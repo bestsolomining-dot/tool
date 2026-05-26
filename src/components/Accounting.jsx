@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { apiFetch } from './poolUtils'
 
 const ENDPOINTS = [
   { key: 'balances', label: 'Get All Balances', method: 'GET', path: '/api/v2/accounting/balances' },
@@ -54,31 +55,28 @@ export default function Accounting({ onCall }) {
 
     if (endpoint.method === 'POST') {
       try {
-        options.headers = { 'Content-Type': 'application/json' }
+        options.headers = { 'Content-Type': 'application/json' };
         options.body = body ? JSON.stringify(JSON.parse(body)) : '{}'
       } catch {
-        setError('Invalid JSON body')
-        setLoading(false)
-        return
+        setError('Invalid JSON body');
+        setLoading(false);
+        return;
       }
     }
 
     try {
-      const res = await fetch(path, options)
-      const contentType = res.headers.get('content-type') || ''
-      const data = contentType.includes('application/json') ? await res.json() : await res.text()
-
+      const result = await apiFetch(path, options);
       setLastCall({
         method: endpoint.method,
         path,
-        status: `${res.status} ${res.statusText}`,
+        status: result.status,
         durationMs: Math.round(performance.now() - startedAt),
-      })
+      });
 
-      if (!res.ok) {
-        setError(typeof data === 'string' ? data : data?.error || data?.message || res.statusText)
+      if (!result.ok) {
+        setError(typeof result.data === 'string' ? result.data : result.data?.error || result.data?.message || result.status);
       } else {
-        setOutput(data)
+        setOutput(result.data);
       }
     } catch (err) {
       setError(err.message || String(err))

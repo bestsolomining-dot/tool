@@ -129,22 +129,22 @@ export default function App() {
               {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
             </span>
           </div>
-          {lastCall && (
+          {/* {lastCall && (
             <div className="status-item">
               <span>Last Call:</span>
               <span className="status-value">
                 {lastCall.method} {lastCall.path} ({lastCall.durationMs}ms)
               </span>
             </div>
-          )}
-          <button
+          )} */}
+          {/* <button
             type="button"
             className="button secondary"
             onClick={() => setResponseModalOpen(true)}
             disabled={!output}
           >
             View API Response
-          </button>
+          </button> */}
         </div>
       </header>
 

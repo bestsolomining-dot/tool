@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Pools from './components/Pools';
 import Accounting from './components/Accounting';
 import HashpowerBot from './components/HashpowerBot';
+import MiningRig from './components/MiningRig';
 import './App.css'; // Import the new CSS
 
 export default function App() {

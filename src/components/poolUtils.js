@@ -25,9 +25,11 @@ export const poolHelpers = {
   getId: (p) => p?.id || p?.poolId,
   getLabel: (p, i = 0) => String(p?.name || p?.id || p?.poolId || p?.__generatedId || `Pool ${i + 1}`),
   getAlgo: (p) => {
-    const val = p?.miningAlgorithm || p?.algorithm || (typeof p === 'string' ? p : null);
-    if (val && typeof val === 'object') return String(val.code || val.name || 'Unknown');
-    return String(val || 'Unknown');
+    let val = p?.miningAlgorithm || p?.algorithm || (typeof p === 'string' ? p : null);
+    if (val && typeof val === 'object') val = val.code || val.enumName || val.name || 'Unknown';
+    let str = String(val || 'Unknown');
+    if (str.includes(':')) str = str.split(':').pop().trim();
+    return str;
   },
 
   normalizeList: (data) => {
@@ -64,11 +66,22 @@ export const poolHelpers = {
   },
 
   getVerifyAlgo: (result) => {
-    const val = result?.requestBody?.miningAlgorithm || 
+    let val = result?.requestBody?.miningAlgorithm ||
                 result?.poolDetails?.miningAlgorithm || 
                 result?.poolDetails?.algorithm;
-    if (val && typeof val === 'object') return String(val.code || val.name || 'Unknown');
-    return String(val || 'Unknown');
+
+    if (!val) {
+      const logs = result?.data?.logs || result?.logs;
+      if (Array.isArray(logs)) {
+        const found = logs.find(l => l.message && l.message.includes('mining algorithm:'));
+        if (found) val = found.message;
+      }
+    }
+
+    if (val && typeof val === 'object') val = val.code || val.enumName || val.name || 'Unknown';
+    let str = String(val || 'Unknown');
+    if (str.includes(':')) str = str.split(':').pop().trim();
+    return str;
   },
   
   normalizeLocation: (val) => LOCATION_MAP[String(val || '').trim().toUpperCase()] || DEFAULT_VERIFICATION_LOCATION,

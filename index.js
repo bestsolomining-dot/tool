@@ -5,6 +5,34 @@ import { NiceHashClient } from './NiceHashClient.js';
 const app = express();
 app.use(express.json());
 
+const SENSITIVE_KEYS = new Set(['password', 'apiKey', 'apiSecret', 'secret', 'token']);
+
+function maskSensitive(value) {
+  if (Array.isArray(value)) return value.map(maskSensitive);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      SENSITIVE_KEYS.has(key) ? '<masked>' : maskSensitive(item),
+    ]),
+  );
+}
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  const requestId = Math.random().toString(36).slice(2, 8);
+  const body = req.method === 'GET' ? '' : ` body=${JSON.stringify(maskSensitive(req.body || {}))}`;
+
+  console.info(`[api:${requestId}] -> ${req.method} ${req.originalUrl}${body}`);
+
+  res.on('finish', () => {
+    console.info(`[api:${requestId}] <- ${res.statusCode} ${req.method} ${req.originalUrl} ${Date.now() - start}ms`);
+  });
+
+  next();
+});
+
 /**
  * NiceHashApp organizes API calls into logical domains.
  */
@@ -14,6 +42,10 @@ const config = {
   orgId: process.env.NICEHASH_ORG_ID,
   environment: process.env.NICEHASH_ENVIRONMENT || 'production'
 };
+
+if (!config.apiKey || !config.apiSecret || !config.orgId) {
+  console.warn('NICEHASH_API_KEY, NICEHASH_API_SECRET, and NICEHASH_ORG_ID are required for NiceHash v2 requests.')
+}
 
 const client = new NiceHashClient(config);
 
@@ -128,39 +160,42 @@ const NiceHashApp = {
  * Express API Endpoints
  */
 
-// Public
-app.get('/api/time', async (req, res) => res.json(await NiceHashApp.public.getTime()));
-app.get('/api/algorithms', async (req, res) => res.json(await NiceHashApp.public.getAlgorithms()));
-
-// Accounting
-app.get('/api/accounting/balances', async (req, res) => res.json(await NiceHashApp.accounting.getBalances()));
-app.get('/api/accounting/balance/:currency', async (req, res) => res.json(await NiceHashApp.accounting.getBalance(req.params.currency)));
-app.post('/api/accounting/withdrawal', async (req, res) => res.json(await NiceHashApp.accounting.createWithdrawal(req.body)));
-
-// Mining
-app.get('/api/mining/rigs', async (req, res) => res.json(await NiceHashApp.mining.getRigs()));
-app.get('/api/mining/rig/:rigId', async (req, res) => res.json(await NiceHashApp.mining.getRigDetails(req.params.rigId)));
-app.post('/api/mining/rigs/status', async (req, res) => res.json(await NiceHashApp.mining.setRigStatus(req.body)));
-
-// Hashpower
-app.get('/api/hashpower/my-orders', async (req, res) => res.json(await NiceHashApp.hashpower.getMyOrders()));
-app.post('/api/hashpower/order', async (req, res) => res.json(await NiceHashApp.hashpower.createOrder(req.body)));
-app.get('/api/hashpower/order-book', async (req, res) => res.json(await NiceHashApp.hashpower.getOrderBook(req.query)));
-
-// Pools
-app.get('/api/pools', async (req, res) => res.json(await NiceHashApp.pools.getPools()));
-app.post('/api/pool', async (req, res) => res.json(await NiceHashApp.pools.createPool(req.body)));
-
-// Error handling wrapper for Express
 const asyncHandler = fn => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(err => {
-    console.error(err);
+    console.error(`[api:error] ${req.method} ${req.originalUrl}`, err);
     res.status(500).json({ error: err.message });
   });
 };
 
+// Public
+app.get('/api/v2/time', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getTime())));
+app.get('/api/v2/algorithms', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getAlgorithms())));
+
+// Accounting
+app.get('/api/v2/accounting/balances', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.getBalances())));
+app.get('/api/v2/accounting/balance/:currency', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.getBalance(req.params.currency))));
+app.post('/api/v2/accounting/withdrawal', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.createWithdrawal(req.body))));
+
+// Mining
+app.get('/api/v2/mining/rigs', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigs())));
+app.get('/api/v2/mining/rig/:rigId', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigDetails(req.params.rigId))));
+app.post('/api/v2/mining/rigs/status', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.setRigStatus(req.body))));
+
+// Hashpower
+app.get('/api/v2/hashpower/my-orders', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getMyOrders())));
+app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.createOrder(req.body))));
+app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getOrderBook(req.query))));
+
+// Pools
+app.get('/api/v2/pools', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.getPools())));
+app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.getPoolDetails(req.params.poolId))));
+app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.createPool(req.body))));
+app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.verifyPool(req.body))));
+
+// Error handling wrapper for Express
+
 // Example: Applying the wrapper to one route
-app.get('/api/mining/address', asyncHandler(async (req, res) => {
+app.get('/api/v2/mining/address', asyncHandler(async (req, res) => {
   const data = await NiceHashApp.mining.getMiningAddress();
   res.json(data);
 }));

@@ -1,11 +1,61 @@
-# React + Vite
+# NiceHash v2 Toolbox
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This project is a React + Vite application with a backend proxy for NiceHash API v2.
 
-Currently, two official plugins are available:
+The frontend uses `/api/v2/*` routes, and the backend server in `index.js` forwards requests to NiceHash using your API key, secret, and organization ID.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
+
+- `GET /api/v2/time` — NiceHash server time
+- `GET /api/v2/algorithms` — Mining algorithms
+- `GET /api/v2/accounting/balances` — Account balances
+- `GET /api/v2/accounting/balance/:currency` — Single currency balance
+- `GET /api/v2/mining/rigs` — Mining rig list
+- `GET /api/v2/mining/address` — Mining address
+- `GET /api/v2/hashpower/order-book` — Hashpower order book
+
+## Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy environment variables:
+
+```bash
+cp .env.example .env
+```
+
+3. Set your NiceHash credentials in `.env`:
+
+- `NICEHASH_API_KEY`
+- `NICEHASH_API_SECRET`
+- `NICEHASH_ORG_ID`
+- `NICEHASH_ENVIRONMENT` (optional, default: `production`)
+
+4. Start the backend server:
+
+```bash
+npm run backend
+```
+
+5. In another terminal, start the frontend:
+
+```bash
+npm run dev
+```
+
+6. Open the app in your browser:
+
+```text
+http://localhost:5173
+```
+
+## Notes
+
+The Vite development server proxies `/api` requests to `http://localhost:3000`, so the frontend can use the same origin for NiceHash queries.
 
 ## React Compiler
 

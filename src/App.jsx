@@ -1,147 +1,203 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import cloudflareLogo from './assets/cloudflare.svg'
-import heroImg from './assets/hero.png'
 import './App.css'
+import Accounting from './components/Accounting'
+import Pools from './components/Pools'
 
 function App() {
-  const [count, setCount] = useState(0)
-  const [name, setName] = useState('unknown')
+  const [status, setStatus] = useState('Ready')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [output, setOutput] = useState(null)
+  const [lastCall, setLastCall] = useState(null)
+  const [responseModalOpen, setResponseModalOpen] = useState(false)
+  const [algorithm, setAlgorithm] = useState('SHA256')
+  const [market, setMarket] = useState('EU')
+
+  async function callApi(path, options = {}) {
+    const startedAt = performance.now()
+    const method = options.method || 'GET'
+
+    setLoading(true)
+    setError('')
+    setStatus(`Calling ${path}`)
+    setLastCall({
+      method,
+      path,
+      status: 'Pending',
+      durationMs: null,
+      timestamp: new Date().toLocaleTimeString(),
+    })
+
+    try {
+      const response = await fetch(path, options)
+      const contentType = response.headers.get('content-type') || ''
+      const data = contentType.includes('application/json')
+        ? await response.json()
+        : await response.text()
+
+      if (!response.ok) {
+        const message = typeof data === 'string'
+          ? `${response.status} ${response.statusText}: ${data.slice(0, 140)}`
+          : data?.error || data?.message || response.statusText
+        setLastCall({
+          method,
+          path,
+          status: `${response.status} ${response.statusText}`,
+          durationMs: Math.round(performance.now() - startedAt),
+          timestamp: new Date().toLocaleTimeString(),
+        })
+        throw new Error(message)
+      }
+
+      setOutput(data)
+      setStatus('Success')
+      setLastCall({
+        method,
+        path,
+        status: `${response.status} ${response.statusText}`,
+        durationMs: Math.round(performance.now() - startedAt),
+        timestamp: new Date().toLocaleTimeString(),
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setError(message)
+      setOutput(null)
+      setStatus('Error')
+      setLastCall(prev => ({
+        method,
+        path,
+        status: prev?.status === 'Pending' ? 'Failed' : prev?.status || 'Failed',
+        durationMs: Math.round(performance.now() - startedAt),
+        timestamp: new Date().toLocaleTimeString(),
+      }))
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started with Cloudflare</h1>
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="brand-block">
+          <p className="eyebrow">NiceHash API v2</p>
+          <h1>NiceHash Toolbox</h1>
           <p>
-            Edit <code>src/App.jsx</code> or <code>worker/index.js</code> and save to test <code>HMR</code>
+            Explore NiceHash v2 endpoints through a backend proxy. Use your keys in
+            the backend environment and inspect API responses from the browser.
           </p>
         </div>
-        <ul style={{ display: 'flex', gap: '1rem', listStyle: 'none', padding: 0 }}>
-          <li>
-            <button
-              className="counter"
-              onClick={() => setCount((count) => count + 1)}
-            >
-              Count is {count}
-            </button>
-          </li>
-          <li>
+        <div className="status-card">
+          <span className="status-label">Connection status</span>
+          <strong className={`status-value status-${status.toLowerCase()}`}>{status}</strong>
+          {loading && <small>Loading...</small>}
+          {error && <pre className="error-message">{error}</pre>}
           <button
-            className="counter"
-            onClick={() => {
-              fetch('/api/')
-                .then((res) => res.json())
-                .then((data) => setName(data.name))
-            }}
-            aria-label='get name'
+            type="button"
+            className="button secondary"
+            onClick={() => setResponseModalOpen(true)}
+            disabled={!lastCall}
           >
-            Name from API is: {name}
+            View API Response
           </button>
-          </li>
-        </ul>
-
-
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-            <li>
-              <a href="https://workers.cloudflare.com/" target="_blank">
-                <img className="button-icon" src={cloudflareLogo} alt="" />
-                Workers Docs
-              </a>
-            </li>
-          </ul>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      </header>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <main className="dashboard">
+        <section className="quick-actions">
+        <article className="panel">
+          <h2>Public API</h2>
+          <button className="button" onClick={() => callApi('/api/v2/time')}>
+            Server Time
+          </button>
+          <button className="button" onClick={() => callApi('/api/v2/algorithms')}>
+            Algorithms
+          </button>
+        </article>
+
+        <Accounting />
+
+        <article className="panel">
+          <h2>Mining</h2>
+          <button className="button" onClick={() => callApi('/api/v2/mining/rigs')}>
+            List Rigs
+          </button>
+          <button className="button" onClick={() => callApi('/api/v2/mining/address')}>
+            Mining Address
+          </button>
+        </article>
+
+        <article className="panel">
+          <h2>Hashpower</h2>
+          <label className="label">
+            Algorithm
+            <input
+              type="text"
+              className="input"
+              value={algorithm}
+              onChange={(event) => setAlgorithm(event.target.value)}
+            />
+          </label>
+          <label className="label">
+            Market
+            <input
+              type="text"
+              className="input"
+              value={market}
+              onChange={(event) => setMarket(event.target.value)}
+            />
+          </label>
+          <button
+            className="button"
+            onClick={() =>
+              callApi(
+                `/api/v2/hashpower/order-book?algorithm=${encodeURIComponent(algorithm)}&market=${encodeURIComponent(market)}`,
+              )
+            }
+          >
+            Fetch Order Book
+          </button>
+        </article>
+        </section>
+
+        <section className="workspace-grid">
+          <Pools />
+        </section>
+      </main>
+
+      {responseModalOpen && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setResponseModalOpen(false)}>
+          <section
+            className="response-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="response-modal-title"
+            onMouseDown={event => event.stopPropagation()}
+          >
+            <div className="response-header">
+              <div>
+                <h2 id="response-modal-title">Current API Response</h2>
+                <p>{lastCall ? `${lastCall.method} ${lastCall.path}` : 'No API call selected'}</p>
+              </div>
+              <span>{lastCall?.status || 'Idle'}</span>
+            </div>
+            {lastCall && (
+              <div className="response-meta">
+                <span>{lastCall.timestamp}</span>
+                <span>{lastCall.durationMs === null ? 'In progress' : `${lastCall.durationMs} ms`}</span>
+              </div>
+            )}
+            <pre className="response-body modal">
+              {output ? JSON.stringify(output, null, 2) : 'Use a dashboard button to query NiceHash.'}
+            </pre>
+            <div className="modal-actions">
+              <button type="button" className="button secondary" onClick={() => setResponseModalOpen(false)}>
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
   )
 }
 

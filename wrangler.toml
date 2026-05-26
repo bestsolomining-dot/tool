@@ -1,0 +1,15 @@
+# wrangler.toml
+name = "nh-tool"          # Change to your Worker's name
+main = "src/index.js"              # Path to your Worker script
+compatibility_date = "2025-03-01"  # Use a recent date
+
+# Environment variables (plain text – not encrypted)
+[vars]
+NICEHASH_ORG_ID = "d3042368-b00e-4308-93bd-ec8c930b7b0d"
+NICEHASH_API_KEY = "69189c7f-33af-4996-8ef6-6730cd6bd9c9"
+NICEHASH_API_SECRET = "820968ce-481c-441e-bdf0-8c752283a6b2b9f80090-5039-4906-aee9-0eb600473671"
+NICEHASH_ENVIRONMENT = "production"
+RIG_BT_API_KEY = "ce7c7b1e3b3f8e52b9a85748663a1db1c489bb43573162ba83cdd55247f8fb40"
+RIG_BT_API_SECRET = "99f95eb2cdc6f9ef0008adfad7d89d4b9fc541bb2ab3e0a6692ff1a42f3ed8d5"
+RIG_SL_API_KEY = "fbf14acf7b8031a780c3695006ed1ebd0d37dcabdd251bd904b01f1dca73eade"
+RIG_SL_API_SECRET = "28277fe1b248418e50912ac128924cdf031263f3de3734a89946615e64085376"

@@ -4,7 +4,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "nh-tool",
+	"name": "tool",
 	"main": "worker/index.js",
 	"compatibility_date": "2026-05-26",
 	"assets": {

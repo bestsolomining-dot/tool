@@ -407,6 +407,26 @@ export default function Pools() {
     ]);
   }
 
+  const handleExportResults = () => {
+    const resultsToExport = verifyResults.filter(item => !item.result?.pending);
+    
+    const data = resultsToExport.map(item => {
+      const p = item.result?.poolDetails || item.result?.requestBody || {};
+      const success = ph.isVerifySuccess(item.result);
+      return {
+        'Pool Name': item.label,
+        'Algorithm': ph.getVerifyAlgo(item.result),
+        'Status': success ? 'VERIFIED' : 'FAILED',
+        'Stratum Host': p.stratumHost || p.stratumHostname || p.host || '',
+        'Port': p.stratumPort || p.port || '',
+        'Username': p.username || '',
+        'Message': ph.getVerifyMessage(item.result),
+        'Verified At': new Date().toLocaleString()
+      };
+    });
+
+    ph.exportToXlsx(data, `pool_verification_${new Date().getTime()}.xlsx`);
+  };
 
   const selectedLabel = selected ? ph.getLabel(selected) : 'Select a pool'
   const completedResults = verifyResults.filter(item => !item.result?.pending)
@@ -457,6 +477,15 @@ export default function Pools() {
               onChange={e => setVerificationDelay(Number(e.target.value))}
             />
           </div>
+
+          <button 
+            className="btn-pro secondary" 
+            onClick={handleExportResults} 
+            disabled={completedResults.length === 0}
+            title="Export completed verification results to XLSX"
+          >
+            Export Results
+          </button>
 
           <button className="btn-pro" onClick={() => verifyAllOnce()} disabled={playing || running}>
             {playing ? 'Verifying...' : `Verify All (${verificationDelay}ms)`}

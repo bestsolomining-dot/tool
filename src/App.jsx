@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Pools from './components/Pools';
 import Accounting from './components/Accounting';
+import HashpowerBot from './components/HashpowerBot';
 import './App.css'; // Import the new CSS
 
 export default function App() {
@@ -225,6 +226,9 @@ export default function App() {
             <button className="btn-pro secondary" onClick={scrollToPools}>Configure Target Pool</button>
           </div>
           {activeSection === 'hashpower' && <ResultPanel />}
+          <div style={{ marginTop: '20px' }}>
+            <HashpowerBot algorithm={algorithm} market={market} />
+          </div>
         </article>
         </section>
 

@@ -1,3 +1,5 @@
+import * as XLSX from 'xlsx';
+
 const DEFAULT_VERIFICATION_LOCATION = 'ANY'
 const LOCATION_MAP = {
   EU: 'EUROPE', EUROPE: 'EUROPE',
@@ -118,7 +120,14 @@ export const poolHelpers = {
     if (!result || result.ok === false) return false;
     const data = result.data || result;
     return !(data.success === false || data.valid === false || data.error);
-  }
+  },
+
+  exportToXlsx: (data, filename = 'export.xlsx') => {
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
+    XLSX.writeFile(workbook, filename);
+  },
 };
 
 /**

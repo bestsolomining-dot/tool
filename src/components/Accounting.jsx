@@ -14,7 +14,7 @@ const ENDPOINTS = [
   { key: 'transaction', label: 'Get Transaction (by currency & id)', method: 'GET', path: '/api/v2/accounting/transaction/{currency}/{transactionId}' },
 ]
 
-export default function Accounting() {
+export default function Accounting({ onCall }) {
   const [endpointKey, setEndpointKey] = useState('balances')
   const [currency, setCurrency] = useState('BTC')
   const [transactionId, setTransactionId] = useState('')
@@ -36,6 +36,11 @@ export default function Accounting() {
     const startedAt = performance.now()
     const path = buildPath()
     const options = { method: endpoint.method }
+
+    if (onCall) {
+      onCall(path, options);
+      return;
+    }
 
     setLoading(true)
     setError('')
@@ -88,50 +93,53 @@ export default function Accounting() {
   }
 
   return (
-    <div className="card">
-      <h2>Accounting</h2>
+    <div className="accounting-form">
+      <div className="field-row">
+        <div className="field">
+          <label className="label">Endpoint</label>
+          <select className="select-pro" value={endpointKey} onChange={event => setEndpointKey(event.target.value)}>
+            {ENDPOINTS.map(item => (
+              <option key={item.key} value={item.key}>{item.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label className="label">Currency</label>
+          <input className="input-pro" value={currency} onChange={event => setCurrency(event.target.value)} />
+        </div>
+      </div>
 
-      <label className="label">Endpoint</label>
-      <select className="input" value={endpointKey} onChange={event => setEndpointKey(event.target.value)}>
-        {ENDPOINTS.map(item => (
-          <option key={item.key} value={item.key}>{item.label}</option>
-        ))}
-      </select>
+      <div className="field">
+        <label className="label">Transaction ID</label>
+        <input className="input-pro" value={transactionId} onChange={event => setTransactionId(event.target.value)} />
+      </div>
 
-      <label className="label">Currency (if applicable)</label>
-      <input className="input" value={currency} onChange={event => setCurrency(event.target.value)} />
+      {endpoint.method === 'POST' && (
+        <div className="field">
+          <label className="label">Request Body</label>
+          <textarea
+            className="input-pro code"
+            value={body}
+            onChange={event => setBody(event.target.value)}
+            placeholder='{"address":"...","amount":0.1}'
+          />
+        </div>
+      )}
 
-      <label className="label">Transaction ID (if applicable)</label>
-      <input className="input" value={transactionId} onChange={event => setTransactionId(event.target.value)} />
-
-      <label className="label">POST Body (JSON, if applicable)</label>
-      <textarea
-        className="input"
-        style={{ minHeight: 90 }}
-        value={body}
-        onChange={event => setBody(event.target.value)}
-        placeholder='{"address":"...","amount":0.1}'
-      />
-
-      <button className="button" onClick={callApi} disabled={loading}>
-        {loading ? 'Calling...' : 'Call Accounting API'}
+      <button className="btn-pro primary" onClick={callApi} disabled={loading}>
+        Execute {endpoint.method} Request
       </button>
 
-      {error && <pre className="error-message">{error}</pre>}
-
-      <div className="inline-response">
-        <div className="inline-response-header">
-          <h3>Response</h3>
-          <span>{lastCall ? `${lastCall.method} ${lastCall.path}` : 'No call yet'}</span>
-        </div>
-        {lastCall && (
-          <div className="response-meta inline">
-            <span>{lastCall.status}</span>
-            <span>{lastCall.durationMs === null ? 'In progress' : `${lastCall.durationMs} ms`}</span>
+      {!onCall && (
+        <div className="inline-response">
+          {error && <pre className="error-message">{error}</pre>}
+          <div className="inline-response-header">
+            <h3>Response</h3>
+            <span>{lastCall ? `${lastCall.method} ${lastCall.path}` : 'No call yet'}</span>
           </div>
-        )}
-        <pre className="response-body">{output ? JSON.stringify(output, null, 2) : 'No response yet'}</pre>
-      </div>
+          <pre className="response-body">{output ? JSON.stringify(output, null, 2) : 'No response yet'}</pre>
+        </div>
+      )}
     </div>
   )
 }

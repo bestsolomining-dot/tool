@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-
+import PoolEditor from './PoolEditor' // Import the new PoolEditor component
+import Modal from './Modal' // Import the new Modal component
+ 
 const DEFAULT_VERIFICATION_LOCATION = 'ANY'
 const LOCATION_MAP = {
   EU: 'EUROPE',
@@ -125,29 +127,42 @@ export default function Pools() {
   const [pools, setPools] = useState([])
   const [selected, setSelected] = useState(null)
   const [selectedId, setSelectedId] = useState('')
-  const [body, setBody] = useState('')
-  const [verifyBody, setVerifyBody] = useState(null)
   const [response, setResponse] = useState(null)
   const [verifyResults, setVerifyResults] = useState([])
-  const [editor, setEditor] = useState(null)
-  const [editorBody, setEditorBody] = useState('')
-  const [editorVerifyBody, setEditorVerifyBody] = useState(null)
-  const [editorResponse, setEditorResponse] = useState(null)
-  const [editorSaveResponse, setEditorSaveResponse] = useState(null)
-  const [editorError, setEditorError] = useState('')
-  const [editorLoading, setEditorLoading] = useState(false)
-  const [editorSaving, setEditorSaving] = useState(false)
-  const [editorDetailsLoading, setEditorDetailsLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [detailsLoading, setDetailsLoading] = useState(false)
   const [error, setError] = useState('')
   const [playing, setPlaying] = useState(false)
   const [running, setRunning] = useState(false)
+  const [verificationDelay, setVerificationDelay] = useState(3000)
+  const [lastRunTime, setLastRunTime] = useState(null)
+  const [nextRunCountdown, setNextRunCountdown] = useState(null)
+  const [mrrRigs, setMrrRigs] = useState(null)
+  const [inspectData, setInspectData] = useState(null)
+
+  const [activeEditorPool, setActiveEditorPool] = useState(null) // State to control PoolEditor modal
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const runTimerRef = useRef(null)
+  const countdownTimerRef = useRef(null)
   const stopRef = useRef(false)
   const activeRequestRef = useRef(null)
   const dropdownRef = useRef(null)
+
+  const openNewPoolEditor = () => {
+    setActiveEditorPool({
+      key: 'new',
+      label: 'New Pool',
+      initialData: {
+        name: "My New Pool",
+        algorithm: "SHA256",
+        stratumHostname: "stratum.example.com",
+        stratumPort: 3333,
+        username: "worker",
+        password: "x"
+      },
+      isNew: true
+    });
+  };
 
   async function loadPools() {
     return fetch('/api/v2/pools')
@@ -168,10 +183,23 @@ export default function Pools() {
     loadPools().then(() => {
       setSelected(null)
       setSelectedId('')
-      setBody('')
-      setVerifyBody(null)
     })
   }, [])
+
+  async function fetchMrrRigs() {
+    setLoading(true);
+    setMrrRigs(null);
+    try {
+      const res = await fetch('/api/v2/mrr/rigs');
+      const data = await res.json();
+      if (res.ok) setMrrRigs(data);
+      else throw new Error(data.error || 'Failed to fetch MRR rigs');
+    } catch (err) {
+      setError(`MRR Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     function onPointerDown(event) {
@@ -198,8 +226,6 @@ export default function Pools() {
 
     setSelectedId(key)
     setSelected(pool)
-    setBody('')
-    setVerifyBody(null)
     setResponse(null)
     setVerifyResults([])
     setError('')
@@ -223,18 +249,17 @@ export default function Pools() {
           : data?.error || data?.message || res.statusText
         throw new Error(message)
       }
-
-      setBody(JSON.stringify(data, null, 2))
-      setVerifyBody(buildPoolVerificationBody(data))
     } catch (err) {
       setError(err.message || String(err))
-      setBody('')
-      setVerifyBody(null)
     } finally {
       setDetailsLoading(false)
     }
   }
 
+  const handleEditorSaveSuccess = async (savedPoolId) => {
+    await loadPools(); // Reload pools after a successful save
+    // Optionally, update the selected pool if the saved one is relevant
+  };
   async function verify() {
     if (!selected) {
       setError('Select a pool first.')
@@ -246,32 +271,30 @@ export default function Pools() {
     setVerifyResults([])
     setError('')
 
-    let parsed
-    try {
-      parsed = JSON.parse(body)
-    } catch {
-      setError('Invalid JSON in pool body')
-      setLoading(false)
-      return
-    }
-
-    let poolDetails = parsed
-    if (Array.isArray(parsed)) {
-      poolDetails = parsed.find(item => String(item.id || item.poolId || item.name) === selectedId) || parsed[0]
-    } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.pools)) {
-      poolDetails = parsed.pools.find(item => String(item.id || item.poolId || item.name) === selectedId) || parsed.pools[0]
-    }
-
-    const payload = buildPoolVerificationBody(poolDetails)
+    const payload = buildPoolVerificationBody(selected)
     const missingFields = getMissingVerificationFields(payload)
-    setVerifyBody(payload)
-
     if (missingFields.length > 0) {
+      const poolId = getPoolId(selected);
+      if (poolId) {
+        try {
+           const resDetails = await fetch(`/api/v2/pool/${encodeURIComponent(poolId)}`)
+           const details = await resDetails.json()
+           const fullPayload = buildPoolVerificationBody(details)
+           return await performVerification(fullPayload, details)
+        } catch (e) {
+           setError(`Details Error: ${e.message}`);
+           setLoading(false);
+           return;
+        }
+      }
       setError(`Missing required verify fields: ${missingFields.join(', ')}`)
       setLoading(false)
       return
     }
+    await performVerification(payload, selected)
+  }
 
+  async function performVerification(payload, poolDetails) {
     try {
       const res = await fetch('/api/v2/pools/verify', {
         method: 'POST',
@@ -310,7 +333,7 @@ export default function Pools() {
         signal,
       })
       const data = await res.json()
-      return { ok: res.ok, poolDetails, requestBody: payload, data }
+      return { ok: res.ok, status: res.status, headers: res.headers, poolDetails, requestBody: payload, data }
     } catch (err) {
       if (err.name === 'AbortError') {
         return { ok: false, requestBody: payload, data: { stopped: true, message: 'Stopped by user' } }
@@ -345,11 +368,34 @@ export default function Pools() {
 
         let result
         try {
-          const details = poolId
-            ? await fetch(`/api/v2/pool/${encodeURIComponent(poolId)}`, { signal: controller.signal }).then(res => res.json())
-            : pool
+          let details = pool
+          if (poolId) {
+            const resDetails = await fetch(`/api/v2/pool/${encodeURIComponent(poolId)}`, { signal: controller.signal })
+            if (resDetails.status === 429) {
+              const retryAfter = resDetails.headers.get('Retry-After')
+              if (retryAfter) {
+                const seconds = parseInt(retryAfter, 10) || 1
+                setError(`Rate limit hit on details. Waiting ${seconds}s...`)
+                await new Promise(r => setTimeout(r, seconds * 1000))
+                const retryRes = await fetch(`/api/v2/pool/${encodeURIComponent(poolId)}`, { signal: controller.signal })
+                details = await retryRes.json()
+              }
+            } else {
+              details = await resDetails.json()
+            }
+          }
+
           const bodyToSend = typeof details === 'string' ? JSON.parse(details) : details
           result = await verifyPoolBody(bodyToSend, controller.signal)
+
+          if (result.status === 429) {
+            const retryAfter = result.headers.get('Retry-After')
+            if (retryAfter) {
+              const seconds = parseInt(retryAfter, 10) || 1
+              setError(`Rate limit hit on verify. Waiting ${seconds}s...`)
+              await new Promise(r => setTimeout(r, seconds * 1000))
+            }
+          }
         } catch (err) {
           result = err.name === 'AbortError'
             ? { ok: false, data: { stopped: true, message: 'Stopped by user' } }
@@ -368,7 +414,7 @@ export default function Pools() {
         await new Promise(resolve => {
           const startedAt = Date.now()
           const timer = setInterval(() => {
-            if (stopRef.current || Date.now() - startedAt >= 3000) {
+            if (stopRef.current || Date.now() - startedAt >= verificationDelay) {
               clearInterval(timer)
               resolve()
             }
@@ -385,16 +431,38 @@ export default function Pools() {
     if (running || playing) return
     setRunning(true)
     stopRef.current = false
-    await verifyAllOnce({ resetStop: false, keepRunning: true })
+
+    const intervalMs = 5 * 60 * 1000
+
+    const executeCycle = async () => {
+      if (stopRef.current) return
+      
+      setNextRunCountdown(null)
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
+      
+      await verifyAllOnce({ resetStop: false, keepRunning: true })
+      
+      const finishedAt = new Date()
+      setLastRunTime(finishedAt.toLocaleTimeString())
+
+      // Start countdown for next run
+      let remaining = intervalMs / 1000
+      setNextRunCountdown(remaining)
+
+      countdownTimerRef.current = setInterval(() => {
+        remaining -= 1
+        setNextRunCountdown(remaining > 0 ? remaining : 0)
+        if (remaining <= 0) clearInterval(countdownTimerRef.current)
+      }, 1000)
+    }
+
+    await executeCycle()
     if (stopRef.current) {
       setRunning(false)
       return
     }
 
-    runTimerRef.current = setInterval(() => {
-      if (stopRef.current) return
-      verifyAllOnce({ resetStop: false, keepRunning: true })
-    }, 10 * 60 * 1000)
+    runTimerRef.current = setInterval(executeCycle, intervalMs)
   }
 
   function verifyAlgorithm(algorithm) {
@@ -409,191 +477,39 @@ export default function Pools() {
       clearInterval(runTimerRef.current)
       runTimerRef.current = null
     }
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current)
+      countdownTimerRef.current = null
+      setNextRunCountdown(null)
+    }
     if (activeRequestRef.current) {
       activeRequestRef.current.abort()
       activeRequestRef.current = null
     }
+    setLastRunTime(null) // Clear the last run time when automation is stopped
   }
 
-  function updateEditorBody(nextBody) {
-    setEditorBody(nextBody)
-    setEditorResponse(null)
-    setEditorSaveResponse(null)
-    setEditorError('')
+  const openPoolEditor = (item) => {
+    setActiveEditorPool({
+      key: item.key,
+      label: item.label,
+      initialData: item.result?.poolDetails || item.result?.requestBody || null, // Pass existing data if available
+      isNew: item.key === 'new'
+    });
+  };
 
-    try {
-      setEditorVerifyBody(buildPoolVerificationBody(JSON.parse(nextBody)))
-    } catch {
-      setEditorVerifyBody(null)
-    }
+  const closePoolEditor = () => {
+    setActiveEditorPool(null);
+  };
+
+  const handleEditorVerifySuccess = (verificationResult) => {
+    // Update the verification results in the main Pools component
+    setVerifyResults(prev => [
+      ...prev.filter(item => item.key !== verificationResult.key),
+      verificationResult,
+    ]);
   }
 
-  async function openPoolEditor(item) {
-    setEditor({ key: item.key, label: item.label })
-    setEditorResponse(item.result || null)
-    setEditorSaveResponse(null)
-    setEditorError('')
-    setEditorDetailsLoading(true)
-
-    const pool = pools.find((candidate, index) => getPoolKey(candidate, index) === item.key)
-    const poolId = getPoolId(pool) || item.result?.poolDetails?.id || item.result?.poolDetails?.poolId || item.key
-
-    try {
-      const res = await fetch(`/api/v2/pool/${encodeURIComponent(poolId)}`)
-      const contentType = res.headers.get('content-type') || ''
-      const data = contentType.includes('application/json') ? await res.json() : await res.text()
-
-      if (!res.ok) {
-        const message = typeof data === 'string'
-          ? `${res.status} ${res.statusText}: ${data.slice(0, 140)}`
-          : data?.error || data?.message || res.statusText
-        throw new Error(message)
-      }
-
-      setEditorBody(JSON.stringify(data, null, 2))
-      setEditorVerifyBody(buildPoolVerificationBody(data))
-    } catch (err) {
-      let fallbackPool = item.result?.poolDetails || item.result?.requestBody
-      if (selectedId === item.key && body) {
-        try {
-          fallbackPool = JSON.parse(body)
-        } catch {
-          fallbackPool = item.result?.poolDetails || item.result?.requestBody
-        }
-      }
-
-      setEditorBody(JSON.stringify(fallbackPool || {}, null, 2))
-      setEditorVerifyBody(buildPoolVerificationBody(fallbackPool))
-      setEditorError(`Could not fetch pool details: ${err.message || String(err)}`)
-    } finally {
-      setEditorDetailsLoading(false)
-    }
-  }
-
-  function closePoolEditor() {
-    setEditor(null)
-    setEditorBody('')
-    setEditorVerifyBody(null)
-    setEditorResponse(null)
-    setEditorSaveResponse(null)
-    setEditorError('')
-    setEditorLoading(false)
-    setEditorSaving(false)
-    setEditorDetailsLoading(false)
-  }
-
-  function applyEditorToSelectedPool() {
-    if (!editor || editor.key !== selectedId) return
-    setBody(editorBody)
-    setVerifyBody(editorVerifyBody)
-  }
-
-  async function verifyEditorPool() {
-    setEditorLoading(true)
-    setEditorError('')
-    setEditorResponse(null)
-
-    let poolDetails
-    try {
-      poolDetails = JSON.parse(editorBody)
-    } catch {
-      setEditorError('Invalid JSON in editor body')
-      setEditorLoading(false)
-      return
-    }
-
-    const payload = buildPoolVerificationBody(poolDetails)
-    const missingFields = getMissingVerificationFields(payload)
-    setEditorVerifyBody(payload)
-
-    if (missingFields.length > 0) {
-      setEditorError(`Missing required verify fields: ${missingFields.join(', ')}`)
-      setEditorLoading(false)
-      return
-    }
-
-    try {
-      const res = await fetch('/api/v2/pools/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const data = await res.json()
-      const result = { ok: res.ok, poolDetails, requestBody: payload, data }
-      setEditorResponse(result)
-      setVerifyResults(prev => [
-        ...prev.filter(item => item.key !== editor.key),
-        { key: editor.key, label: editor.label, result },
-      ])
-      if (!res.ok) setEditorError(data?.error || data?.message || res.statusText)
-    } catch (err) {
-      setEditorError(err.message || String(err))
-    } finally {
-      setEditorLoading(false)
-    }
-  }
-
-  async function saveEditorPool({ verifyAfterSave = false } = {}) {
-    setEditorSaving(true)
-    setEditorError('')
-    setEditorSaveResponse(null)
-
-    let poolDetails
-    try {
-      poolDetails = JSON.parse(editorBody)
-    } catch {
-      setEditorError('Invalid JSON in editor body')
-      setEditorSaving(false)
-      return
-    }
-
-    const savePayload = buildPoolSaveBody(poolDetails)
-    const missingFields = getMissingSaveFields(savePayload)
-    if (missingFields.length > 0) {
-      setEditorError(`Missing required save fields: ${missingFields.join(', ')}`)
-      setEditorSaving(false)
-      return
-    }
-
-    try {
-      const res = await fetch('/api/v2/pool', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(savePayload),
-      })
-      const contentType = res.headers.get('content-type') || ''
-      const data = contentType.includes('application/json') ? await res.json() : await res.text()
-      const saveResult = { ok: res.ok, status: `${res.status} ${res.statusText}`, requestBody: savePayload, data }
-      setEditorSaveResponse(saveResult)
-
-      if (!res.ok) {
-        const message = typeof data === 'string' ? data : data?.error || data?.message || res.statusText
-        throw new Error(message)
-      }
-
-      await loadPools()
-
-      const savedId = data?.id || data?.poolId || savePayload.id
-      if (savedId) {
-        const detailRes = await fetch(`/api/v2/pool/${encodeURIComponent(savedId)}`)
-        const detailData = await detailRes.json()
-        setEditorBody(JSON.stringify(detailData, null, 2))
-        setEditorVerifyBody(buildPoolVerificationBody(detailData))
-        if (selectedId === editor.key || selectedId === savedId) {
-          setBody(JSON.stringify(detailData, null, 2))
-          setVerifyBody(buildPoolVerificationBody(detailData))
-        }
-      }
-
-      if (verifyAfterSave) {
-        await verifyEditorPool()
-      }
-    } catch (err) {
-      setEditorError(err.message || String(err))
-    } finally {
-      setEditorSaving(false)
-    }
-  }
 
   const selectedLabel = selected ? getPoolLabel(selected) : 'Select a pool'
   const completedResults = verifyResults.filter(item => !item.result?.pending)
@@ -616,44 +532,59 @@ export default function Pools() {
   ).sort(([left], [right]) => left.localeCompare(right))
 
   return (
-    <div className="card">
-      <h2>Pools</h2>
+    <div className="card pools-manager">
+      <div className="section-header">
+        <h2>Stratum Pools</h2>
+      </div>
 
-      <label className="label">Select pool</label>
-      <div className="pool-select" ref={dropdownRef}>
-        <button
-          type="button"
-          className={`pool-select-trigger${dropdownOpen ? ' is-open' : ''}`}
-          onClick={() => setDropdownOpen(open => !open)}
-          aria-haspopup="listbox"
-          aria-expanded={dropdownOpen}
-        >
-          <span>{selectedLabel}</span>
-          <small>{detailsLoading ? 'Loading details' : pools.length ? `${pools.length} pools` : 'No pools'}</small>
-        </button>
-
-        {dropdownOpen && (
-          <div className="pool-select-menu" role="listbox" aria-label="Pools">
-            {pools.map((pool, index) => {
-              const val = getPoolKey(pool, index)
-              const label = getPoolLabel(pool, index)
-              return (
-                <button
-                  type="button"
-                  key={val}
-                  className={`pool-select-option${selectedId === val ? ' is-selected' : ''}`}
-                  onClick={() => onSelect(val)}
-                  role="option"
-                  aria-selected={selectedId === val}
-                >
-                  <span>{label}</span>
-                  <small>{val}</small>
-                </button>
-              )
-            })}
-            {!pools.length && <div className="pool-select-empty">No pools available</div>}
-          </div>
-        )}
+      <div className="selection-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+        <div className="pool-select-pro" ref={dropdownRef} style={{ flex: 1 }}>
+          <button 
+            className={`select-trigger-pro ${dropdownOpen ? 'active' : ''}`} 
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+          >
+            <span 
+              className="current-selection"
+              onClick={e => {
+                if (selected) {
+                  e.stopPropagation()
+                  openPoolEditor({ key: selectedId, label: selectedLabel })
+                }
+              }}
+              style={{ cursor: selected ? 'pointer' : 'inherit' }}
+              title={selected ? "Click to open Pool Editor" : ""}
+            >{selectedLabel}</span>
+            <span className="count-badge">{pools.length}</span>
+          </button>
+          {dropdownOpen && (
+            <div className="select-dropdown-pro shadow-lg">
+              {pools.map((pool, index) => {
+                const key = getPoolKey(pool, index);
+                const label = getPoolLabel(pool, index);
+                return (
+                <div key={key} className="dropdown-item-pro" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onClick={() => onSelect(key)}>
+                   <div style={{ display: 'flex', flexDirection: 'column' }}>
+                     <strong>{label}</strong>
+                     <code>{getPoolAlgorithm(pool)}</code>
+                   </div>
+                   <button 
+                     type="button" 
+                     className="text-button" 
+                     style={{ fontSize: '10px', opacity: 0.6, padding: '4px' }} 
+                     onClick={(e) => { e.stopPropagation(); openPoolEditor({ key, label }); }}
+                   >
+                     EDIT
+                   </button>
+                </div>
+              )})}
+            </div>
+          )}
+        </div>
+        <div className="actions" style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+          <button className="btn-pro primary" onClick={openNewPoolEditor}>+ New Pool</button>
+          <button className="btn-pro" onClick={fetchMrrRigs} title="Fetch MiningRigRentals data">MRR Rigs</button>
+          <button className="btn-pro secondary" onClick={() => selected && openPoolEditor({ key: selectedId, label: selectedLabel })} disabled={!selected}>Edit Settings</button>
+        </div>
       </div>
 
       <div className="pool-algorithm-summary">
@@ -669,7 +600,7 @@ export default function Pools() {
                 <strong>{count}</strong>
                 <button
                   type="button"
-                  className="button secondary"
+                  className="btn-pro secondary"
                   onClick={() => verifyAlgorithm(algorithm)}
                   disabled={playing || running}
                 >
@@ -683,44 +614,54 @@ export default function Pools() {
         )}
       </div>
 
-      <label className="label">Pool config (JSON)</label>
-      <textarea
-        className="input pool-json"
-        value={body}
-        onChange={event => {
-          setBody(event.target.value)
-          try {
-            setVerifyBody(buildPoolVerificationBody(JSON.parse(event.target.value)))
-          } catch {
-            setVerifyBody(null)
-          }
-        }}
-        placeholder={detailsLoading ? 'Loading pool details...' : 'Select a pool to load its config.'}
-        disabled={detailsLoading}
-      />
-
-      <div className="pool-request-preview">
-        <div className="response-header compact">
-          <h3>Verify request body</h3>
-          <span>POST /api/v2/pools/verify</span>
-        </div>
-        <pre className="response-body compact">
-          {verifyBody ? JSON.stringify(verifyBody, null, 2) : 'Select a pool to generate the required verify body.'}
-        </pre>
-      </div>
-
-      <div className="pool-actions">
-        <button className="button" onClick={verify} disabled={loading || detailsLoading || playing || !selected}>
+      <div className="pool-actions" style={{ alignItems: 'center', gap: '1rem' }}>
+        <button className="btn-pro primary" onClick={verify} disabled={loading || detailsLoading || playing || !selected}>
           {loading ? 'Verifying...' : 'Verify Pool'}
         </button>
-        <button className="button" onClick={() => verifyAllOnce()} disabled={playing || running}>
-          {playing ? 'Verifying...' : 'Verify All (3s delay)'}
+        
+        <button 
+          className="btn-pro" 
+          onClick={() => openPoolEditor({ key: selectedId, label: selectedLabel })} 
+          disabled={!selected || detailsLoading || playing}
+        >
+          Edit Pool
         </button>
-        <button className="button" onClick={startRun} disabled={playing || running}>
-          {running ? 'Running...' : 'Auto Run (every 10m)'}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+           <label style={{ fontSize: '10px', fontWeight: 'bold' }}>DELAY (MS)</label>
+           <input 
+             type="number" 
+             className="input-pro" 
+             style={{ width: '70px', padding: '4px' }} 
+             value={verificationDelay} 
+             onChange={e => setVerificationDelay(Number(e.target.value))} 
+           />
+        </div>
+
+        <button className="btn-pro" onClick={() => verifyAllOnce()} disabled={playing || running}>
+          {playing ? 'Verifying...' : `Verify All (${verificationDelay}ms)`}
         </button>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '120px' }}>
+          <button className="btn-pro" onClick={startRun} disabled={playing || running}>
+            {running ? 'Running...' : 'Auto Run (10m)'}
+          </button>
+          <div style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>
+            {running && nextRunCountdown !== null && (
+              <small style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 'bold' }}>
+                Next run in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
+              </small>
+            )}
+            {lastRunTime && (
+              <small style={{ fontSize: '10px', color: '#059669' }}>
+                Finished: {lastRunTime}
+              </small>
+            )}
+          </div>
+        </div>
+
         {(playing || running) && (
-          <button className="button danger" onClick={stopAutomation}>Stop</button>
+          <button className="btn-pro danger" onClick={stopAutomation}>Stop</button>
         )}
       </div>
 
@@ -761,7 +702,17 @@ export default function Pools() {
                 return (
                   <details className="verify-item" key={item.key}>
                     <summary>
-                      <span className={`verify-status ${pending ? 'pending' : success ? 'success' : 'fail'}`}>
+                      <span 
+                        className={`verify-status ${pending ? 'pending' : success ? 'success' : 'fail'}`}
+                        onClick={event => {
+                          if (pending) return
+                          event.preventDefault()
+                          event.stopPropagation()
+                          openPoolEditor(item)
+                        }}
+                        style={{ cursor: pending ? 'wait' : 'pointer' }}
+                        title={pending ? "Verifying..." : "Click to open Pool Editor"}
+                      >
                         {pending ? 'Checking' : success ? 'Success' : 'Fail'}
                       </span>
                       <button
@@ -774,7 +725,19 @@ export default function Pools() {
                         }}
                         disabled={pending}
                       >
-                        {item.label}
+                      {item.label} <span style={{ fontSize: '0.9em', opacity: 0.7 }}>✎</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button"
+                        style={{ fontSize: '10px', marginLeft: 'auto', marginRight: '10px' }}
+                        onClick={event => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          setInspectData(item.result)
+                        }}
+                      >
+                        Inspect
                       </button>
                       <span className="verify-algorithm">{algorithm}</span>
                       <small>{pending ? 'Waiting for response' : getVerifyMessage(item.result)}</small>
@@ -783,7 +746,7 @@ export default function Pools() {
                       <div className="verify-log">
                         <h4>Verification log</h4>
                         {logs.map((log, index) => (
-                          <div className="verify-log-row" key={`${item.key}-log-${index}`}>
+                          <div className={`verify-log-row ${log.level?.toLowerCase() || ''}`} key={`${item.key}-log-${index}`}>
                             <span>{log.level || 'LOG'}</span>
                             <time>{log.timestamp || '-'}</time>
                             <p>{log.message || JSON.stringify(log)}</p>
@@ -804,114 +767,52 @@ export default function Pools() {
         )}
       </div>
 
-      {editor && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={closePoolEditor}>
-          <section
-            className="pool-editor-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="pool-editor-title"
-            onMouseDown={event => event.stopPropagation()}
-          >
-            <div className="response-header">
-              <div>
-                <h2 id="pool-editor-title">Pool Editor</h2>
-                <p>{editor.label}</p>
-              </div>
-              <span>{editorDetailsLoading ? 'Loading' : editorResponse ? (isVerifySuccess(editorResponse) ? 'Verified' : 'Failed') : 'Editing'}</span>
-            </div>
+      {activeEditorPool && (
+        <PoolEditor
+          pool={activeEditorPool}
+          onClose={closePoolEditor}
+          onSaveSuccess={handleEditorSaveSuccess}
+          onVerifySuccess={handleEditorVerifySuccess}
+          initialPoolData={activeEditorPool.initialData}
+          isNew={activeEditorPool.isNew}
+          // PoolEditor itself is a modal, so no need to wrap it in the generic Modal component
+        />
+      )}
 
-            <div className="pool-editor-grid">
-              <label className="label">
-                Pool details JSON
-                <textarea
-                  className="input pool-json editor"
-                  value={editorBody}
-                  onChange={event => updateEditorBody(event.target.value)}
-                  disabled={editorDetailsLoading}
-                  placeholder={editorDetailsLoading ? 'Loading pool details...' : ''}
-                />
-              </label>
+      {mrrRigs && (
+        <Modal isOpen={mrrRigs} onClose={() => setMrrRigs(null)} title="MiningRigRentals Data">
+          <pre className="response-body modal">
+            {JSON.stringify(mrrRigs, null, 2)}
+          </pre>
+          <div className="modal-actions">
+            <button className="btn-pro primary" onClick={() => setInspectData(mrrRigs)}>Expand View</button>
+            <button className="btn-pro secondary" onClick={() => setMrrRigs(null)}>Close</button>
+          </div>
+        </Modal>
+      )}
 
-              <div className="pool-editor-side">
-                <div className="pool-request-preview flat">
-                  <div className="response-header compact">
-                    <h3>Save request body</h3>
-                    <span>POST /api/v2/pool</span>
-                  </div>
-                  <pre className="response-body compact">
-                    {(() => {
-                      try {
-                        return JSON.stringify(buildPoolSaveBody(JSON.parse(editorBody)), null, 2)
-                      } catch {
-                        return 'Invalid JSON.'
-                      }
-                    })()}
-                  </pre>
-                </div>
-
-                <div className="pool-request-preview flat">
-                  <div className="response-header compact">
-                    <h3>Verify request body</h3>
-                    <span>Generated</span>
-                  </div>
-                  <pre className="response-body compact">
-                    {editorVerifyBody ? JSON.stringify(editorVerifyBody, null, 2) : 'Invalid JSON or unsupported pool shape.'}
-                  </pre>
-                </div>
-
-                {editorResponse && (
-                  <div className="pool-request-preview flat">
-                    <div className="response-header compact">
-                      <h3>Latest verify result</h3>
-                      <span>{isVerifySuccess(editorResponse) ? 'Success' : 'Fail'}</span>
-                    </div>
-                    <pre className="response-body compact">
-                      {JSON.stringify(editorResponse, null, 2)}
-                    </pre>
-                  </div>
-                )}
-
-                {editorSaveResponse && (
-                  <div className="pool-request-preview flat">
-                    <div className="response-header compact">
-                      <h3>Latest save result</h3>
-                      <span>{editorSaveResponse.ok ? 'Saved' : 'Fail'}</span>
-                    </div>
-                    <pre className="response-body compact">
-                      {JSON.stringify(editorSaveResponse, null, 2)}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {editorError && <pre className="error-message modal-error">{editorError}</pre>}
-
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="button secondary"
-                onClick={applyEditorToSelectedPool}
-                disabled={editor.key !== selectedId}
-              >
-                Apply to Selected
-              </button>
-              <button type="button" className="button" onClick={() => saveEditorPool()} disabled={editorSaving || editorDetailsLoading}>
-                {editorSaving ? 'Saving...' : 'Save Pool'}
-              </button>
-              <button type="button" className="button secondary" onClick={() => saveEditorPool({ verifyAfterSave: true })} disabled={editorSaving || editorLoading || editorDetailsLoading}>
-                Save + Verify
-              </button>
-              <button type="button" className="button" onClick={verifyEditorPool} disabled={editorLoading || editorDetailsLoading}>
-                {editorLoading ? 'Verifying...' : 'Verify Edited Pool'}
-              </button>
-              <button type="button" className="button secondary" onClick={closePoolEditor}>
-                Close
-              </button>
-            </div>
-          </section>
-        </div>
+      {inspectData && (
+        <Modal isOpen={inspectData} onClose={() => setInspectData(null)} title="Inspect Response" maxWidth="90vw">
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+             <button
+               className="text-button"
+               onClick={() => {
+                 navigator.clipboard.writeText(JSON.stringify(inspectData, null, 2));
+                 alert('Copied to clipboard');
+               }}
+             >
+               Copy JSON
+             </button>
+          </div>
+          <pre className="response-body modal" style={{ maxHeight: '70vh' }}>
+            {JSON.stringify(inspectData, null, 2)}
+          </pre>
+          <div className="modal-actions">
+            <button className="btn-pro secondary" onClick={() => setInspectData(null)}>
+              Dismiss
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   )

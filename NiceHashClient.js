@@ -87,7 +87,11 @@ export class NiceHashClient {
     });
 
     if (response.statusCode >= 400) {
-      throw new Error(`NiceHash API [${response.statusCode}]: ${await response.body.text()}`);
+      const errorText = await response.body.text();
+      const error = new Error(`NiceHash API [${response.statusCode}]: ${errorText}`);
+      error.statusCode = response.statusCode;
+      error.headers = response.headers;
+      throw error;
     }
     return response.body.json();
   }

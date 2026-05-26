@@ -6,8 +6,9 @@ import { cloudflare } from '@cloudflare/vite-plugin'
 export default defineConfig(({ command }) => ({
   plugins: [react(), command === 'build' ? cloudflare() : undefined].filter(Boolean),
   server: {
+    host: true,
     proxy: {
-      '/api': 'http://localhost:3000',
+      '/api': 'http://0.0.0.0:3000',
     },
   },
 }))

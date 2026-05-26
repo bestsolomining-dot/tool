@@ -163,21 +163,31 @@ const NiceHashApp = {
 const asyncHandler = fn => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(err => {
     console.error(`[api:error] ${req.method} ${req.originalUrl}`, err);
-    res.status(500).json({ error: err.message });
+    const status = err.statusCode || 500;
+
+    if (status === 429 && err.headers) {
+      if (err.headers['retry-after']) res.set('Retry-After', err.headers['retry-after']);
+      if (err.headers['x-ratelimit-limit']) res.set('X-RateLimit-Limit', err.headers['x-ratelimit-limit']);
+    }
+
+    res.status(status).json({ error: err.message });
   });
 };
 
 // Public
 app.get('/api/v2/time', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getTime())));
 app.get('/api/v2/algorithms', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getAlgorithms())));
+app.get('/api/v2/mining/markets', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getMarkets())));
+app.get('/api/v2/public/stats/24h', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getGlobalStats24h())));
 
 // Accounting
 app.get('/api/v2/accounting/balances', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.getBalances())));
 app.get('/api/v2/accounting/balance/:currency', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.getBalance(req.params.currency))));
 app.post('/api/v2/accounting/withdrawal', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.createWithdrawal(req.body))));
+app.get('/api/v2/mining/address', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getMiningAddress())));
 
 // Mining
-app.get('/api/v2/mining/rigs', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigs())));
+app.get('/api/v2/mining/rigs2', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigs())));
 app.get('/api/v2/mining/rig/:rigId', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigDetails(req.params.rigId))));
 app.post('/api/v2/mining/rigs/status', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.setRigStatus(req.body))));
 
@@ -191,6 +201,32 @@ app.get('/api/v2/pools', asyncHandler(async (req, res) => res.json(await NiceHas
 app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.getPoolDetails(req.params.poolId))));
 app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.createPool(req.body))));
 app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.verifyPool(req.body))));
+
+// --- MINING RIG RENTALS V2 ---
+async function mrrRequest(endpoint, res) {
+  const nonce = Date.now().toString();
+  const sig = createHash('sha1')
+    .update(mrrConfig.apiKey + nonce + endpoint + mrrConfig.apiSecret)
+    .digest('hex');
+
+  const { statusCode, body } = await request(`https://www.miningrigrentals.com/api/v2${endpoint}`, {
+    headers: {
+      'x-mrr-key': mrrConfig.apiKey,
+      'x-mrr-nonce': nonce,
+      'x-mrr-signature': sig,
+    }
+  });
+
+  const data = await body.json();
+  res.status(statusCode).json(data);
+}
+
+app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => mrrRequest('/rig/mine', res)));
+app.get('/api/v2/mrr/balance', asyncHandler(async (req, res) => mrrRequest('/account/balance', res)));
+app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => {
+  // Public endpoint, but signature is often required for consistency in some MRR accounts
+  mrrRequest('/info/algos', res);
+}));
 
 // Error handling wrapper for Express
 

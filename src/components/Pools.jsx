@@ -151,7 +151,7 @@ export default function Pools() {
 
   async function loadPools() {
     return fetch('/api/v2/pools')
-      .then(response => response.json())
+      .then(res => res.json())
       .then(data => {
         const normalized = normalizePools(data)
         setPools(normalized)
@@ -363,6 +363,7 @@ export default function Pools() {
           ...prev.filter(item => item.key !== key),
           { key, label: getPoolLabel(pool, i), result },
         ])
+
         if (stopRef.current || i >= targetPools.length - 1) break
         await new Promise(resolve => {
           const startedAt = Date.now()
@@ -396,6 +397,11 @@ export default function Pools() {
     }, 10 * 60 * 1000)
   }
 
+  function verifyAlgorithm(algorithm) {
+    const targetPools = pools.filter(pool => getPoolAlgorithm(pool) === algorithm)
+    verifyAllOnce({ targetPools })
+  }
+
   function stopAutomation() {
     stopRef.current = true
     setRunning(false)
@@ -407,11 +413,6 @@ export default function Pools() {
       activeRequestRef.current.abort()
       activeRequestRef.current = null
     }
-  }
-
-  function verifyAlgorithm(algorithm) {
-    const targetPools = pools.filter(pool => getPoolAlgorithm(pool) === algorithm)
-    verifyAllOnce({ targetPools })
   }
 
   function updateEditorBody(nextBody) {
@@ -548,7 +549,6 @@ export default function Pools() {
 
     const savePayload = buildPoolSaveBody(poolDetails)
     const missingFields = getMissingSaveFields(savePayload)
-
     if (missingFields.length > 0) {
       setEditorError(`Missing required save fields: ${missingFields.join(', ')}`)
       setEditorSaving(false)
@@ -637,7 +637,6 @@ export default function Pools() {
             {pools.map((pool, index) => {
               const val = getPoolKey(pool, index)
               const label = getPoolLabel(pool, index)
-
               return (
                 <button
                   type="button"
@@ -715,10 +714,10 @@ export default function Pools() {
           {loading ? 'Verifying...' : 'Verify Pool'}
         </button>
         <button className="button" onClick={() => verifyAllOnce()} disabled={playing || running}>
-          {playing ? 'Playing...' : 'Verify All (3s delay)'}
+          {playing ? 'Verifying...' : 'Verify All (3s delay)'}
         </button>
         <button className="button" onClick={startRun} disabled={playing || running}>
-          {running ? 'Running...' : 'Start Run (every 10m)'}
+          {running ? 'Running...' : 'Auto Run (every 10m)'}
         </button>
         {(playing || running) && (
           <button className="button danger" onClick={stopAutomation}>Stop</button>

@@ -35,13 +35,6 @@ export default function Pools() {
   const activeRequestRef = useRef(null)
   const dropdownRef = useRef(null) // Kept for legacy or cleanup
 
-  const [enableVerifyAllButton, setEnableVerifyAllButton] = useState(true)
-  const [enableVerifyImportedButton, setEnableVerifyImportedButton] = useState(true)
-  const [runVerifyAllInAuto, setRunVerifyAllInAuto] = useState(true)
-  const fileInputRef = useRef(null)
-  const poolsRef = useRef([])
-  useEffect(() => { poolsRef.current = pools }, [pools])
-
   const openNewPoolEditor = () => {
     const editor = {
       key: 'new',
@@ -239,21 +232,20 @@ export default function Pools() {
     }
   }
 
-  async function verifyAllOnce({ resetStop = true, keepRunning = false, targetPools } = {}) {
-    const poolsToVerify = targetPools || poolsRef.current
-    if (!Array.isArray(poolsToVerify) || poolsToVerify.length === 0 || playing) return
+  async function verifyAllOnce({ resetStop = true, keepRunning = false, targetPools = pools } = {}) {
+    if (!Array.isArray(targetPools) || targetPools.length === 0 || playing) return
     setPlaying(true)
     setError('')
     setResponse(null)
     setVerifyResults([])
-    setProgress({ current: 0, total: poolsToVerify.length })
+    setProgress({ current: 0, total: targetPools.length })
     if (resetStop) stopRef.current = false
 
     try {
-      for (let i = 0; i < poolsToVerify.length; i++) {
+      for (let i = 0; i < targetPools.length; i++) {
         if (stopRef.current) break
 
-        const pool = poolsToVerify[i]
+        const pool = targetPools[i]
         const poolId = ph.getId(pool)
         const key = ph.getKey(pool, i)
         const controller = new AbortController()
@@ -311,9 +303,9 @@ export default function Pools() {
           ...prev.filter(item => item.key !== key),
           { key, label: ph.getLabel(pool, i), result },
         ])
-        setProgress({ current: i + 1, total: poolsToVerify.length })
+        setProgress({ current: i + 1, total: targetPools.length })
 
-        if (stopRef.current || i >= poolsToVerify.length - 1) break
+        if (stopRef.current || i >= targetPools.length - 1) break
         await new Promise(resolve => {
           const startedAt = Date.now()
           const timer = setInterval(() => {
@@ -376,13 +368,9 @@ export default function Pools() {
     }
 
     await executeCycle()
-    if (stopRef.current) {
-      
+    if (stopRef.current) { // If stopped during the first cycle
       setRunning(false)
-
     }
-
-
   }
 
   function verifyAlgorithm(algorithm) {
@@ -394,6 +382,9 @@ export default function Pools() {
     const input = prompt('Paste pool JSON object or array to verify (one-time run):');
     if (!input) return;
     try {
+      if (!ph.XLSX) {
+        throw new Error('XLSX library not loaded. Cannot import files.');
+      }
       const parsed = JSON.parse(input);
       const list = Array.isArray(parsed) ? parsed : [parsed];
       const targetPools = list.map((p, i) => ({
@@ -525,7 +516,7 @@ export default function Pools() {
       )}
       <div className="pool-actions" style={{ minWidth: '500px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
         <div className="pool-actions" style={{ width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'left', gap: '0.8rem', marginBottom: '1rem' }}>
-
+          
           {/* Export button */}
           <button
             className="btn-pro secondary"
@@ -566,22 +557,22 @@ export default function Pools() {
             <button className="btn-pro" onClick={stopAutomation}>Stop</button>
           )}
           {/* Checkboxes for control */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginLeft: '1rem', borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '1rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', opacity: 0.8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginLeft: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem' }}>
               <input type="checkbox" checked={enableVerifyAllButton} onChange={(e) => setEnableVerifyAllButton(e.target.checked)} />
-              Enable 'Verify All'
+              Enable 'Verify All' Button
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', opacity: 0.8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem' }}>
               <input type="checkbox" checked={enableVerifyImportedButton} onChange={(e) => setEnableVerifyImportedButton(e.target.checked)} />
-              Enable 'Import/Verify'
+              Enable 'Verify Imported/XLSX' Buttons
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', opacity: 0.8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem' }}>
               <input type="checkbox" checked={runVerifyAllInAuto} onChange={(e) => setRunVerifyAllInAuto(e.target.checked)} />
-              Auto Pass: Run Verify Pass
+              Run 'Verify All' in Auto Mode
             </label>
           </div>
           {/* Time information block – pushed to the end on flex row, wraps below on small screens */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '0.9rem', marginRight: 'auto', background: 'rgba(92, 92, 92, 0.2)', padding: '4px 8px', borderRadius: '6px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '3rem   ', marginRight: 'auto', background: 'rgba(92, 92, 92, 0.2)', padding: '4px 8px', borderRadius: '6px' }}>
             {/* Delay input */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
               <label style={{ fontSize: '10px', fontWeight: 'bold' }}>DELAY (5s)</label>

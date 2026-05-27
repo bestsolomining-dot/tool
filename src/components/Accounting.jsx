@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { apiFetch } from './poolUtils'
+import { apiFetch } from '../core/poolUtils'
 
 const ENDPOINTS = [
   { key: 'balances', label: 'Get All Balances', method: 'GET', path: '/api/v2/accounting/balances' },
@@ -125,7 +125,7 @@ export default function Accounting({ onCall }) {
       )}
 
       <button className="btn-pro primary" onClick={callApi} disabled={loading}>
-        Execute {endpoint.method} Request
+        {endpoint.method} Balance
       </button>
 
       {!onCall && (

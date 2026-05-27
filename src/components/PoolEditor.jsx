@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import Modal from './Modal'
-import { poolHelpers as ph, apiFetch, poolApi } from './poolUtils'
+import { poolHelpers as ph, apiFetch, poolApi } from '../core/poolUtils'
 
 export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySuccess, initialPoolData, isNew, isPopout = false }) {
   const [editorBody, setEditorBody] = useState('')

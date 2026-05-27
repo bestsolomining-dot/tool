@@ -147,5 +147,5 @@ export const poolApi = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   }),
-  mrrRigs: () => apiFetch('/api/v2/mrr/rigs')
+  mrrRigs: (client) => apiFetch(`/api/v2/mrr/rigs${client ? `?client=${client}` : ''}`)
 };

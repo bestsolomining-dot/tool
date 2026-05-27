@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { apiFetch } from './poolUtils';
+import { apiFetch } from '../core/poolUtils';
 
 /**
  * HashpowerBot Component
@@ -7,13 +7,14 @@ import { apiFetch } from './poolUtils';
  * Automates interactions with the NiceHash Hashpower Market.
  * Monitors market prices and provides a foundation for automated ordering.
  */
-export default function HashpowerBot({ algorithm, market }) {
+export default function HashpowerBot({ algorithm, market, onCall }) {
   const [isRunning, setIsRunning] = useState(false);
   const [logs, setLogs] = useState([]);
   const [marketData, setMarketData] = useState(null);
   const [config, setConfig] = useState({
     checkInterval: 60000, // 1 minute
     maxPrice: '0.0100',
+    stepDown: '0.0001',
   });
   
   const timerRef = useRef(null);
@@ -27,21 +28,96 @@ export default function HashpowerBot({ algorithm, market }) {
     addLog(`Checking market for ${algorithm} (${market})...`);
     
     try {
-      const path = `/api/v2/hashpower/order-book?algorithm=${algorithm}&market=${market}`;
-      const result = await apiFetch(path);
+      // 1. Get my active orders to find the one we are managing
+      const ordersData = await onCall('/api/v2/hashpower/myOrders', {
+        query: { 
+          op: 'LE', 
+          ts: Date.now(), 
+          active: true, 
+          limit: 1000 
+        },
+        silent: true
+      });
 
-      if (result.ok) {
-        setMarketData(result.data);
-        // The API structure varies, we attempt to find stats in common locations
-        const stats = result.data?.stats?.[market] || result.data?.stats || {};
-        addLog(`Market check successful. Orders: ${stats.ordersCount || 0}, Min Price: ${stats.minimalPrice || 'N/A'}`);
+      if (ordersData?.error || ordersData?.message) {
+        const errorMsg = ordersData.error || ordersData.message;
+        addLog(`API Error (Orders): ${typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)}`, 'error');
+        return;
+      }
+
+      const activeOrders = ordersData?.list || [];
+      const myOrder = activeOrders.find(o => {
+        const oAlgo = typeof o.algorithm === 'object' ? o.algorithm.algorithm : o.algorithm;
+        const oMarket = typeof o.market === 'object' ? o.market.id || o.market.name : o.market;
         
-        if (stats.minimalPrice && parseFloat(stats.minimalPrice) <= parseFloat(config.maxPrice)) {
-           addLog('Threshold condition met: Price is below maximum limit.', 'success');
+        return String(oAlgo || '').toUpperCase() === algorithm.toUpperCase() && 
+               String(oMarket || '').toUpperCase() === market.toUpperCase() &&
+               (o.status?.code === 'ACTIVE' || o.status === 'ACTIVE');
+      });
+
+      if (!myOrder) {
+        addLog(`No active order found for ${algorithm} (${market}). Check "My Orders" first.`, 'warn');
+        return;
+      }
+
+      // 2. Get order book for the specific algorithm and market
+      const bookData = await onCall('/api/v2/hashpower/order-book', {
+        query: { algorithm, market },
+        silent: true
+      });
+
+      if (bookData?.error || bookData?.message) {
+        const errorMsg = bookData.error || bookData.message;
+        addLog(`API Error (OrderBook): ${typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)}`, 'error');
+        return;
+      }
+
+      const book = (bookData?.list || bookData?.[0]?.list || []).filter(o => o.type === 'STANDARD');
+      
+      // 3. Compare and Adjust
+      const myPrice = parseFloat(myOrder.price);
+      const mySpeed = parseFloat(myOrder.acceptedCurrentSpeed);
+      const myLimit = parseFloat(myOrder.limit);
+      const maxPriceThreshold = parseFloat(config.maxPrice) || 0;
+      const stepDownDelta = parseFloat(config.stepDown) || 0;
+      const minDelta = 0.0001; // Minimal increment to be above competitor
+
+      // Find highest competitor price that is not ours
+      const competitors = book.filter(o => o.id !== myOrder.id);
+      const highestCompPrice = competitors.length > 0 ? parseFloat(competitors[0].price) : 0;
+      const optimalPrice = highestCompPrice + minDelta;
+
+      let nextPrice = myPrice;
+
+      if (mySpeed >= myLimit * 0.95) {
+        // We are at speed. Check if we can lower the price.
+        if (myPrice > optimalPrice) {
+          nextPrice = Math.max(myPrice - stepDownDelta, optimalPrice);
+          addLog(`?adjust price?; order ${myOrder.id}, speed ${mySpeed.toFixed(8)}, rigs ${myOrder.rigsCount}, price ${myPrice.toFixed(4)}, step_down -${stepDownDelta.toFixed(4)}`, 'success');
+        } else {
+          addLog(`[STABLE] Speed OK (${mySpeed.toFixed(4)}). Price is optimal at ${myPrice.toFixed(4)}`);
         }
       } else {
-        addLog(`Failed to fetch market data: ${result.status}`, 'error');
+        // Speed is low. Check if we need to increase price.
+        if (optimalPrice > myPrice) {
+          nextPrice = Math.min(optimalPrice, maxPriceThreshold);
+          addLog(`?adjust price?; order ${myOrder.id}, speed ${mySpeed.toFixed(8)}, rigs ${myOrder.rigsCount}, price ${myPrice.toFixed(4)}, step_up ${nextPrice.toFixed(4)}`, 'warn');
+        } else {
+          addLog(`[WAIT] Already at top of book (${myPrice.toFixed(4)}), waiting for available rigs.`);
+        }
       }
+
+      // 4. Update the order if price has changed
+      if (Math.abs(nextPrice - myPrice) > 0.00001) {
+        await onCall(`/api/v2/hashpower/order/${myOrder.id}/update`, {
+          method: 'POST',
+          body: { price: nextPrice.toFixed(8), limit: myOrder.limit },
+          silent: true
+        });
+      }
+
+      addLog(`Cycle complete. Managed Order: ${myOrder.id.slice(0,8)}...`);
+
     } catch (err) {
       addLog(`Bot Error: ${err.message}`, 'error');
     }
@@ -61,7 +137,7 @@ export default function HashpowerBot({ algorithm, market }) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRunning, algorithm, market, config.checkInterval]);
+  }, [isRunning, algorithm, market, config.checkInterval, onCall]);
 
   return (
     <div className="bot-panel" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
@@ -73,7 +149,7 @@ export default function HashpowerBot({ algorithm, market }) {
         </div>
       </div>
 
-      <div className="field-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+      <div className="field-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
         <div className="field">
           <label className="label">Max Price Threshold</label>
           <input 
@@ -82,6 +158,17 @@ export default function HashpowerBot({ algorithm, market }) {
             step="0.0001"
             value={config.maxPrice} 
             onChange={e => setConfig(prev => ({ ...prev, maxPrice: e.target.value }))}
+            disabled={isRunning}
+          />
+        </div>
+        <div className="field">
+          <label className="label">Step Down Delta</label>
+          <input 
+            className="input-pro" 
+            type="number" 
+            step="0.0001"
+            value={config.stepDown} 
+            onChange={e => setConfig(prev => ({ ...prev, stepDown: e.target.value }))}
             disabled={isRunning}
           />
         </div>

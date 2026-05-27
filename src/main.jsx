@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App.jsx'; // Ensure .jsx extension
+import App from '../App.jsx'; // Found in parent directory
 
 import './index.css'; // Import global styles
 const container = document.getElementById('root');

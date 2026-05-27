@@ -1,14 +1,18 @@
 import 'dotenv/config';
 import express from 'express';
+import fs from 'fs/promises';
+import path from 'path';
 import { createHash, createHmac } from 'crypto';
 import { request } from 'undici';
 import { NiceHashClient } from './NiceHashClient.js';
 import { mapNiceHashToMRR } from './src/core/algoMapping.js';
 
 const app = express();
+app.set('etag', false); // Disable ETags to prevent 304 caching on API errors
 app.use(express.json());
 const mrrLastNonceByClient = new Map();
 const mrrQueueByClient = new Map();
+const mrrInstances = new Map();
 
 // --- CORS MIDDLEWARE (Must be first) ---
 app.use((req, res, next) => {
@@ -69,9 +73,19 @@ const mrrConfigs = {
     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_SL),
     apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_SL),
   },
+  VN: {
+    apiKey: normalizeCredential(process.env.MRR_KEY_RIG_VN),
+    apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_VN),
+  },
 };
 const defaultMrrClientRaw = String(process.env.MRR_DEFAULT_CLIENT || 'BT').trim().toUpperCase();
-const defaultMrrClient = defaultMrrClientRaw === 'SL' ? 'SL' : 'BT';
+const defaultMrrClient = (function() {
+  if (mrrConfigs[defaultMrrClientRaw]) return defaultMrrClientRaw;
+  // Fallback logic
+  if (defaultMrrClientRaw === 'SL') return 'SL';
+  if (defaultMrrClientRaw === 'VN') return 'VN';
+  return 'BT';
+})();
 
 if (!config.apiKey || !config.apiSecret || !config.orgId) {
   console.warn('NICEHASH_API_KEY, NICEHASH_API_SECRET, and NICEHASH_ORG_ID are required for NiceHash v2 requests.')
@@ -98,78 +112,78 @@ const NiceHashApp = {
 
   // --- ACCOUNTING & WALLET ---
   accounting: {
-    getBalances: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/accounts2' }),
-    getBalance: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/account2/${currency}` }),
-    getActivitiesAll: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/activities' }),
-    getActivity: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/activity/${currency}` }),
-    getCurrencies: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/currencies' }),
+    getBalances: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/accounts2', query: { ts: Date.now().toString() } }),
+    getBalance: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/account2/${currency}`, query: { ts: Date.now().toString() } }),
+    getActivitiesAll: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/activities', query: { ts: Date.now().toString() } }),
+    getActivity: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/activity/${currency}`, query: { ts: Date.now().toString() } }),
+    getCurrencies: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/currencies', query: { ts: Date.now().toString() } }),
     getDepositAddressLn: (body) => client.call({ method: 'POST', path: '/main/api/v2/accounting/depositAddress/ln', body }),
-    getDepositAddresses: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/depositAddresses' }),
-    getDepositsAll: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/deposits' }),
-    getDeposits: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/deposits/${currency}` }),
-    getDepositDetail: (currency, id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/deposits2/${currency}/${id}` }),
-    getExchangeTrades: (id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/exchange/${id}/trades` }),
-    getHashpowerTransactions: (id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/hashpower/${id}/transactions` }),
-    getMiningEarnings: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/hashpowerEarnings/${currency}` }),
-    getIndividualBalance: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/individual/balance' }),
-    listVirginUtxos: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/list/virginUtxo' }),
+    getDepositAddresses: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/depositAddresses', query: { ts: Date.now().toString() } }),
+    getDepositsAll: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/deposits', query: { ts: Date.now().toString() } }),
+    getDeposits: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/deposits/${currency}`, query: { ts: Date.now().toString() } }),
+    getDepositDetail: (currency, id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/deposits2/${currency}/${id}`, query: { ts: Date.now().toString() } }),
+    getExchangeTrades: (id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/exchange/${id}/trades`, query: { ts: Date.now().toString() } }),
+    getHashpowerTransactions: (id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/hashpower/${id}/transactions`, query: { ts: Date.now().toString() } }),
+    getMiningEarnings: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/hashpowerEarnings/${currency}`, query: { ts: Date.now().toString() } }),
+    getIndividualBalance: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/individual/balance', query: { ts: Date.now().toString() } }),
+    listVirginUtxos: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/list/virginUtxo', query: { ts: Date.now().toString() } }),
     selectVirginUtxo: (body) => client.call({ method: 'POST', path: '/main/api/v2/accounting/select/virginUtxo', body }),
-    getTransaction: (currency, transactionId) => client.call({ method: 'GET', path: `/main/api/v2/accounting/transaction/${currency}/${transactionId}` }),
-    getTransactions: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/transactions/${currency}` }),
+    getTransaction: (currency, transactionId) => client.call({ method: 'GET', path: `/main/api/v2/accounting/transaction/${currency}/${transactionId}`, query: { ts: Date.now().toString() } }),
+    getTransactions: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/transactions/${currency}`, query: { ts: Date.now().toString() } }),
     transitionConsolidation: (body) => client.call({ method: 'POST', path: '/main/api/v2/accounting/transition/consolidation', body }),
-    getTravelRuleData: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/travelrule/transaction/data' }),
-    getTravelRuleVasps: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/travelrule/vasps' }),
+    getTravelRuleData: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/travelrule/transaction/data', query: { ts: Date.now().toString() } }),
+    getTravelRuleVasps: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/travelrule/vasps', query: { ts: Date.now().toString() } }),
     resolveWithheld: (id) => client.call({ method: 'POST', path: `/main/api/v2/accounting/travelrule/withheldDeposit/resolve/${id}` }),
     createWithdrawal: (body) => client.call({ method: 'POST', path: '/main/api/v2/accounting/withdrawal', body }),
     cancelWithdrawal: (currency, id) => client.call({ method: 'DELETE', path: `/main/api/v2/accounting/withdrawal/${currency}/${id}` }),
-    getWithdrawalDetail: (currency, id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawal2/${currency}/${id}` }),
-    getWithdrawalAddress: (id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawalAddress/${id}` }),
-    getWithdrawalAddresses: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/withdrawalAddresses' }),
-    getWithdrawals: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawals/${currency}` }),
+    getWithdrawalDetail: (currency, id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawal2/${currency}/${id}`, query: { ts: Date.now().toString() } }),
+    getWithdrawalAddress: (id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawalAddress/${id}`, query: { ts: Date.now().toString() } }),
+    getWithdrawalAddresses: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/withdrawalAddresses', query: { ts: Date.now().toString() } }),
+    getWithdrawals: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawals/${currency}`, query: { ts: Date.now().toString() } }),
   },
 
   // --- RIG MANAGEMENT (MINER PRIVATE) ---
   mining: {
-    getMiningAddress: () => client.call({ method: 'GET', path: '/main/api/v2/mining/miningAddress' }),
-    getAlgoStats: () => client.call({ method: 'GET', path: '/main/api/v2/mining/algo/stats' }),
-    getGroups: () => client.call({ method: 'GET', path: '/main/api/v2/mining/groups/list' }),
-    getRigStatsAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rig/stats/algo' }),
-    getRigStatsUnpaid: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rig/stats/unpaid' }),
-    getRigDetails: (rigId) => client.call({ method: 'GET', path: `/main/api/v2/mining/rig2/${rigId}` }),
-    getRigsLegacy: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs' }),
-    getActiveWorkers: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/activeWorkers' }),
-    getPayouts: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/payouts' }),
-    getRigsStatsAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/algo' }),
-    getRigsStatsData: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/data' }),
-    getRigsStatsDataAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/data/algo' }),
-    getRigsStatsHistory: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/history' }),
-    getRigsStatsUnpaid: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/unpaid' }),
+    getMiningAddress: () => client.call({ method: 'GET', path: '/main/api/v2/mining/miningAddress', query: { ts: Date.now().toString() } }),
+    getAlgoStats: () => client.call({ method: 'GET', path: '/main/api/v2/mining/algo/stats', query: { ts: Date.now().toString() } }),
+    getGroups: () => client.call({ method: 'GET', path: '/main/api/v2/mining/groups/list', query: { ts: Date.now().toString() } }),
+    getRigStatsAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rig/stats/algo', query: { ts: Date.now().toString() } }),
+    getRigStatsUnpaid: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rig/stats/unpaid', query: { ts: Date.now().toString() } }),
+    getRigDetails: (rigId) => client.call({ method: 'GET', path: `/main/api/v2/mining/rig2/${rigId}`, query: { ts: Date.now().toString() } }),
+    getRigsLegacy: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs', query: { ts: Date.now().toString() } }),
+    getActiveWorkers: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/activeWorkers', query: { ts: Date.now().toString() } }),
+    getPayouts: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/payouts', query: { ts: Date.now().toString() } }),
+    getRigsStatsAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/algo', query: { ts: Date.now().toString() } }),
+    getRigsStatsData: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/data', query: { ts: Date.now().toString() } }),
+    getRigsStatsDataAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/data/algo', query: { ts: Date.now().toString() } }),
+    getRigsStatsHistory: (query) => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/history', query }),
+    getRigsStatsUnpaid: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/unpaid', query: { ts: Date.now().toString() } }),
     setRigStatus: (body) => client.call({ method: 'POST', path: '/main/api/v2/mining/rigs/status2', body }),
-    getRigs: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs2' }),
-    exportOfflineRigs: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs2/exportOffline' }),
+    getRigs: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs2', query: { ts: Date.now().toString() } }),
+    exportOfflineRigs: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs2/exportOffline', query: { ts: Date.now().toString() } }),
   },
 
   // --- HASHPOWER MARKETPLACE ---
   hashpower: {
     getBusinessBuyerStats: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/business/buyer/stats' }),
     getBusinessBuyerInfo: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/business/buyers/info' }),
-    getMyOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/myOrders' }),
+    getMyOrders: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/myOrders', query: { orgId: config.orgId, ...query } }),
     createOrder: (orderData) => client.call({ method: 'POST', path: '/main/api/v2/hashpower/order', body: orderData }),
-    getOrderDetail: (orderId) => client.call({ method: 'GET', path: `/main/api/v2/hashpower/order/${orderId}` }),
+    getOrderDetail: (orderId) => client.call({ method: 'GET', path: `/main/api/v2/hashpower/order/${orderId}`, query: { ts: Date.now().toString() } }),
     cancelOrder: (orderId) => client.call({ method: 'DELETE', path: `/main/api/v2/hashpower/order/${orderId}` }),
     refillOrder: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/refill`, body }),
     updatePriceLimit: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/updatePriceAndLimit`, body }),
-    getVmmOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/vmm/orders' }),
+    getVmmOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/vmm/orders', query: { ts: Date.now().toString() } }),
     // Public Hashpower
     getOrderPrice: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/order/price', query }),
-    getOrderBook: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/orderBook', query }),
+    getOrderBook: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/orderBook', query: { ts: Date.now().toString(), ...query } }),
     getGlobalStats24h: () => client.call({ method: 'GET', path: '/main/api/v2/public/stats/global/24h' }),
   },
 
   // --- EASYMINING ---
   easyMining: {
-    getMassBuyConfigs: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/easymining/massbuy/configurations' }),
-    getSoloOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/solo/order' }),
+    getMassBuyConfigs: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/easymining/massbuy/configurations', query: { ts: Date.now().toString() } }),
+    getSoloOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/solo/order', query: { ts: Date.now().toString() } }),
     buySoloPackage: (body) => client.call({ method: 'POST', path: '/main/api/v2/hashpower/solo/order', body }),
     // Public EasyMining
     getCurrencyAlgos: () => client.call({ method: 'GET', path: '/main/api/v2/public/currency-algos' }),
@@ -262,13 +276,55 @@ app.get('/api/v2/mining/rigs2', asyncHandler(async (req, res) => res.json(await 
 app.get('/api/v2/mining/rig/:rigId', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigDetails(req.params.rigId))));
 app.post('/api/v2/mining/rigs/status', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.setRigStatus(req.body))));
 app.get('/api/v2/mining/payouts', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getPayouts())));
-app.get('/api/v2/mining/history', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigsStatsHistory())));
+app.get('/api/v2/mining/history', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigsStatsHistory(req.query))));
 app.get('/api/v2/mining/algo-stats', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getAlgoStats())));
 
 // Hashpower
-app.get('/api/v2/hashpower/my-orders', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getMyOrders())));
+app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
+  const query = { ...req.query };
+  if (!query.ts) query.ts = Date.now().toString();
+  console.log('Backend received /api/v2/hashpower/myOrders with query:', query);
+  const data = await NiceHashApp.hashpower.getMyOrders(query);
+
+  // Save to CSV on the server side (current path)
+  const list = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
+  if (list && list.length > 0) {
+    try {
+      const flattenedData = list.map(o => ({
+        id: o.id || '',
+        algorithm: typeof o.algorithm === 'object' ? o.algorithm.algorithm : o.algorithm,
+        market: typeof o.market === 'object' ? o.market.id : o.market,
+        price: o.price,
+        limit: o.limit,
+        speed: o.acceptedCurrentSpeed || 0,
+        poolHost: o.pool?.stratumHostname || '',
+        poolUser: o.pool?.username || '',
+        poolPass: o.pool?.password || '',
+        status: typeof o.status === 'object' ? o.status.code : o.status,
+        ts: new Date().toISOString()
+      }));
+
+      const headers = Object.keys(flattenedData[0]).join(',');
+      const rows = flattenedData.map(row => 
+        Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+      ).join('\n');
+
+      const csvContent = `${headers}\n${rows}`;
+      const filePath = path.join(process.cwd(), `nicehash_orders_${Date.now()}.csv`);
+      await fs.writeFile(filePath, csvContent, 'utf-8');
+      console.log(`[csv] Saved orders list to: ${filePath}`);
+    } catch (csvErr) {
+      console.error('[csv] Failed to save CSV:', csvErr.message);
+    }
+  }
+  res.json(data);
+}));
+app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getOrderDetail(req.params.orderId))));
 app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.createOrder(req.body))));
 app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getOrderBook(req.query))));
+app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.cancelOrder(req.params.orderId))));
+app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.refillOrder(req.params.orderId, req.body))));
+app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.updatePriceLimit(req.params.orderId, req.body))));
 
 // Pools
 app.get('/api/v2/pools', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.getPools())));
@@ -277,18 +333,56 @@ app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await NiceHas
 app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.verifyPool(req.body))));
 
 // --- MINING RIG RENTALS V2 ---
+function nextMrrNonce(clientName) {
+  // Use BigInt to support huge nonces without precision loss
+  const lastNonce = BigInt(mrrLastNonceByClient.get(clientName) || 0n);
+  const now = BigInt(Date.now());
+  const nonce = now > lastNonce ? now : lastNonce + 1n;
+  
+  mrrLastNonceByClient.set(clientName, nonce);
+  return nonce.toString();
+}
+
 function resolveMrrClient(clientNameRaw) {
   const clientName = String(clientNameRaw || defaultMrrClient).toUpperCase();
-  const clientConfig = mrrConfigs[clientName];
 
-  if (!clientConfig) {
-    const err = new Error(`Unknown MRR client "${clientName}". Use BT or SL.`);
-    err.statusCode = 400;
-    throw err;
+  if (!mrrInstances.has(clientName)) {
+    let config = mrrConfigs[clientName];
+    
+    const envKey = process.env[`MRR_KEY_RIG_${clientName}`] || 
+                   process.env[`MRR_API_KEY_${clientName}`];
+    const envSecret = process.env[`MRR_SECRET_RIG_${clientName}`] || 
+                     process.env[`MRR_API_SECRET_${clientName}`];
+
+    const envNonce = process.env[`RIG_${clientName}_NOUNCE`]; // Read nonce from environment
+
+    if (envKey && envSecret) {
+      config = {
+        apiKey: normalizeCredential(envKey),
+        apiSecret: normalizeCredential(envSecret),
+      };
+    }
+
+    if (config?.apiKey && config?.apiSecret) {
+      mrrInstances.set(clientName, config);
+      
+      if (envNonce) {
+        try {
+          const bigEnv = BigInt(envNonce);
+          const now = BigInt(Date.now());
+          const initialNonce = bigEnv > now ? bigEnv : now;
+          mrrLastNonceByClient.set(clientName, initialNonce.toString());
+          console.log(`[mrr:${clientName}] Initializing nonce from environment: ${initialNonce.toString()}`);
+        } catch (e) {
+          console.warn(`[mrr:${clientName}] Invalid nonce in environment: ${envNonce}`);
+        }
+      }
+    }
   }
 
-  if (!clientConfig.apiKey || !clientConfig.apiSecret) {
-    const err = new Error(`MRR credentials missing for client "${clientName}". Expected MRR_KEY_RIG_${clientName} and MRR_SECRET_RIG_${clientName}.`);
+  const clientConfig = mrrInstances.get(clientName);
+  if (!clientConfig) {
+    const err = new Error(`MRR credentials missing for client "${clientName}". Ensure MRR_KEY_RIG_${clientName} and MRR_SECRET_RIG_${clientName} are set in .env.`);
     err.statusCode = 400;
     throw err;
   }
@@ -334,18 +428,6 @@ function extractAlgorithmItems(payload, candidateKeys = []) {
   return [];
 }
 
-function nextMrrNonce(clientName) {
-  // MRR nonces must be strictly increasing.
-  // We use milliseconds multiplied by 1000 to simulate microseconds, 
-  // ensuring that even high-frequency requests remain unique and increasing.
-  // We store as string in the map to avoid BigInt serialization issues.
-  const now = BigInt(Date.now()) * 1000n;
-  const previous = BigInt(mrrLastNonceByClient.get(clientName) || 0);
-  const next = now > previous ? now : previous + 1n;
-  mrrLastNonceByClient.set(clientName, next.toString());
-  return String(next);
-}
-
 async function runMrrCallInOrder(clientName, task) {
   const previous = mrrQueueByClient.get(clientName) || Promise.resolve();
   const current = previous
@@ -363,20 +445,100 @@ async function runMrrCallInOrder(clientName, task) {
   }
 }
 
+// async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw }) {
+//   const { clientName, clientConfig } = resolveMrrClient(clientNameRaw);
+//   return runMrrCallInOrder(clientName, async () => {
+//     const normalizedEndpoint = sanitizeMrrEndpoint(endpoint);
+//     const requestMethod = String(method || 'GET').toUpperCase();
+
+//     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
+//     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedEndpoint}`);
+//     if (query && typeof query === 'object') {
+//       for (const [key, value] of Object.entries(query)) {
+//         if (value === undefined || value === null || value === '') continue;
+//         baseUrl.searchParams.set(key, String(value));
+//       }
+//     }
+
+//     // MRR V2 Signature requires the endpoint path ONLY (excluding query strings).
+//     // The endpoint must start with a / relative to the v2 base.
+//     // Example: /api/v2/rig/14 -> /rig/14
+//     const sigEndpoint = baseUrl.pathname.replace(/^\/api\/v2/, '');
+    
+//     const send = async (headers, requestNonce, requestBodyContent) => request(baseUrl.toString(), {
+//       method: requestMethod,
+//       headers: {
+//         'user-agent': 'Mozilla/4.0 (compatible; MRR API Node client; Ben Tre Mining Tool)',
+//         ...headers,
+//         ...(hasBody ? { 'content-type': 'application/json' } : {}),
+//       },
+//       ...(hasBody ? { body: JSON.stringify(requestBodyContent) } : {}),
+//     });
+
+//     // Primary auth: documented v2 headers.
+//     let nonce = nextMrrNonce(clientName);
+//     let signString = `${clientConfig.apiKey}${nonce}${sigEndpoint}`;
+//     let apiSig = createHmac('sha1', clientConfig.apiSecret).update(String(signString)).digest('hex');
+
+//     let { statusCode, body: responseBody } = await send({
+//       'x-api-key': clientConfig.apiKey,
+//       'x-api-nonce': nonce,
+//       'x-api-sign': apiSig,
+//     }, nonce, body);
+
+//     const text = await responseBody.text();
+//     let data;
+//     try {
+//       data = text ? JSON.parse(text) : { success: false, message: 'Empty response' };
+//     } catch {
+//       data = { success: false, message: text };
+//     }
+
+//     const authMessage = String(data?.data?.message || data?.message || '');
+//     const isAuthError = !data.success && (authMessage.includes('Not Authenticated') || authMessage.includes('Invalid Key') || authMessage.includes('Invalid signature'));
+
+//     const shouldFallbackLegacy =
+//       statusCode >= 400 || isAuthError ||
+//       authMessage.includes('Missing API Key');
+
+//     if (shouldFallbackLegacy) {
+//       console.warn(`[mrr:${clientName}] Auth failure on v2 headers, trying legacy fallback...`);
+      
+//       // IMPORTANT: Generate a FRESH nonce for the retry attempt
+//       nonce = nextMrrNonce(clientName);
+//       signString = `${clientConfig.apiKey}${nonce}${sigEndpoint}`;
+//       const legacySig = createHash('sha1').update(String(signString + clientConfig.apiSecret)).digest('hex');
+
+//       const legacyResponse = await send({
+//         'x-mrr-key': clientConfig.apiKey,
+//         'x-mrr-nonce': nonce,
+//         'x-mrr-signature': legacySig,
+//       }, nonce, body);
+
+//       statusCode = legacyResponse.statusCode;
+//       const legacyText = await legacyResponse.body.text();
+//       try {
+//         data = legacyText ? JSON.parse(legacyText) : {};
+//       } catch {
+//         data = { success: false, message: legacyText };
+//       }
+//     }
+
+//     // If final data still reports failure, ensure statusCode reflects it
+//     if (data && data.success === false && statusCode === 200) {
+//       console.error(`[mrr:${clientName}] API Error: ${data.message || 'Unauthorized'}`);
+//       statusCode = 401; // Treat as Unauthorized for the frontend
+//     }
+
+//     return { statusCode, data, clientName };
+//   });
+// }
+
 async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw }) {
   const { clientName, clientConfig } = resolveMrrClient(clientNameRaw);
   return runMrrCallInOrder(clientName, async () => {
     const normalizedEndpoint = sanitizeMrrEndpoint(endpoint);
     const requestMethod = String(method || 'GET').toUpperCase();
-    const sigEndpoint = normalizedEndpoint.startsWith('/') ? normalizedEndpoint.substring(1) : normalizedEndpoint;
-
-    const nonce = nextMrrNonce(clientName);
-    const apiSig = createHmac('sha1', clientConfig.apiSecret)
-      .update(`${clientConfig.apiKey}${nonce}${sigEndpoint}`)
-      .digest('hex');
-    const legacySig = createHash('sha1')
-      .update(`${clientConfig.apiKey}${nonce}${sigEndpoint}${clientConfig.apiSecret}`)
-      .digest('hex');
 
     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedEndpoint}`);
@@ -387,23 +549,33 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
       }
     }
 
-    const send = async (headers) => request(baseUrl.toString(), {
+    // Endpoint for signature: relative to /api/v2, no query string
+    const sigEndpoint = baseUrl.pathname.replace(/^\/api\/v2/, '');
+    
+    const send = async (nStr, sig, authHeaders = {}) => request(baseUrl.toString(), {
       method: requestMethod,
       headers: {
-        ...headers,
+        'user-agent': 'Ben Tre Mining Tool/2.0',
+        'accept': 'application/json',
+        'cache-control': 'no-store, no-cache, must-revalidate',
+        ...authHeaders,
         ...(hasBody ? { 'content-type': 'application/json' } : {}),
       },
       ...(hasBody ? { body: JSON.stringify(body) } : {}),
     });
 
-    // Primary auth: documented v2 headers.
-    let { statusCode, body: responseBody } = await send({
+    // --- TRY MODERN V2 (HMAC-SHA1) ---
+    let currentNonce = nextMrrNonce(clientName);
+    let signString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
+    let signature = createHmac('sha1', clientConfig.apiSecret).update(signString).digest('hex');
+
+    let response = await send(currentNonce, signature, {
       'x-api-key': clientConfig.apiKey,
-      'x-api-nonce': nonce,
-      'x-api-sign': apiSig,
+      'x-api-nonce': currentNonce,
+      'x-api-sign': signature
     });
 
-    const text = await responseBody.text();
+    let text = await response.body.text();
     let data;
     try {
       data = text ? JSON.parse(text) : { success: false, message: 'Empty response' };
@@ -411,36 +583,33 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
       data = { success: false, message: text };
     }
 
-    // If MRR returns success: false in the body, we treat it as an error
-    // even if the HTTP status code is 200.
-    const isAuthError = !data.success && (String(data.message).includes('Not Authenticated') || String(data.message).includes('Invalid Key'));
-
+    // --- FALLBACK TO LEGACY (SHA1 CONCAT) ---
     const authMessage = String(data?.data?.message || data?.message || '');
-    const shouldFallbackLegacy =
-      statusCode >= 400 || isAuthError ||
-      authMessage.includes('Missing API Key');
+    const isSigError = !data.success && (authMessage.includes('Signature Failure') || authMessage.includes('Invalid signature'));
 
-    if (shouldFallbackLegacy) {
-      const legacyResponse = await send({
+    if (isSigError) {
+      console.warn(`[mrr:${clientName}] HMAC failed, retrying with Legacy SHA1 Concatenation...`);
+      currentNonce = nextMrrNonce(clientName);
+      const legacyStr = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}${clientConfig.apiSecret}`;
+      const legacySig = createHash('sha1').update(legacyStr).digest('hex');
+
+      response = await send(currentNonce, legacySig, {
         'x-mrr-key': clientConfig.apiKey,
-        'x-mrr-nonce': nonce,
-        'x-mrr-signature': legacySig,
+        'x-mrr-nonce': currentNonce,
+        'x-mrr-signature': legacySig
       });
-      statusCode = legacyResponse.statusCode;
-      const legacyText = await legacyResponse.body.text();
-      try {
-        data = legacyText ? JSON.parse(legacyText) : {};
-      } catch {
-        data = { success: false, message: legacyText };
-      }
+      const retryText = await response.body.text();
+      data = JSON.parse(retryText);
     }
 
-    // If final data still reports failure, ensure statusCode reflects it
-    if (data && data.success === false && statusCode === 200) {
-      statusCode = 401; // Treat as Unauthorized for the frontend
-    }
+    // Force 401 if MRR returns success: false
+    let finalStatus = response.statusCode;
+    if (!data.success && finalStatus === 200) finalStatus = 401;
 
-    return { statusCode, data, clientName };
+    console.log(`[mrr:${clientName}] 
+    endpoint=${normalizedEndpoint} nonce=${currentNonce} status=${finalStatus}`);
+
+    return { statusCode: finalStatus, data, clientName };
   });
 }
 
@@ -486,6 +655,7 @@ app.get('/api/v2/mrr/balance', asyncHandler(async (req, res) => mrrRequest('/acc
 app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => mrrRequest('/info/algos', req, res)));
 app.get('/api/v2/mrr/profiles', asyncHandler(async (req, res) => mrrRequest('/profile', req, res)));
 app.get('/api/v2/mrr/rentals', asyncHandler(async (req, res) => mrrRequest('/rental', req, res)));
+app.get('/api/v2/mrr/whoami', asyncHandler(async (req, res) => mrrRequest('/account/whoami', req, res)));
 
 app.get('/api/v2/mrr/rig/:rigIds/pool', asyncHandler(async (req, res) => {
   const ids = req.params.rigIds.split(';').map(id => id.trim()).filter(Boolean);
@@ -523,6 +693,8 @@ app.get('/api/v2/mrr/rig/:rigIds/info', asyncHandler(async (req, res) => {
 
   const fetchSingleInfo = async (id) => {
     try {
+      // Use Promise.all inside here if you wanted to fetch both in parallel, 
+      // but currently it does a sequential fallback which is safer for rate limits.
       const poolRes = await mrrApiCall({ endpoint: `/rig/${id}/pool`, clientNameRaw: req.query.client });
       let info = extractRigInfo(poolRes.data);
 

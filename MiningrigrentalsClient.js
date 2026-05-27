@@ -1,110 +1,87 @@
-import axios from 'axios';
-import crypto from 'crypto';
+import { request } from 'undici';
+import { createHmac, createHash } from 'node:crypto';
 
-const DEFAULT_BASE_URL = 'https://www.miningrigrentals.com/api/v2';
+export class MiningRigRentalsClient {
+  constructor({ apiKey, apiSecret }) {
+    this.apiKey = apiKey;
+    this.apiSecret = apiSecret;
+    this.baseUrl = 'https://www.miningrigrentals.com/api/v2';
+    this.lastNonce = 0;
+  }
 
-function normalizeIds(ids) {
-  if (Array.isArray(ids)) return ids.join(';');
-  return String(ids ?? '').trim();
-}
+  /**
+   * Generates a strictly increasing millisecond nonce.
+   */
+  getNextNonce() {
+    const now = Date.now();
+    const nonce = now > this.lastNonce ? now : this.lastNonce + 1;
+    this.lastNonce = nonce;
+    return String(nonce);
+  }
 
-export class MiningrigrentalsClient {
-  constructor({ key, secret, baseUrl = DEFAULT_BASE_URL }) {
-    if (!key || !secret) {
-      throw new Error('MiningrigrentalsClient requires both key and secret');
+  async call({ method = 'GET', endpoint, query = {}, body = null }) {
+    const nonce = this.getNextNonce();
+    const requestMethod = method.toUpperCase();
+    
+    // Ensure endpoint starts with / and remove trailing slashes for signature
+    const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const cleanPath = path.replace(/\/+$/, '') || '/';
+
+    const signString = `${this.apiKey}${nonce}${cleanPath}`;
+    const signature = createHmac('sha1', this.apiSecret).update(signString).digest('hex');
+
+    const url = new URL(`${this.baseUrl}${cleanPath}`);
+    if (query) {
+      Object.entries(query).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
+      });
     }
 
-    this.key = key;
-    this.secret = secret;
-    this.baseUrl = baseUrl.replace(/\/+$/, '');
-    this.prevNonce = Date.now();
-  }
-
-  nextNonce() {
-    this.prevNonce += 1;
-    return String(this.prevNonce);
-  }
-
-  signature(endpoint, nonce) {
-    return crypto.createHmac('sha1', this.secret).update(`${this.key}${nonce}${endpoint}`).digest('hex');
-  }
-
-  async request(method, endpoint, { params, data } = {}) {
-    const nonce = this.nextNonce();
-    const headers = {
-      'x-api-key': this.key,
-      'x-api-nonce': nonce,
-      'x-api-sign': this.signature(endpoint, nonce),
+    const sendRequest = async (authHeaders) => {
+      return request(url.toString(), {
+        method: requestMethod,
+        headers: {
+          'user-agent': 'Ben Tre Mining Tool/2.0',
+          'accept': 'application/json',
+          ...(body ? { 'content-type': 'application/json' } : {}),
+          'x-api-key': this.apiKey,
+          'x-api-nonce': nonce,
+          'x-api-sign': signature,
+          ...authHeaders // Allow overrides
+        },
+        ...(body ? { body: JSON.stringify(body) } : {})
+      });
     };
 
-    try {
-      const response = await axios({
-        method,
-        url: `${this.baseUrl}${endpoint}`,
-        headers,
-        params,
-        data,
+    let response = await sendRequest({
+      'x-api-key': this.apiKey,
+      'x-api-nonce': nonce,
+      'x-api-sign': signature,
+    });
+
+    let data = await response.body.json();
+
+    // --- Legacy Fallback ---
+    // Some account types or endpoints require the older SHA1(key + nonce + endpoint + secret) format
+    const isAuthError = !data.success && (
+      data.message?.includes('Signature') || 
+      data.data?.message?.includes('Signature') ||
+      response.statusCode === 401
+    );
+
+    if (isAuthError) {
+      const nextNonce = this.getNextNonce();
+      const legacySignStr = `${this.apiKey}${nextNonce}${cleanPath}${this.apiSecret}`;
+      const legacySig = createHash('sha1').update(legacySignStr).digest('hex');
+
+      response = await sendRequest({
+        'x-mrr-key': this.apiKey,
+        'x-mrr-nonce': nextNonce,
+        'x-mrr-signature': legacySig,
       });
-      return response.data;
-    } catch (error) {
-      const status = error?.response?.status;
-      const payload = error?.response?.data;
-      throw new Error(
-        `MRR ${method} ${endpoint} failed${status ? ` (${status})` : ''}: ${JSON.stringify(payload || error.message)}`,
-        { cause: error },
-      );
+      data = await response.body.json();
     }
-  }
 
-  // MiningRig methods
-  getRigs(options = {}) {
-    return this.request('GET', '/rig', { params: options });
-  }
-
-  listMyRigs(options = {}) {
-    return this.request('GET', '/rig/mine', { params: options });
-  }
-
-  getRigsById(rigIds) {
-    return this.request('GET', `/rig/${normalizeIds(rigIds)}`);
-  }
-
-  createRig(options) {
-    return this.request('PUT', '/rig', { params: options });
-  }
-
-  updateRigsById(rigIds, options = {}) {
-    return this.request('PUT', `/rig/${normalizeIds(rigIds)}`, { params: options });
-  }
-
-  deleteRigs(rigIds) {
-    return this.request('DELETE', `/rig/${normalizeIds(rigIds)}`);
-  }
-
-  extendRental(rigIds, options = {}) {
-    return this.request('PUT', `/rig/${normalizeIds(rigIds)}/extend`, { params: options });
-  }
-
-  applyPoolToRigs(rigIds, profileId) {
-    return this.request('PUT', `/rig/${normalizeIds(rigIds)}/profile`, { params: { profile: profileId } });
-  }
-
-  getPoolsFromRigs(rigIds) {
-    return this.request('GET', `/rig/${normalizeIds(rigIds)}/pool`);
-  }
-
-  addPoolToRigs(rigIds, options = {}) {
-    return this.request('PUT', `/rig/${normalizeIds(rigIds)}/pool`, { params: options });
-  }
-
-  replacePoolOnRigs(rigIds, options = {}) {
-    return this.addPoolToRigs(rigIds, options);
-  }
-
-  deletePoolOnRigs(rigIds, priority) {
-    const suffix = priority === undefined ? '' : `/${priority}`;
-    return this.request('DELETE', `/rig/${normalizeIds(rigIds)}/pool${suffix}`);
+    return { statusCode: response.statusCode, data };
   }
 }
-
-export default MiningrigrentalsClient;

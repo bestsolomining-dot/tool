@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import PoolEditorPopup from './PoolEditorPopup' // Use the new wrapper
 import Modal from './Modal' // Import the new Modal component
-import { poolHelpers as ph, poolApi } from './poolUtils'
+import { poolHelpers as ph, poolApi } from '../core/poolUtils'
 
-export default function Pools() {
+export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   const [pools, setPools] = useState([])
   const [selected, setSelected] = useState(null)
   const [selectedId, setSelectedId] = useState('')
@@ -63,22 +63,29 @@ export default function Pools() {
     }
   }
 
+  // Automatically clear MRR results when client changes to prevent data mixing
   useEffect(() => {
-    loadPools().then(() => {
-      setSelected(null)
-      setSelectedId('')
-    })
-  }, [])
+    setMrrRigs(null);
+  }, [mrrClient]);
 
-  async function fetchMrrRigs() {
+  async function fetchMrrRigs(clientName = mrrClient) {
     setLoading(true);
     setMrrRigs(null);
+    setError('');
     try {
-      const result = await poolApi.mrrRigs();
-      if (result.ok) setMrrRigs(result.data);
-      else throw new Error(result.data?.error || 'Failed to fetch MRR rigs');
+      const result = await poolApi.mrrRigs(clientName);
+      if (result.ok) {
+        setMrrRigs(result.data);
+      } else {
+        // Specifically handle Unauthorized errors for better user guidance
+        if (result.status === 401) {
+          throw new Error('Unauthorized: MRR API Key/Secret is invalid or missing for this client.');
+        }
+        const message = result.data?.error || result.data?.message || `Request failed with status ${result.status}`;
+        throw new Error(message);
+      }
     } catch (err) {
-      setError(`MRR Error: ${err.message}`);
+      setError(err.message.includes('MRR Error') ? err.message : `MRR Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -410,7 +417,8 @@ export default function Pools() {
   const handleExportResults = () => {
     const resultsToExport = verifyResults.filter(item => !item.result?.pending);
     
-    const data = resultsToExport.map(item => {
+    // 1. Export Pool Verification Results
+    const poolData = resultsToExport.map(item => {
       const p = item.result?.poolDetails || item.result?.requestBody || {};
       const success = ph.isVerifySuccess(item.result);
       return {
@@ -424,8 +432,35 @@ export default function Pools() {
         'Verified At': new Date().toLocaleString()
       };
     });
+    if (poolData.length > 0) {
+      ph.exportToXlsx(poolData, `pool_verification_${Date.now()}.xlsx`);
+    }
 
-    ph.exportToXlsx(data, `pool_verification_${new Date().getTime()}.xlsx`);
+    // 2. Export MRR Rigs (from local state)
+    if (mrrRigs) {
+      const rigs = mrrRigs.rigs || mrrRigs.data || (Array.isArray(mrrRigs) ? mrrRigs : []);
+      const rigData = (Array.isArray(rigs) ? rigs : []).map(r => ({
+        'ID': r.id,
+        'Name': r.name,
+        'Status': r.status,
+        'Algorithm': r.algo,
+        'Hashrate': r.hashrate,
+        'Price': r.price
+      }));
+      if (rigData.length > 0) ph.exportToXlsx(rigData, `mrr_rigs_${Date.now()}.xlsx`);
+    }
+
+    // 3. Export NiceHash Orders (from props)
+    const rawOrders = niceHashData?.list || niceHashData?.myOrders || (Array.isArray(niceHashData) ? niceHashData : []);
+    const orderData = (Array.isArray(rawOrders) ? rawOrders : []).map(o => ({
+      'Order ID': o.id || o.orderId,
+      'Algorithm': typeof o.algorithm === 'object' ? o.algorithm.algorithm : o.algorithm,
+      'Market': typeof o.market === 'object' ? o.market.id : o.market,
+      'Price': o.price,
+      'Limit': o.limit,
+      'Status': typeof o.status === 'object' ? o.status.code : o.status
+    }));
+    if (orderData.length > 0) ph.exportToXlsx(orderData, `nicehash_orders_${Date.now()}.xlsx`);
   };
 
   const selectedLabel = selected ? ph.getLabel(selected) : 'Select a pool'
@@ -494,6 +529,7 @@ export default function Pools() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '120px' }}>
             <button className="btn-pro" onClick={startRun} disabled={playing || running}>
               {running ? 'Running...' : 'Auto Run (10m)'}
+            </button>
             
             <div style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>
               {running && nextRunCountdown !== null && (
@@ -507,7 +543,6 @@ export default function Pools() {
                 </div>
               )}
             </div>
-            </button>
             
           </div>
           {(playing || running) && (
@@ -700,7 +735,16 @@ export default function Pools() {
         </div>
         <div className="actions" style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
           <button className="btn-pro secondary" onClick={() => setSidebarVisible(!sidebarVisible)}>{sidebarVisible ? 'Hide Sidebar' : 'Show Sidebar'}</button>
-          <button className="btn-pro" onClick={fetchMrrRigs} title="Fetch MiningRigRentals data">MRR Rigs</button>
+          <select 
+            className="select-pro" 
+            style={{ width: '80px', padding: '4px', fontSize: '11px' }} 
+            value={mrrClient} 
+            onChange={e => setMrrClient(e.target.value)}
+          >
+            <option value="BT">BT</option>
+            <option value="SL">SL</option>
+          </select>
+          <button className="btn-pro" onClick={() => fetchMrrRigs()} title="Fetch MiningRigRentals data">MRR Rigs</button>
           <button className="btn-pro secondary" onClick={() => selected && openPoolEditor({ key: selectedId, label: selectedLabel })} disabled={!selected}>Edit Settings</button>
         </div>
       </div>

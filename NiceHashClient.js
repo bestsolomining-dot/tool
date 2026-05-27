@@ -64,9 +64,19 @@ export class NiceHashClient {
     const nonce = randomUUID();
     const requestId = randomUUID();
 
-    const queryString = typeof query === 'string' 
-      ? query 
-      : new URLSearchParams(query).toString();
+    const queryParams = new URLSearchParams(
+      typeof query === 'string'
+        ? Object.fromEntries(new URLSearchParams(query).entries())
+        : query,
+    );
+
+    // For Hashpower Private API, ts and nonce MUST be in the query string
+    if (path.includes('/hashpower/')) {
+      queryParams.set('ts', time);
+      queryParams.set('nonce', nonce);
+    }
+
+    const queryString = queryParams.toString();
 
     const signature = this.computeSignature(method, path, queryString, body, time, nonce);
 

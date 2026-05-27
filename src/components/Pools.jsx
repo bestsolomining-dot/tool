@@ -472,25 +472,37 @@ export default function Pools() {
 
   return (
     <div className="card pools-manager">
-      <div className="section-header">
+      {/* <div className="section-header">
         <h2>Pools Management</h2>
-      </div>
-      <div className="pool-actions" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div className="pool-actions">
-          <button className="btn-pro primary" onClick={verify} disabled={loading || detailsLoading || playing || !selected}>
-            {loading ? 'Verifying...' : 'Verify Pool'}
-          </button>
-
-          <button
-            className="btn-pro"
-            onClick={() => openPoolEditor({ key: selectedId, label: selectedLabel })}
-            disabled={!selected || detailsLoading || playing}
-          >
-            Edit Pool
-          </button>
-
+      </div> */}
+      {!!inspectData && (
+        <Modal isOpen={true} onClose={() => setInspectData(null)} title="Inspect Response" maxWidth="90vw">
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+            <button
+              className="text-button"
+              onClick={() => {
+                navigator.clipboard.writeText(JSON.stringify(inspectData, null, 2));
+                alert('Copied to clipboard');
+              }}
+            >
+              Copy JSON
+            </button>
+          </div>
+          <pre className="response-body modal" style={{ maxHeight: '70vh' }}>
+            {JSON.stringify(inspectData, null, 2)}
+          </pre>
+          <div className="modal-actions">
+            <button className="btn-pro secondary" onClick={() => setInspectData(null)}>
+              Dismiss
+            </button>
+          </div>
+        </Modal>
+      )}
+      <div className="pool-actions" style={{ minWidth: '500px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div className="pool-actions" style={{ width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+          {/* Delay input */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <label style={{ fontSize: '10px', fontWeight: 'bold' }}>DELAY (MS)</label>
+            <label style={{ fontSize: '10px', fontWeight: 'bold' }}>DELAY (5s)</label>
             <input
               type="number"
               className="input-pro"
@@ -500,6 +512,7 @@ export default function Pools() {
             />
           </div>
 
+          {/* Export button */}
           <button
             className="btn-pro secondary"
             onClick={handleExportResults}
@@ -509,47 +522,49 @@ export default function Pools() {
             Export Results
           </button>
 
-          <button className="btn-pro" onClick={() => verifyAllOnce()} disabled={playing || running} >
+          {/* Verify All button */}
+          <button className="btn-pro" onClick={() => verifyAllOnce()} disabled={playing || running}>
             {playing ? 'Verifying...' : `Verify All (${verificationDelay}ms)`}
           </button>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '200px' }}>
-            <button className="btn-pro" onClick={startRun} disabled={playing || running}>
-              {running ? 'Running...' : 'Auto Run'}
+          {/* Auto Run button (standalone) */}
+          <button className="btn-pro" onClick={startRun} disabled={playing || running}>
+            {running ? 'Running...' : 'Auto Run'}
+          </button>
 
-              <div style={{ minHeight: '60px', display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '10px' }}>
-                {running && (
-                  <>
-                    <div style={{ color: '#f59e0b', fontWeight: 'bold' }}>
-                      Run #{runCount}
-                    </div>
-                    {currentRunStartTime && (
-                      <div style={{ color: '#8b5cf6' }}>
-                        Elapsed: {Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s
-                      </div>
-                    )}
-                    {nextRunCountdown !== null && (
-                      <div style={{ color: '#3b82f6', fontWeight: 'bold' }}>
-                        Next in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
-                      </div>
-                    )}
-                  </>
-                )}
-                {lastRunTime && (
-                  <div style={{ color: '#059669' }}>
-                    Finished: {lastRunTime}
+          {/* Stop button (conditional) */}
+          {(playing || running) && (
+            <button className="btn-pro" onClick={stopAutomation}>Stop</button>
+          )}
+
+          {/* Time information block – pushed to the end on flex row, wraps below on small screens */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '1rem   ', marginLeft: 'auto', background: 'rgba(0,0,0,0.2)', padding: '4px 8px', borderRadius: '6px' }}>
+            {running && (
+              <>
+                <div style={{ color: '#f59e0b', fontWeight: 'bold' }}>
+                  Run #{runCount}
+                </div>
+                {currentRunStartTime && (
+                  <div style={{ color: '#8b5cf6' }}>
+                    Elapsed: {Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s
                   </div>
                 )}
+                {nextRunCountdown !== null && (
+                  <div style={{ color: '#3b82f6', fontWeight: 'bold' }}>
+                    Next in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
+                  </div>
+                )}
+              </>
+            )}
+            {lastRunTime && !running && (
+              <div style={{ color: '#059669' }}>
+                Finished: {lastRunTime}
               </div>
-            </button>
-
+            )}
           </div>
-          {(playing || running) && (
-            <button className="btn-pro" onClick={stopAutomation} style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>Stop Automation</button>
-          )}
         </div>
         <div>
-          <div className="pool-main-content" style={{ flex: 1, minWidth: '360px' }}>
+          <div className="pool-main-content" style={{ flex: 1, minWidth: '500px' }}>
             {progress.total > 0 && (
               <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', marginBottom: '12px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <div
@@ -587,7 +602,7 @@ export default function Pools() {
                   </div>
                   <div className="wide">
                     <span>Algorithm</span>
-                    <strong>{algorithmSummary || 'No completed checks'}</strong>
+                    {algorithmSummary || 'No completed checks'}
                   </div>
                 </div>
                 <div className="verify-list">
@@ -664,11 +679,7 @@ export default function Pools() {
             )}
           </div>
         </div>
-
       </div>
-
-
-
 
       <div className="pools-dashboard-layout" style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {sidebarVisible && (
@@ -719,7 +730,7 @@ export default function Pools() {
 
       </div>
 
-      <div className="selection-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+      {/* <div className="selection-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
         <div className="pool-select-pro" ref={dropdownRef} style={{ flex: 1 }}>
           <button
             className="select-trigger-pro"
@@ -739,7 +750,7 @@ export default function Pools() {
           <button className="btn-pro" onClick={fetchMrrRigs} title="Fetch MiningRigRentals data">MRR Rigs</button>
           <button className="btn-pro secondary" onClick={() => selected && openPoolEditor({ key: selectedId, label: selectedLabel })} disabled={!selected}>Edit Settings</button>
         </div>
-      </div>
+      </div> */}
 
       {error && <pre className="error-message">{error}</pre>}
 
@@ -754,7 +765,7 @@ export default function Pools() {
       ))}
 
       {/* Pool Selector Modal */}
-      <Modal isOpen={selectorOpen} onClose={() => setSelectorOpen(false)} title="Select a Stratum Pool" maxWidth="600px">
+      {/* <Modal isOpen={selectorOpen} onClose={() => setSelectorOpen(false)} title="Select a Stratum Pool" maxWidth="600px">
         <div className="select-dropdown-pro" style={{ position: 'static', boxShadow: 'none', border: 'none', padding: 0 }}>
           {pools.map((pool, index) => {
             const key = ph.getKey(pool, index);
@@ -783,31 +794,9 @@ export default function Pools() {
             )
           })}
         </div>
-      </Modal>
+      </Modal> */}
 
-      {!!inspectData && (
-        <Modal isOpen={true} onClose={() => setInspectData(null)} title="Inspect Response" maxWidth="90vw">
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
-            <button
-              className="text-button"
-              onClick={() => {
-                navigator.clipboard.writeText(JSON.stringify(inspectData, null, 2));
-                alert('Copied to clipboard');
-              }}
-            >
-              Copy JSON
-            </button>
-          </div>
-          <pre className="response-body modal" style={{ maxHeight: '70vh' }}>
-            {JSON.stringify(inspectData, null, 2)}
-          </pre>
-          <div className="modal-actions">
-            <button className="btn-pro secondary" onClick={() => setInspectData(null)}>
-              Dismiss
-            </button>
-          </div>
-        </Modal>
-      )}
+
     </div>
   )
 }

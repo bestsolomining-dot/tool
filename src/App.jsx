@@ -6,7 +6,7 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <div className="brand-block">
-          <h1>NiceHash Pool Manager</h1>
+          <h1>NiceHash Pool Management</h1>
           <p className="subtitle">
             Stratum pool verification and monitoring for mining operations.
           </p>

@@ -122,10 +122,10 @@
   border: 1px solid var(--border-color);
   background: var(--control);
   color: var(--text-main);
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 0.9rem;
+  padding: 8px 8px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;

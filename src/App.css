@@ -439,9 +439,9 @@
 }
 
 /* Status Indicators */
-.status-value.status-success { color: #38a169; }
+.status-value.status-success { color: #dac449; }
 .status-value.status-error { color: #e53e3e; }
-.status-value.status-ready { color: #3182ce; }
+.status-value.status-ready { color: #2996fc; }
 
 /* Pools Manager Specifics */
 .pools-manager .selection-bar {

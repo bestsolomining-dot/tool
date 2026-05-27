@@ -194,61 +194,12 @@ export default function App() {
               </div> */}
             </article>
 
-            {/* <article className="panel">
-              <div className="panel-header">
-                <h2>Hashpower Market</h2>
-                <span className="panel-icon">?</span>
-              </div>
-              <div className="market-inputs">
-                <input
-                  className="input-pro"
-                  placeholder="Algo (e.g. KAWPOW)"
-                  value={algorithm}
-                  onChange={(e) => setAlgorithm(e.target.value)}
-                />
-                <input
-                  className="input-pro"
-                  placeholder="Market (e.g. EU/USA)"
-                  value={market}
-                  onChange={(e) => setMarket(e.target.value)}
-                />
-              </div>
-              <select
-                className="select-pro"
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (!val) return;
-                  if (val === 'orderbook' || val === '/api/v2/hashpower/myOrders') {
-                    const path = val === 'orderbook' ? '/api/v2/hashpower/order-book' : val;
-                    handleHashpowerCall(path, {
-                      query: {
-                        algorithm,
-                        market,
-                        op: 'LE',
-                        ts: Date.now(),
-                        limit: 100
-                        // active: true // Removed to show all orders (active and inactive)
-                      },
-                      silent: true // Prevents modal from opening when selecting from dropdown
-                    });
-                  } else {
-                    handleHashpowerCall(val);
-                  }
-                }}
-                value=""
-              >
-                <option value="" disabled>Select Endpoint...</option>
-                <option value="/api/v2/hashpower/myOrders">My Orders</option>
-                <option value="orderbook">Order Book</option>
-                <option value="/api/v2/public/stats/24h">Global Stats 24h</option>
-              </select>
-              <div style={{ marginTop: '10px' }}>
-                <button className="btn-pro secondary" onClick={scrollToPools}>Configure Target Pool</button>
-              </div>
-              <div style={{ marginTop: '20px' }}>
+            <article className="panel">
+              
+              <div style={{ marginTop: '5px' }}>
                 <HashpowerBot algorithm={algorithm} market={market} onCall={handleHashpowerCall} />
               </div>
-            </article> */}
+            </article>
           </div>
 
           <article className="panel">

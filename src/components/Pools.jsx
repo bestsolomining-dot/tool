@@ -468,7 +468,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
       'Limit': o.limit,
       'Status': typeof o.status === 'object' ? o.status.code : o.status
     }));
-    if (orderData.length > 0) ph.exportToXlsx(orderData, `nicehash_orders_${Date.now()}.xlsx`);
+    if (orderData.length > 0) ph.exportToXlsx(orderData, 'orders.xlsx');
   };
 
   const selectedLabel = selected ? ph.getLabel(selected) : 'Select a pool'

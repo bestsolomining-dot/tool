@@ -167,7 +167,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                 padding: '15px',
                 position: 'relative'
               }}>
-                {isMine && <span style={{ position: 'absolute', top: '-8px', left: '10px', background: '#3b82f6', color: 'white', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>Your Rig</span>}
+                {isMine && <span style={{ position: 'absolute', top: '-8px', left: '10px', background: '#3b82f6', color: 'white', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>Rig ID: {rig.id}</span>}
                 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>

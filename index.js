@@ -310,11 +310,11 @@ app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
       ).join('\n');
 
       const csvContent = `${headers}\n${rows}`;
-      const filePath = path.join(process.cwd(), `nicehash_orders_${Date.now()}.csv`);
+      const filePath = path.join(process.cwd(), 'orders.xlsx');
       await fs.writeFile(filePath, csvContent, 'utf-8');
-      console.log(`[csv] Saved orders list to: ${filePath}`);
+      console.log(`[excel] Overwritten orders list to: ${filePath}`);
     } catch (csvErr) {
-      console.error('[csv] Failed to save CSV:', csvErr.message);
+      console.error('[excel] Failed to save orders:', csvErr.message);
     }
   }
   res.json(data);

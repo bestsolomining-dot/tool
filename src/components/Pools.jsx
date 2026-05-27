@@ -318,6 +318,7 @@ export default function Pools() {
       }
     } finally {
       setPlaying(false)
+      if (!stopRef.current) setLastRunTime(new Date().toLocaleTimeString())
       if (!keepRunning && stopRef.current) setRunning(false)
     }
   }
@@ -529,7 +530,7 @@ export default function Pools() {
 
           {/* Auto Run button (standalone) */}
           <button className="btn-pro" onClick={startRun} disabled={playing || running}>
-            {running ? 'Running...' : 'Auto Run'}
+            {running ? 'Running...' : 'Auto'}
           </button>
 
           {/* Stop button (conditional) */}
@@ -539,218 +540,196 @@ export default function Pools() {
 
           {/* Time information block – pushed to the end on flex row, wraps below on small screens */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '1rem   ', marginLeft: 'auto', background: 'rgba(0,0,0,0.2)', padding: '4px 8px', borderRadius: '6px' }}>
-            {running && (
-              <>
-                <div style={{ color: '#f59e0b', fontWeight: 'bold' }}>
-                  Run #{runCount}
-                </div>
-                {currentRunStartTime && (
-                  <div style={{ color: '#8b5cf6' }}>
-                    Elapsed: {Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '1rem', marginLeft: 'auto', background: 'rgba(0,0,0,0.2)', padding: '4px 8px', borderRadius: '6px' }}>
+              {running && (
+                <>
+                  <div style={{ color: '#f59e0b', fontWeight: 'bold' }}>
+                    Running #{runCount}
                   </div>
-                )}
-                {nextRunCountdown !== null && (
-                  <div style={{ color: '#3b82f6', fontWeight: 'bold' }}>
-                    Next in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
-                  </div>
-                )}
-              </>
-            )}
-            {lastRunTime && !running && (
-              <div style={{ color: '#059669' }}>
-                Finished: {lastRunTime}
-              </div>
-            )}
-          </div>
-        </div>
-        <div>
-          <div className="pool-main-content" style={{ flex: 1, minWidth: '500px' }}>
-            {progress.total > 0 && (
-              <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', marginBottom: '12px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <div
-                  className="verify-progress-bar-fill"
-                  style={{
-                    width: `${(progress.current / progress.total) * 100}%`,
-                    height: '100%',
-                    background: '#3b82f6',
-                    transition: 'width 0.3s ease'
-                  }}
-                />
-                <small style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', fontSize: '10px', lineHeight: '18px', fontWeight: 'bold', textShadow: '0 0 3px black' }}>
-                  {Math.round((progress.current / progress.total) * 100)}% ({progress.current}/{progress.total})
-                </small>
-              </div>
-            )}
-            {verifyResults.length > 0 ? (
-              <div className="results-wrapper">
-                <div className="verify-summary">
-                  <div>
-                    <span>Target pools</span>
-                    <strong>{pools.length}</strong>
-                  </div>
-                  <div>
-                    <span>Verified</span>
-                    <strong>{completedResults.length}</strong>
-                  </div>
-                  <div>
-                    <span>Success</span>
-                    <strong>{successCount}</strong>
-                  </div>
-                  <div>
-                    <span>Error</span>
-                    <strong>{failCount}</strong>
-                  </div>
-                  <div className="wide">
-                    <span>Algorithm</span>
-                    {algorithmSummary || 'No completed checks'}
-                  </div>
-                </div>
-                <div className="verify-list">
-                  {verifyResults.map(item => {
-                    const pending = item.result?.pending
-                    const success = !pending && ph.isVerifySuccess(item.result)
-                    const logs = ph.getVerifyLogs(item.result)
-                    const algorithm = ph.getVerifyAlgo(item.result)
-                    return (
-                      <details className="verify-item" key={item.key}>
-                        <summary>
-                          <span
-                            className={`verify-status ${pending ? 'pending' : success ? 'success' : 'error'}`}
-                            onClick={event => {
-                              if (pending) return
-                              event.preventDefault()
-                              event.stopPropagation()
-                              openPoolEditor(item)
-                            }}
-                            style={{ cursor: pending ? 'wait' : 'pointer' }}
-                            title={pending ? "Verifying..." : "Click to open Pool Editor"}
-                          >
-                            {pending ? 'Checking' : success ? 'Success' : 'Error'}
-                          </span>
-                          <button
-                            type="button"
-                            className="pool-editor-link"
-                            onClick={event => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              openPoolEditor(item)
-                            }}
-                            disabled={pending}
-                          >
-                            {item.label} <span style={{ fontSize: '0.9em', opacity: 0.7 }}>✎</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="text-button"
-                            style={{ fontSize: '10px', marginLeft: 'auto', marginRight: '10px' }}
-                            onClick={event => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              setInspectData(item.result)
-                            }}
-                          >
-                            Inspect
-                          </button>
-                          <span className="verify-algorithm">{algorithm}</span>
-                          <small>{pending ? 'Waiting for response' : ph.getVerifyMessage(item.result)}</small>
-                        </summary>
-                        {logs.length > 0 && (
-                          <div className="verify-log">
-                            <h4>Verification log</h4>
-                            {logs.map((log, index) => (
-                              <div className={`verify-log-row ${log.level?.toLowerCase() || ''}`} key={`${item.key}-log-${index}`}>
-                                <span>{log.level || 'LOG'}</span>
-                                <time>{log.timestamp || '-'}</time>
-                                <p>{log.message || JSON.stringify(log)}</p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <pre className="response-body compact">
-                          {JSON.stringify(item.result, null, 2)}
-                        </pre>
-                      </details>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : (
-              <pre className="response-body compact">{response ? JSON.stringify(response, null, 2) : 'No response yet'}</pre>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="pools-dashboard-layout" style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        {sidebarVisible && (
-          <div className="pool-sidebar" style={{ width: '100%', maxWidth: '380px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div className="pool-algorithm-summary" style={{ marginTop: 0 }}>
-              <div className="response-header compact">
-                <h3>Algorithm Summary</h3>
-                <span>{poolAlgorithmGroups.length} types / {pools.length} pools</span>
-              </div>
-              {poolAlgorithmGroups.length > 0 ? (
-                <div className="algorithm-grid">
-                  {poolAlgorithmGroups.map(([algorithm, count]) => (
-                    <div className="algorithm-row" key={algorithm}>
-                      <span>{algorithm}</span>
-                      <strong style={{ marginLeft: 'auto', marginRight: '3rem', flexWrap: 'wrap', alignItems: 'flex-start', display: 'flex', gap: '6.5rem' }}>
-                        {count}
-                      </strong>
-                      <button
-                        type="button"
-                        className="btn-pro secondary"
-                        onClick={() => verifyAlgorithm(algorithm)}
-                        disabled={playing || running}
-                      >
-                        Verify
-                      </button>
+                  {currentRunStartTime && (
+                    <div style={{ color: '#8b5cf6' }}>
+                      Elapsed: {Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s
                     </div>
-                  ))}
+                  )}
+                  {nextRunCountdown !== null && (
+                    <div style={{ color: '#3b82f6', fontWeight: 'bold' }}>
+                      Next in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
+                    </div>
+                  )}
+                </>
+              )}
+
+              {lastRunTime && !running && !playing && (
+                <div style={{ color: '#059669' }}>
+                  Finished: {lastRunTime}
                 </div>
-              ) : (
-                <pre className="response-body compact">No pools loaded.</pre>
               )}
             </div>
-
-            {mrrRigs && (
-              <div className="pool-mrr-summary" style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div className="response-header compact" style={{ marginBottom: '10px' }}>
-                  <h3 style={{ margin: 0, fontSize: '14px' }}>MRR Rigs Data</h3>
-                  <button className="text-button" onClick={() => setMrrRigs(null)}>Clear</button>
-                </div>
-                <pre className="response-body compact" style={{ fontSize: '11px', maxHeight: '300px', overflow: 'auto', background: 'rgba(0,0,0,0.2)' }}>
-                  {JSON.stringify(mrrRigs, null, 2)}
-                </pre>
-              </div>
-            )}
           </div>
-        )}
-
-
+          <div>
+            <div className="pool-main-content" style={{ flex: 1, minWidth: '500px' }}>
+              {progress.total > 0 && (
+                <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', marginBottom: '12px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div
+                    className="verify-progress-bar-fill"
+                    style={{
+                      width: `${(progress.current / progress.total) * 100}%`,
+                      height: '100%',
+                      background: '#3b82f6',
+                      transition: 'width 0.3s ease'
+                    }}
+                  />
+                  <small style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', fontSize: '10px', lineHeight: '18px', fontWeight: 'bold', textShadow: '0 0 3px black' }}>
+                    {Math.round((progress.current / progress.total) * 100)}% ({progress.current}/{progress.total})
+                  </small>
+                </div>
+              )}
+              {verifyResults.length > 0 ? (
+                <div className="results-wrapper">
+                  <div className="verify-summary">
+                    <div>
+                      <span>Target pools</span>
+                      <strong>{pools.length}</strong>
+                    </div>
+                    <div>
+                      <span>Verified</span>
+                      <strong>{completedResults.length}</strong>
+                    </div>
+                    <div>
+                      <span>Success</span>
+                      <strong>{successCount}</strong>
+                    </div>
+                    <div>
+                      <span>Error</span>
+                      <strong>{failCount}</strong>
+                    </div>
+                    <div className="wide">
+                      <span>Algorithm</span>
+                      {algorithmSummary || 'No completed checks'}
+                    </div>
+                  </div>
+                  <div className="verify-list">
+                    {verifyResults.map(item => {
+                      const pending = item.result?.pending
+                      const success = !pending && ph.isVerifySuccess(item.result)
+                      const logs = ph.getVerifyLogs(item.result)
+                      const algorithm = ph.getVerifyAlgo(item.result)
+                      return (
+                        <details className="verify-item" key={item.key}>
+                          <summary>
+                            <span
+                              className={`verify-status ${pending ? 'pending' : success ? 'success' : 'error'}`}
+                              onClick={event => {
+                                if (pending) return
+                                event.preventDefault()
+                                event.stopPropagation()
+                                openPoolEditor(item)
+                              }}
+                              style={{ cursor: pending ? 'wait' : 'pointer' }}
+                              title={pending ? "Verifying..." : "Click to open Pool Editor"}
+                            >
+                              {pending ? 'Checking' : success ? 'Success' : 'Error'}
+                            </span>
+                            <button
+                              type="button"
+                              className="pool-editor-link"
+                              onClick={event => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                openPoolEditor(item)
+                              }}
+                              disabled={pending}
+                            >
+                              {item.label} <span style={{ fontSize: '0.9em', opacity: 0.7 }}>✎</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="text-button"
+                              style={{ fontSize: '10px', marginLeft: 'auto', marginRight: '10px' }}
+                              onClick={event => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                setInspectData(item.result)
+                              }}
+                            >
+                              Inspect
+                            </button>
+                            <span className="verify-algorithm">{algorithm}</span>
+                            <small>{pending ? 'Waiting for response' : ph.getVerifyMessage(item.result)}</small>
+                          </summary>
+                          {logs.length > 0 && (
+                            <div className="verify-log">
+                              <h4>Verification log</h4>
+                              {logs.map((log, index) => (
+                                <div className={`verify-log-row ${log.level?.toLowerCase() || ''}`} key={`${item.key}-log-${index}`}>
+                                  <span>{log.level || 'LOG'}</span>
+                                  <time>{log.timestamp || '-'}</time>
+                                  <p>{log.message || JSON.stringify(log)}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <pre className="response-body compact">
+                            {JSON.stringify(item.result, null, 2)}
+                          </pre>
+                        </details>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <pre className="response-body compact">{response ? JSON.stringify(response, null, 2) : 'No response yet'}</pre>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
+      <div className="pools-dashboard-layout" style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          {sidebarVisible && (
+            <div className="pool-sidebar" style={{ width: '100%', maxWidth: '380px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div className="pool-algorithm-summary" style={{ marginTop: 0 }}>
+                <div className="response-header compact">
+                  <h3>Algorithm Summary</h3>
+                  <span>{poolAlgorithmGroups.length} types / {pools.length} pools</span>
+                </div>
+                {poolAlgorithmGroups.length > 0 ? (
+                  <div className="algorithm-grid">
+                    {poolAlgorithmGroups.map(([algorithm, count]) => (
+                      <div className="algorithm-row" key={algorithm}>
+                        <span>{algorithm}</span>
+                        <strong style={{ marginLeft: 'auto', marginRight: '1rem', flexWrap: 'wrap', alignItems: 'flex-start', display: 'flex', gap: '6.5rem' }}>
+                          {count}
+                        </strong>
+                        <button
+                          type="button"
+                          className="btn-pro secondary"
+                          onClick={() => verifyAlgorithm(algorithm)}
+                          disabled={playing || running}
+                        >
+                          Verify
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <pre className="response-body compact">No pools loaded.</pre>
+                )}
+              </div>
 
-      {/* <div className="selection-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-        <div className="pool-select-pro" ref={dropdownRef} style={{ flex: 1 }}>
-          <button
-            className="select-trigger-pro"
-            onClick={() => setSelectorOpen(true)}
-          >
-            <span className="current-selection">{selectedLabel}</span>
-            <span className="count-badge">{pools.length}</span>
-          </button>
-          {rateLimitStatus && (
-            <div style={{ color: '#f59e0b', fontSize: '11px', marginTop: '6px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span className="spinner-mini"></span> {rateLimitStatus}
+              {mrrRigs && (
+                <div className="pool-mrr-summary" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.3rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div className="response-header compact" style={{ marginBottom: '10px' }}>
+                    <h3 style={{ margin: 0, fontSize: '14px' }}>MRR Rigs Data</h3>
+                    <button className="text-button" onClick={() => setMrrRigs(null)}>Clear</button>
+                  </div>
+                  <pre className="response-body compact" style={{ fontSize: '11px', maxHeight: '300px', overflow: 'auto', background: 'rgba(0,0,0,0.2)' }}>
+                    {JSON.stringify(mrrRigs, null, 2)}
+                  </pre>
+                </div>
+              )}
             </div>
           )}
         </div>
-        <div className="actions" style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-          <button className="btn-pro secondary" onClick={() => setSidebarVisible(!sidebarVisible)}>{sidebarVisible ? 'Hide Sidebar' : 'Show Sidebar'}</button>
-          <button className="btn-pro" onClick={fetchMrrRigs} title="Fetch MiningRigRentals data">MRR Rigs</button>
-          <button className="btn-pro secondary" onClick={() => selected && openPoolEditor({ key: selectedId, label: selectedLabel })} disabled={!selected}>Edit Settings</button>
-        </div>
-      </div> */}
 
       {error && <pre className="error-message">{error}</pre>}
 
@@ -763,40 +742,6 @@ export default function Pools() {
           onVerifySuccess={handleEditorVerifySuccess}
         />
       ))}
-
-      {/* Pool Selector Modal */}
-      {/* <Modal isOpen={selectorOpen} onClose={() => setSelectorOpen(false)} title="Select a Stratum Pool" maxWidth="600px">
-        <div className="select-dropdown-pro" style={{ position: 'static', boxShadow: 'none', border: 'none', padding: 0 }}>
-          {pools.map((pool, index) => {
-            const key = ph.getKey(pool, index);
-            const label = ph.getLabel(pool, index);
-            const isActive = selectedId === key;
-            return (
-              <div
-                key={key}
-                className={`dropdown-item-pro ${isActive ? 'active' : ''}`}
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
-                onClick={() => onSelect(key)}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <strong style={{ color: isActive ? '#3b82f6' : 'inherit' }}>{label}</strong>
-                  <code style={{ fontSize: '11px', opacity: 0.7 }}>{ph.getAlgo(pool)}</code>
-                </div>
-                <button
-                  type="button"
-                  className="btn-pro secondary"
-                  style={{ fontSize: '10px', padding: '4px 8px' }}
-                  onClick={(e) => { e.stopPropagation(); openPoolEditor({ key, label }); }}
-                >
-                  Edit
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      </Modal> */}
-
-
     </div>
-  )
+  );
 }

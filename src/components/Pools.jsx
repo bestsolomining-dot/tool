@@ -351,9 +351,6 @@ export default function Pools() {
 
       if (stopRef.current) return
 
-      const finishedAt = new Date.now()
-      setLastRunTime(finishedAt.toLocaleTimeString())
-
       // Start countdown for next run
       let remaining = intervalMs / 1000
       setNextRunCountdown(remaining)
@@ -370,6 +367,7 @@ export default function Pools() {
 
     await executeCycle()
     if (stopRef.current) {
+      
       setRunning(false)
 
     }

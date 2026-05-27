@@ -113,7 +113,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
     <div className="mrr-rigs-dashboard">
       <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '15px' }}>
         <div>
-          <h2 style={{ margin: 0 }}>{endpoint === '/rig' ? 'MRR Marketplace' : 'My MRR Rigs'} ({mrrClient})</h2>
+          <h2 style={{ margin: 0 }}>{endpoint === '/rig' ? 'MRR Marketplace' : 'RIGS'} ({mrrClient})</h2>
           <small style={{ opacity: 0.5 }}>
             Showing {filteredRigs.length} of {totalFetchedCount} rigs {algo && `for ${algo}`}
           </small>
@@ -143,7 +143,8 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
         )}
         
         <div className="rig-grid-container" style={{ 
-          maxHeight: '600px', 
+          minHeight: '800px',
+          maxHeight: '800px',
           overflowY: 'auto', 
           paddingRight: '8px',
           scrollbarWidth: 'thin',

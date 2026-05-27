@@ -721,7 +721,24 @@ app.get('/api/v2/mrr/rig/:rigIds', asyncHandler(async (req, res) => mrrRequest(`
 
 app.get('/api/v2/mrr/rig/:rigIds/pool', asyncHandler(async (req, res) => mrrRequest(`/rig/${req.params.rigIds}/pool`, req, res)));
 
-app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => mrrRequest(`/rental/${req.params.rentalIds}`, req, res)));
+app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
+  const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
+  if (clientParam === 'ALL') {
+    const clients = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
+    for (const clientName of clients) {
+      const { statusCode, data } = await mrrApiCall({
+        endpoint: `/rental/${req.params.rentalIds}`,
+        clientNameRaw: clientName,
+      });
+      if (statusCode === 200 && data?.success) {
+        res.set('X-MRR-Client', clientName);
+        return res.json(data);
+      }
+    }
+    return res.status(404).json({ success: false, message: 'Rental ID not found in any configured account.' });
+  }
+  await mrrRequest(`/rental/${req.params.rentalIds}`, req, res);
+}));
 
 app.get('/api/v2/mrr/rental/:rentalIds/pool', asyncHandler(async (req, res) => mrrRequest(`/rental/${req.params.rentalIds}/pool`, req, res)));
 

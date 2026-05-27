@@ -192,7 +192,7 @@ app.get('/api/v2/mining/rig/:rigId', asyncHandler(async (req, res) => res.json(a
 app.post('/api/v2/mining/rigs/status', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.setRigStatus(req.body))));
 
 // Hashpower
-app.get('/api/v2/hashpower/my-orders', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getMyOrders())));
+app.get('/api/v2/hashpower/my-orders', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getMyOrders(req.query))));
 app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.createOrder(req.body))));
 app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getOrderBook(req.query))));
 

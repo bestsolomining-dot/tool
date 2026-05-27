@@ -109,7 +109,9 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
   useEffect(() => {
     return () => {
+      stopRef.current = true; // Signal any running loops to stop immediately
       if (runTimerRef.current) clearInterval(runTimerRef.current)
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
       if (activeRequestRef.current) activeRequestRef.current.abort()
     }
   }, [])
@@ -493,7 +495,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
     <div className="card pools-manager" >
       <div className="pool-actions" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', minWidth: '400px' }}>
         <div className="pool-actions">
-          <button className="btn-pro primary" onClick={verify} disabled={loading || detailsLoading || playing || !selected}>
+          <button className="btn-pro primary" onClick={verify} disabled={loading || detailsLoading || playing || !selected || running}>
           {loading ? 'Verifying...' : 'Verify Pool'}
           </button>
           
@@ -716,7 +718,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
           <select 
             className="select-pro" 
             style={{ width: '80px', padding: '4px', fontSize: '11px' }} 
-            value={mrrClient} 
+            value={mrrClient || ''} 
             onChange={e => setMrrClient(e.target.value)}
           >
             <option value="BT">BT</option>

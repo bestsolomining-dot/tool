@@ -14,9 +14,9 @@ export default function App() {
   const [activeSection, setActiveSection] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
-  const [algorithm, setAlgorithm] = useState(null);
-  const [market, setMarket] = useState(null);
-  const [mrrClient, setMrrClient] = useState(null);
+  const [algorithm, setAlgorithm] = useState('');
+  const [market, setMarket] = useState('');
+  const [mrrClient, setMrrClient] = useState('BT');
 
   const scrollToPools = useCallback(() => {
     const poolsEl = document.querySelector('.pools-section');
@@ -96,7 +96,10 @@ export default function App() {
         });
       }
 
-      const isAppError = data && data.success === false;
+      // Improved detection for both JSON errors and plain string errors
+      const isAppError = !res.ok || 
+                        (data && typeof data === 'object' && (data.success === false || data.error)) ||
+                        (typeof data === 'string' && data.length > 0 && !data.startsWith('{'));
 
       if (!isAppError && (res.status === 304 || res.ok)) {
         if (!options.silent) {
@@ -183,7 +186,7 @@ export default function App() {
               </div> */}
             </article>
 
-            <article className="panel">
+            {/* <article className="panel">
               <div className="panel-header">
                 <h2>Hashpower Market</h2>
                 <span className="panel-icon">?</span>
@@ -237,7 +240,7 @@ export default function App() {
               <div style={{ marginTop: '20px' }}>
                 <HashpowerBot algorithm={algorithm} market={market} onCall={handleHashpowerCall} />
               </div>
-            </article>
+            </article> */}
           </div>
 
           <article className="panel">

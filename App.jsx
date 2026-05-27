@@ -4,6 +4,8 @@ import Modal from './src/components/Modal';
 import HashpowerBot from './src/components/HashpowerBot';
 import NiceHash from './src/components/NiceHash';
 import MiningRigRental from './src/components/MiningRigRental';
+import MiningRigSection from './src/components/MiningRigSection'; // New import
+import MrrPoolsManager from './src/components/MrrPoolsManager';
 import './src/App.css';
 
 export default function App() {
@@ -14,8 +16,8 @@ export default function App() {
   const [activeSection, setActiveSection] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
-  const [algorithm, setAlgorithm] = useState(null);
-  const [market, setMarket] = useState(null);
+  const [algorithm, setAlgorithm] = useState(''); // Initialize with empty string
+  const [market, setMarket] = useState(''); // Initialize with empty string
   const [mrrClient, setMrrClient] = useState('BT'); // Default to BT to prevent initial errors
 
   const scrollToPools = useCallback(() => {
@@ -85,47 +87,46 @@ export default function App() {
         } catch {
           data = text;
         }
-      }
 
-      if (!options.silent) {
-        setLastCall({
-          method,
-          path: finalPath,
-          status: `${res.status} ${res.statusText}`,
-          durationMs: Math.round(performance.now() - startedAt),
-        });
-      }
-
-      const isAppError = data && data.success === false;
-
-      if (!isAppError && (res.status === 304 || res.ok)) {
-        if (!options.silent && options.showModal) {
-          setError('');
-          if (res.status === 304) {
-            setModalContent({
-              status: res.status,
-              message: res.statusText,
-              note: 'Content not modified. Displaying previously fetched data if available.',
-            });
-            setResponseModalOpen(true);
-          } else {
-            setOutput(data);
-            setModalContent(data);
-            setResponseModalOpen(true);
-          }
-        } else if (!options.silent) {
-          setOutput(data);
+        if (!options.silent) {
+          setLastCall({
+            method,
+            path: finalPath,
+            status: `${res.status} ${res.statusText}`,
+            durationMs: Math.round(performance.now() - startedAt),
+          });
         }
-      } else if (!options.silent) {
-        const errorMsg =
-          typeof data === 'string'
-            ? data
-            : data?.error || data?.message || data?.data?.message || res.statusText;
 
-        setError(errorMsg);
-        setOutput(null);
-        setModalContent(null);
-        setResponseModalOpen(false);
+        const isAppError = data && (data.success === false || data.error); // Check for common error indicators
+
+        if (!isAppError && (res.status === 304 || res.ok)) {
+          if (!options.silent && options.showModal) {
+            setError('');
+            if (res.status === 304) {
+              setModalContent({
+                status: res.status,
+                message: res.statusText,
+                note: 'Content not modified. Displaying previously fetched data if available.',
+              });
+              setResponseModalOpen(true);
+            } else {
+              if (!options.silent) setOutput(data);
+              setModalContent(data);
+              setResponseModalOpen(true);
+            }
+          }
+          if (!options.silent) setOutput(data);
+        } else if (!options.silent) {
+          const errorMsg =
+            typeof data === 'string'
+              ? data
+              : data?.error || data?.message || data?.data?.message || res.statusText || 'Unknown API Error';
+
+          setError(errorMsg);
+          setOutput(null);
+          setModalContent(null);
+          setResponseModalOpen(false);
+        }
       }
       return data;
     } catch (err) {
@@ -141,6 +142,7 @@ export default function App() {
     } finally {
       if (!options.silent) setLoading(false);
     }
+
   }, []);
 
   const handleMiningCall = useCallback((path, opts = {}) => {
@@ -152,17 +154,24 @@ export default function App() {
   }, [callApi]);
 
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="brand-block">
+    <div className="app-shell" style={{ padding: '0 20px 40px', maxWidth: '1600px', margin: '0 auto' }}>
+      <header className="app-header" style={{ 
+        padding: '40px 0', 
+        borderBottom: '1px solid rgba(255,255,255,0.05)', 
+        marginBottom: '30px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end'
+      }}>
+        <div className="brand-block" style={{ flex: 1 }}>
           <h1>Ben Tre Mining Tool</h1>
-          <p className="subtitle">
+          <p className="subtitle" style={{ opacity: 0.6, fontSize: '0.95rem', maxWidth: '600px', marginTop: '8px' }}>
             A powerful desktop tool for Nicehash miners. Manage rigs, monitor stats, and automate hashpower purchases with ease.
           </p>
         </div>
-        <div className="status-card">
+        <div className="status-card" style={{ marginBottom: '5px' }}>
           <div className="status-item">
-            <span>Status:</span>
+            <span style={{ opacity: 0.5, marginRight: '8px' }}>SYSTEM:</span>
             <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`}>
               {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
             </span>
@@ -185,7 +194,7 @@ export default function App() {
               </div> */}
             </article>
 
-            <article className="panel">
+            {/* <article className="panel">
               <div className="panel-header">
                 <h2>Hashpower Market</h2>
                 <span className="panel-icon">?</span>
@@ -212,11 +221,11 @@ export default function App() {
                   if (val === 'orderbook' || val === '/api/v2/hashpower/myOrders') {
                     const path = val === 'orderbook' ? '/api/v2/hashpower/order-book' : val;
                     handleHashpowerCall(path, {
-                      query: { 
-                        algorithm, 
-                        market, 
-                        op: 'LE', 
-                        ts: Date.now(), 
+                      query: {
+                        algorithm,
+                        market,
+                        op: 'LE',
+                        ts: Date.now(),
                         limit: 100
                         // active: true // Removed to show all orders (active and inactive)
                       },
@@ -239,15 +248,15 @@ export default function App() {
               <div style={{ marginTop: '20px' }}>
                 <HashpowerBot algorithm={algorithm} market={market} onCall={handleHashpowerCall} />
               </div>
-            </article>
+            </article> */}
           </div>
 
           <article className="panel">
-            <MiningRigRental 
-              onCall={handleMiningCall} 
-              mrrClient={mrrClient} 
-              setMrrClient={setMrrClient} 
-            />
+            <MiningRigSection onCall={handleMiningCall} mrrClient={mrrClient} setMrrClient={setMrrClient} />
+          </article>
+
+          <article className="panel">
+            <MrrPoolsManager onCall={handleMiningCall} mrrClient={mrrClient} />
           </article>
         </section>
 

@@ -8,8 +8,8 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
   const [loadingLocal, setLoadingLocal] = useState(false);
 
   const orders = useMemo(() => {
-    if (localOrders.length > 0) return localOrders;
-    const raw = output?.data ?? output;
+    if (localOrders.length > 0) return localOrders; // localOrders is already processed
+    const raw = output; // output should now be the direct API response
     if (!raw) return [];
     if (Array.isArray(raw)) return raw;
     if (Array.isArray(raw?.orders)) return raw.orders;
@@ -94,7 +94,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
         <button className="btn-pro" onClick={() => onCall('/api/v2/algorithms')}>Algorithms</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/mining/payouts')}>Payouts</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/mining/history', { query: { algorithm } })}>History</button>
-      </div>
+      
 
       <div className="market-inputs" style={{ marginTop: '15px' }}>
         <select className="select-pro" value={selectedOrderId} onChange={(e) => handleOrderSelect(e.target.value)}>
@@ -113,6 +113,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
           Get Order Detail
         </button>
       </div>
+      
 
       {selectedOrderId && (
         <div className="button-group" style={{ marginTop: '10px' }}>
@@ -124,6 +125,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
 
       <div className="market-inputs" style={{ marginTop: '10px' }}>
         <button className="btn-pro" onClick={fetchOrders}>Refresh Orders</button>
+      </div>
       </div>
 
       {loadingLocal && <div style={{ fontSize: '11px', opacity: 0.6, margin: '10px 0' }}>Fetching order data...</div>}
@@ -141,7 +143,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>MARKET</span> <strong>{orderDetail.market}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>PRICE</span> <strong style={{ color: '#f59e0b' }}>{orderDetail.price}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>LIMIT</span> <strong>{orderDetail.limit}</strong></div>
-            <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>CURR. SPEED</span> <strong>{parseFloat(orderDetail.acceptedCurrentSpeed || 0).toFixed(4)}</strong></div>
+            <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>CURR. SPEED</span> <strong>{parseFloat(orderDetail.acceptedCurrentSpeed || 0).toFixed(7)}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>RIGS</span> <strong>{orderDetail.rigsCount}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>ID</span> <code style={{ fontSize: '9px' }}>{orderDetail.id?.slice(0, 10)}</code></div>
             <div style={{ gridColumn: 'span 2' }}><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>STRATUM HOST</span> <strong style={{ wordBreak: 'break-all' }}>{orderDetail.pool?.stratumHostname || 'N/A'}</strong></div>
@@ -176,7 +178,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
                     <tr key={id || i} onClick={() => handleOrderSelect(id)} style={{ cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.02)' }} className="hover-row">
                       <td style={{ padding: '8px' }}>{algo}</td>
                       <td style={{ padding: '8px', color: '#f59e0b' }}>{o.price}</td>
-                      <td style={{ padding: '8px' }}>{parseFloat(o.acceptedCurrentSpeed || 0).toFixed(3)}</td>
+                      <td style={{ padding: '8px' }}>{parseFloat(o.acceptedCurrentSpeed || 0).toFixed(6)}</td>
                       <td style={{ padding: '8px', color: o.status?.code === 'ACTIVE' ? '#10b981' : 'inherit' }}>{o.status?.code}</td>
                     </tr>
                   );

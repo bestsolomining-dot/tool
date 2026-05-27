@@ -390,6 +390,57 @@ function resolveMrrClient(clientNameRaw) {
   return { clientName, clientConfig };
 }
 
+function extractAlgorithmItems(payload, candidateKeys = []) {
+  if (!payload || typeof payload !== 'object') return [];
+
+  for (const key of candidateKeys) {
+    const value = payload[key];
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const nestedKey of candidateKeys) {
+        if (Array.isArray(value[nestedKey])) return value[nestedKey];
+      }
+    }
+  }
+
+  // Generic deep search if specific keys don't yield an array
+  const visited = new WeakSet();
+  const queue = [payload];
+  while (queue.length) {
+    const node = queue.shift();
+    if (!node || typeof node !== 'object' || visited.has(node)) continue;
+    visited.add(node);
+
+    if (Array.isArray(node)) {
+      // If it's an array, check if its elements are algorithm items
+      if (node.every(item => typeof item === 'object' && (item.algo || item.algorithm || item.name))) {
+        return node;
+      }
+      // Otherwise, add individual items to the queue for deeper inspection
+      for (const item of node) {
+        if (item && typeof item === 'object') queue.push(item);
+      }
+    } else {
+      // If it's an object, check its properties
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) {
+          // If a property is an array, check if its elements are algorithm items
+          if (value.every(item => typeof item === 'object' && (item.algo || item.algorithm || item.name))) {
+            return value;
+          }
+          // Otherwise, add individual items to the queue
+          for (const item of value) {
+            if (item && typeof item === 'object') queue.push(item);
+          }
+        } else if (value && typeof value === 'object') {
+          queue.push(value);
+        }
+      }
+    }
+  }
+  return [];
+}
+
 function sanitizeMrrEndpoint(rawEndpoint) {
   const value = String(rawEndpoint || '').trim();
   if (!value) {
@@ -402,17 +453,13 @@ function sanitizeMrrEndpoint(rawEndpoint) {
   return normalized.replace(/\/+$/, '') || '/';
 }
 
-function extractAlgorithmItems(payload, candidateKeys = []) {
-  if (!payload || typeof payload !== 'object') return [];
+function extractRigInfo(mrrApiResponseData) {
+  // The mrrApiResponseData is the 'data' field from mrrApiCall, e.g., { success: true, data: ... }
+  // We need to look inside mrrApiResponseData.data
+  const payload = mrrApiResponseData?.data;
 
-  for (const key of candidateKeys) {
-    const value = payload[key];
-    if (Array.isArray(value)) return value;
-    if (value && typeof value === 'object') {
-      for (const nestedKey of candidateKeys) {
-        if (Array.isArray(value[nestedKey])) return value[nestedKey];
-      }
-    }
+  if (!payload) {
+    return { miningAlgorithm: '', stratumHost: '', stratumPort: null, username: '', password: '' };
   }
 
   const queue = [payload];
@@ -495,47 +542,46 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
     }
 
     // --- FALLBACK TO LEGACY (SHA1 CONCAT) ---
-    const authMessage = String(data?.data?.message || data?.message || '');
-    const isSigError = !data.success && /signature|unauthorized|authenticated|invalid/i.test(authMessage);
-    const isAuthFailureMessage = /signature|unauthorized|authenticated|invalid/i.test(authMessage);
-    const isSigError = !data.success && isAuthFailureMessage; // Only fallback if data.success is explicitly false or missing
+    let authMessage = String(data?.data?.message || data?.message || '');
+    let isAuthFailureMessage = /signature|unauthorized|authenticated|invalid/i.test(authMessage);
+    const shouldRetry = !data.success && isAuthFailureMessage;
 
-    if (isSigError) {
+    if (shouldRetry) {
       console.warn(`[mrr:${clientName}] HMAC failed, retrying with Legacy SHA1 Concatenation...`);
       currentNonce = nextMrrNonce(clientName);
       const legacyStr = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}${clientConfig.apiSecret}`;
       const legacySig = createHash('sha1').update(legacyStr).digest('hex');
 
-      response = await send(currentNonce, legacySig, {
+      const retryRes = await send(currentNonce, legacySig, {
         'x-mrr-key': clientConfig.apiKey,
         'x-mrr-nonce': currentNonce,
         'x-mrr-signature': legacySig
       });
-      const retryText = await response.body.text();
-      data = JSON.parse(retryText);
+      const retryText = await retryRes.body.text();
+      try {
+        data = JSON.parse(retryText);
+        response = retryRes;
+        authMessage = String(data?.data?.message || data?.message || '');
+        isAuthFailureMessage = /signature|unauthorized|authenticated|invalid/i.test(authMessage);
+      } catch (e) { /* fallback to original error if retry response isn't JSON */ }
     }
 
-    // Force error status if MRR returns success: false or an error message
+    // Force 401 error status if MRR returns success: false or an auth error message
     let finalStatus = response.statusCode;
-    const finalMsg = String(data?.data?.message || data?.message || '');
-    if ((data?.success === false || /unauthorized|invalid|failure|authenticated/i.test(finalMsg)) && finalStatus < 400) finalStatus = 401;
-    const finalMsg = String(data?.data?.message || data?.message || ''); // Re-evaluate finalMsg after potential retry
-    
-    // If the HTTP status is 200 but the message indicates an auth failure, force 401
-    if (finalStatus === 200 && isAuthFailureMessage) {
-        finalStatus = 401;
-    } else if (data?.success === false && finalStatus < 400) { // If success is explicitly false, and status is not already an error
-        finalStatus = 401;
+    if ((data?.success === false || isAuthFailureMessage) && finalStatus < 400) {
+      finalStatus = 401;
     }
-    
-    console.log(`[mrr:${clientName}] endpoint=${normalizedEndpoint} nonce=${currentNonce} status=${finalStatus} msg=${data?.message || 'OK'}`);
+
+    console.log(`[mrr:${clientName}] endpoint=${normalizedEndpoint} nonce=${currentNonce} status=${finalStatus} msg=${authMessage || 'OK'}`);
 
     return { statusCode: finalStatus, data, clientName };
   });
 }
 
 async function mrrRequest(endpoint, req, res, method = 'GET', body = undefined) {
-  const { client: clientQuery, ...forwardQuery } = req.query || {};
+  // Destructure to remove internal parameters (client, endpoint) from the forwarding query
+  const { client: clientQuery, endpoint: _internalPath, ...forwardQuery } = req.query || {};
+  
   // Default to primary client if 'ALL' is passed to a non-supporting endpoint
   const targetClient = String(clientQuery || '').toUpperCase() === 'ALL' ? defaultMrrClient : clientQuery;
 
@@ -567,6 +613,22 @@ function extractRigInfo(payload) {
       return { miningAlgorithm, stratumHost, stratumPort, username, password };
     }
 
+    // If it's a rig object, but missing some fields, check its pools
+    if (node.pools && Array.isArray(node.pools)) {
+      for (const pool of node.pools) {
+        const poolAlgo = pool.algo || pool.algorithm || '';
+        const poolHost = pool.stratumHost || pool.host || '';
+        const poolUser = pool.username || pool.user || '';
+        const poolPass = pool.password || pool.pass || '';
+        const poolPortMatch = (poolHost.match(/:(\d+)$/) || [])[1];
+        const poolPort = poolPortMatch ? Number(poolPortMatch) : null;
+
+        if (poolAlgo && poolHost && poolUser && poolPass) {
+          return { miningAlgorithm: poolAlgo, stratumHost: poolHost, stratumPort: poolPort, username: poolUser, password: poolPass };
+        }
+      }
+    }
+
     for (const value of Object.values(node)) {
       if (value && typeof value === 'object') queue.push(value);
     }
@@ -577,6 +639,7 @@ function extractRigInfo(payload) {
 
 app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
+  const targetEndpoint = req.query.endpoint || '/rig/mine';
 
   if (clientParam === 'ALL') {
     const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
@@ -586,11 +649,14 @@ app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
     for (const clientName of allClientNames) {
       try {
         const { data, statusCode } = await mrrApiCall({
-          endpoint: '/rig/mine',
+          endpoint: targetEndpoint,
           clientNameRaw: clientName,
         });
-        if (statusCode === 200 && data?.success && Array.isArray(data.rigs)) {
-          allRigs.push(...data.rigs.map(rig => ({ ...rig, mrrClient: clientName }))); // Add client identifier
+        
+        // Extract rigs from MRR's standard .data envelope
+        const rigs = Array.isArray(data?.data) ? data.data : (Array.isArray(data?.data?.rigs) ? data.data.rigs : []);
+        if (statusCode === 200 && data?.success && rigs.length > 0) {
+          allRigs.push(...rigs.map(rig => ({ ...rig, mrrClient: clientName }))); // Add client identifier
         } else {
           errors.push({ client: clientName, message: data?.message || `Failed to fetch rigs (status: ${statusCode})` });
         }
@@ -600,43 +666,64 @@ app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
     }
     res.json({ success: true, rigs: allRigs, errors: errors.length > 0 ? errors : undefined });
   } else {
-    // Existing logic for single client
-    await mrrRequest('/rig/mine', req, res);
+    // Dynamic endpoint selection (Marketplace vs My Rigs)
+    await mrrRequest(targetEndpoint, req, res);
   }
+}));
+
+/**
+ * Aggregated endpoint to fetch pools for all rigs owned by the user.
+ */
+app.get('/api/v2/mrr/rigs/pools', asyncHandler(async (req, res) => {
+  const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
+
+  // 1. Fetch user's rigs to get IDs
+  const { data: rigsData } = await mrrApiCall({
+    endpoint: '/rig/mine',
+    clientNameRaw: clientParam,
+  });
+
+  const rigs = Array.isArray(rigsData?.data) ? rigsData.data : (Array.isArray(rigsData?.data?.rigs) ? rigsData.data.rigs : []);
+  
+  if (!rigsData?.success || rigs.length === 0) {
+    res.set('X-MRR-Client', clientParam);
+    return res.json(rigsData || { success: true, data: [] });
+  }
+
+  // 2. Fetch pools for all IDs in bulk using the semicolon separator supported by MRR
+  const rigIds = rigs.map(r => r.id).join(';');
+  const { statusCode, data } = await mrrApiCall({
+    endpoint: `/rig/${rigIds}/pool`,
+    clientNameRaw: clientParam,
+  });
+
+  res.set('X-MRR-Client', clientParam);
+  res.status(statusCode).json(data);
 }));
 
 app.get('/api/v2/mrr/balance', asyncHandler(async (req, res) => mrrRequest('/account/balance', req, res)));
 app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => mrrRequest('/info/algos', req, res)));
 app.get('/api/v2/mrr/profiles', asyncHandler(async (req, res) => mrrRequest('/profile', req, res)));
+
 app.get('/api/v2/mrr/rentals', asyncHandler(async (req, res) => mrrRequest('/rental', req, res)));
+
+app.get('/api/v2/mrr/rental/history', asyncHandler(async (req, res) => {
+  // MRR retrieves history via the main rental endpoint with a query flag
+  req.query.history = '1';
+  return mrrRequest('/rental', req, res);
+}));
+app.get('/api/v2/mrr/rig/all', asyncHandler(async (req, res) => mrrRequest('/rig', req, res))); // New endpoint for all available rigs
 app.get('/api/v2/mrr/whoami', asyncHandler(async (req, res) => mrrRequest('/account/whoami', req, res)));
 
-app.get('/api/v2/mrr/rig/:rigIds/pool', asyncHandler(async (req, res) => {
-  const ids = req.params.rigIds.split(';').map(id => id.trim()).filter(Boolean);
-  
-  if (ids.length === 0) {
-    return res.status(400).json({ success: false, message: 'No Rig IDs provided' });
-  }
+app.get('/api/v2/mrr/rig', asyncHandler(async (req, res) => mrrRequest('/rig', req, res)));
 
-  if (ids.length === 1) {
-    return mrrRequest(`/rig/${ids[0]}/pool`, req, res);
-  }
+app.get('/api/v2/mrr/rig/:rigIds', asyncHandler(async (req, res) => mrrRequest(`/rig/${req.params.rigIds}`, req, res)));
 
-  // Handle bulk request by fetching each individually
-  const results = await Promise.all(ids.map(async (id) => {
-    try {
-      const { data } = await mrrApiCall({ 
-        endpoint: `/rig/${id}/pool`, 
-        clientNameRaw: req.query.client 
-      });
-      return { rigId: id, ...data };
-    } catch (err) {
-      return { rigId: id, success: false, message: err.message };
-    }
-  }));
+app.get('/api/v2/mrr/rig/:rigIds/pool', asyncHandler(async (req, res) => mrrRequest(`/rig/${req.params.rigIds}/pool`, req, res)));
 
-  res.json({ success: true, data: results });
-}));
+app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => mrrRequest(`/rental/${req.params.rentalIds}`, req, res)));
+
+app.get('/api/v2/mrr/rental/:rentalIds/pool', asyncHandler(async (req, res) => mrrRequest(`/rental/${req.params.rentalIds}/pool`, req, res)));
 
 app.put('/api/v2/mrr/rig/:rigId/pool', asyncHandler(async (req, res) => {
   // The MRR API expects pool details in the body for a PUT request

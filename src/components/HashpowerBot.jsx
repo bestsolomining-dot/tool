@@ -93,9 +93,9 @@ export default function HashpowerBot({ algorithm, market, onCall }) {
         // We are at speed. Check if we can lower the price.
         if (myPrice > optimalPrice) {
           nextPrice = Math.max(myPrice - stepDownDelta, optimalPrice);
-          addLog(`?adjust price?; order ${myOrder.id}, speed ${mySpeed.toFixed(8)}, rigs ${myOrder.rigsCount}, price ${myPrice.toFixed(4)}, step_down -${stepDownDelta.toFixed(4)}`, 'success');
+          addLog(`?adjust price?; order ${myOrder.id}, speed ${mySpeed.toFixed(8)}, rigs ${myOrder.rigsCount}, price ${myPrice.toFixed(8)}, step_down -${stepDownDelta.toFixed(4)}`, 'success');
         } else {
-          addLog(`[STABLE] Speed OK (${mySpeed.toFixed(4)}). Price is optimal at ${myPrice.toFixed(4)}`);
+          addLog(`[STABLE] Speed OK (${mySpeed.toFixed(5)}). Price is optimal at ${myPrice.toFixed(8)}`);
         }
       } else {
         // Speed is low. Check if we need to increase price.

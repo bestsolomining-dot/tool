@@ -40,9 +40,7 @@ export default function MrrPoolsManager({ onCall, mrrClient }) {
       setPoolData({ success: false, message: err.message });
     } finally {
       setLoading(false);
-    } finally {
-      setLoading(false);
-    }
+    } 
   };
 
   const callMrrFunction = () => {
@@ -227,7 +225,7 @@ export default function MrrPoolsManager({ onCall, mrrClient }) {
             </div>
 
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '6px', fontSize: '11px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ marginBottom: '4px' }}><span style={{ opacity: 0.6 }}>Rig ID:</span> {rentalInfo.id}</div>
+              <div style={{ marginBottom: '14px' }}><span style={{ opacity: 0.6 }}>Rig ID:</span> {rentalInfo.id}</div>
               <div><span style={{ opacity: 0.6 }}>Duration:</span> {rentalInfo.hours} Hours</div>
             </div>
 

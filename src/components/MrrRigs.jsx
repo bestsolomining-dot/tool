@@ -168,12 +168,12 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                 padding: '15px',
                 position: 'relative'
               }}>
-                {isMine && <span style={{ position: 'absolute', top: '-8px', left: '10px', background: '#3b82f6', color: 'white', fontSize: '9px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>Rig ID: {rig.id}</span>}
+                {isMine && <span style={{ position: 'absolute', top: '1px', left: '10px', background: '#494947', color: 'white', fontSize: '9px', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>Rig ID: #{rig.id} {rig.mrrClient && `[${rig.mrrClient}]`}</span>}
                 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace' }}>#{rig.id} {rig.mrrClient && `[${rig.mrrClient}]`}</span>
-                  <strong style={{ fontSize: '15px' }}>{rig.name}</strong>
+                  {/* <span style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace' }}>#{rig.id} {rig.mrrClient && `[${rig.mrrClient}]`}</span> */}
+                  <strong style={{ fontSize: '14px' }}>{rig.name}</strong>
                 </div>
                 <span 
                   style={{ 

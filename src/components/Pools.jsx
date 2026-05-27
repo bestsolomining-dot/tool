@@ -63,6 +63,11 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
     }
   }
 
+  // Initialize pools on mount
+  useEffect(() => {
+    loadPools();
+  }, []);
+
   // Automatically clear MRR results when client changes to prevent data mixing
   useEffect(() => {
     setMrrRigs(null);
@@ -354,6 +359,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
     await executeCycle()
     if (stopRef.current) {
+      setLastRunTime(new Date().toLocaleTimeString())
       setRunning(false)
       return
     }
@@ -484,25 +490,14 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   ).sort(([left], [right]) => left.localeCompare(right))
 
   return (
-    <div className="card pools-manager">
-      <div className="section-header">
-        <h2>Stratum Pools</h2>
-      </div>
-      <div className="pool-actions" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+    <div className="card pools-manager" >
+      <div className="pool-actions" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', minWidth: '400px' }}>
         <div className="pool-actions">
           <button className="btn-pro primary" onClick={verify} disabled={loading || detailsLoading || playing || !selected}>
           {loading ? 'Verifying...' : 'Verify Pool'}
           </button>
-
-          <button
-            className="btn-pro"
-            onClick={() => openPoolEditor({ key: selectedId, label: selectedLabel })}
-            disabled={!selected || detailsLoading || playing}
-          >
-            Edit Pool
-          </button>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          
+          <div style={{ minHeight: '50px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
             <label style={{ fontSize: '10px', fontWeight: 'bold' }}>DELAY (MS)</label>
             <input
               type="number"
@@ -511,6 +506,18 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
               value={verificationDelay}
               onChange={e => setVerificationDelay(Number(e.target.value))}
             />
+            <div style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>
+              {running && nextRunCountdown !== null && (
+                <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 'bold' }}>
+                  Next run in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
+                </div>
+              )}
+              {lastRunTime && (
+                <div style={{ fontSize: '10px', color: '#059669' }}>
+                  Finished: {lastRunTime}
+                </div>
+              )}
+            </div>
           </div>
 
           <button 
@@ -528,29 +535,15 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '120px' }}>
             <button className="btn-pro" onClick={startRun} disabled={playing || running}>
-              {running ? 'Running...' : 'Auto Run (10m)'}
+              {running ? 'Running...' : 'Auto'}
             </button>
-            
-            <div style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>
-              {running && nextRunCountdown !== null && (
-                <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 'bold' }}>
-                  Next run in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
-                </div>
-              )}
-              {lastRunTime && (
-                <div style={{ fontSize: '10px', color: '#059669' }}>
-                  Finished: {lastRunTime}
-                </div>
-              )}
-            </div>
-            
           </div>
           {(playing || running) && (
-              <button className="btn-pro" onClick={stopAutomation} style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>Stop Automation</button>
+              <button className="btn-pro" onClick={stopAutomation} style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>Stop</button>
             )}
         </div>
         <div>
-          <div className="pool-main-content" style={{ flex: 1, minWidth: '320px' }}>
+          <div className="pool-main-content" style={{ flex: 1, minWidth: '500px', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {progress.total > 0 && (
               <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', marginBottom: '12px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <div
@@ -640,21 +633,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
                           <span className="verify-algorithm">{algorithm}</span>
                           <small>{pending ? 'Waiting for response' : ph.getVerifyMessage(item.result)}</small>
                         </summary>
-                        {logs.length > 0 && (
-                          <div className="verify-log">
-                            <h4>Verification log</h4>
-                            {logs.map((log, index) => (
-                              <div className={`verify-log-row ${log.level?.toLowerCase() || ''}`} key={`${item.key}-log-${index}`}>
-                                <span>{log.level || 'LOG'}</span>
-                                <time>{log.timestamp || '-'}</time>
-                                <p>{log.message || JSON.stringify(log)}</p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <pre className="response-body compact">
-                          {JSON.stringify(item.result, null, 2)}
-                        </pre>
                       </details>
                     )
                   })}

@@ -87,9 +87,9 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
 
   return (
     <div className="rig-section nh-theme">
-      <h3 className="section-title">NiceHash Rigs</h3>
+      <h3 className="section-title">NiceHash</h3>
       <div className="button-group">
-        <button className="btn-pro" onClick={fetchOrders}>Rigs List</button>
+        <button className="btn-pro" onClick={fetchOrders}>Orders List</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/mining/address')}>Mining Address</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/algorithms')}>Algorithms</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/mining/payouts')}>Payouts</button>

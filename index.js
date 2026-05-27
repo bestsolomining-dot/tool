@@ -79,7 +79,7 @@ const mrrConfigs = {
   },
 };
 const defaultMrrClientRaw = String(process.env.MRR_DEFAULT_CLIENT || 'BT').trim().toUpperCase();
-const defaultMrrClient = (function() {
+const defaultMrrClient = (function () {
   if (mrrConfigs[defaultMrrClientRaw]) return defaultMrrClientRaw;
   // Fallback logic
   if (defaultMrrClientRaw === 'SL') return 'SL';
@@ -88,7 +88,7 @@ const defaultMrrClient = (function() {
 })();
 
 if (!config.apiKey || !config.apiSecret || !config.orgId) {
-  console.warn('NICEHASH_API_KEY, NICEHASH_API_SECRET, and NICEHASH_ORG_ID are required for NiceHash v2 requests.')
+  console.warn('NICEHASH_API_KEY, NICEHASH_API_SECRET, and NICEHASH_ORG_ID are required for NiceHash v2 requests.');
 }
 
 const client = new NiceHashClient(config);
@@ -344,7 +344,7 @@ function nextMrrNonce(clientName) {
 }
 
 function resolveMrrClient(clientNameRaw) {
-  const clientName = String(clientNameRaw || defaultMrrClient).toUpperCase();
+  const clientName = String(clientNameRaw || defaultMrrClient).toUpperCase(); // Use default if not provided
 
   if (!mrrInstances.has(clientName)) {
     let config = mrrConfigs[clientName];
@@ -445,95 +445,6 @@ async function runMrrCallInOrder(clientName, task) {
   }
 }
 
-// async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw }) {
-//   const { clientName, clientConfig } = resolveMrrClient(clientNameRaw);
-//   return runMrrCallInOrder(clientName, async () => {
-//     const normalizedEndpoint = sanitizeMrrEndpoint(endpoint);
-//     const requestMethod = String(method || 'GET').toUpperCase();
-
-//     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
-//     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedEndpoint}`);
-//     if (query && typeof query === 'object') {
-//       for (const [key, value] of Object.entries(query)) {
-//         if (value === undefined || value === null || value === '') continue;
-//         baseUrl.searchParams.set(key, String(value));
-//       }
-//     }
-
-//     // MRR V2 Signature requires the endpoint path ONLY (excluding query strings).
-//     // The endpoint must start with a / relative to the v2 base.
-//     // Example: /api/v2/rig/14 -> /rig/14
-//     const sigEndpoint = baseUrl.pathname.replace(/^\/api\/v2/, '');
-    
-//     const send = async (headers, requestNonce, requestBodyContent) => request(baseUrl.toString(), {
-//       method: requestMethod,
-//       headers: {
-//         'user-agent': 'Mozilla/4.0 (compatible; MRR API Node client; Ben Tre Mining Tool)',
-//         ...headers,
-//         ...(hasBody ? { 'content-type': 'application/json' } : {}),
-//       },
-//       ...(hasBody ? { body: JSON.stringify(requestBodyContent) } : {}),
-//     });
-
-//     // Primary auth: documented v2 headers.
-//     let nonce = nextMrrNonce(clientName);
-//     let signString = `${clientConfig.apiKey}${nonce}${sigEndpoint}`;
-//     let apiSig = createHmac('sha1', clientConfig.apiSecret).update(String(signString)).digest('hex');
-
-//     let { statusCode, body: responseBody } = await send({
-//       'x-api-key': clientConfig.apiKey,
-//       'x-api-nonce': nonce,
-//       'x-api-sign': apiSig,
-//     }, nonce, body);
-
-//     const text = await responseBody.text();
-//     let data;
-//     try {
-//       data = text ? JSON.parse(text) : { success: false, message: 'Empty response' };
-//     } catch {
-//       data = { success: false, message: text };
-//     }
-
-//     const authMessage = String(data?.data?.message || data?.message || '');
-//     const isAuthError = !data.success && (authMessage.includes('Not Authenticated') || authMessage.includes('Invalid Key') || authMessage.includes('Invalid signature'));
-
-//     const shouldFallbackLegacy =
-//       statusCode >= 400 || isAuthError ||
-//       authMessage.includes('Missing API Key');
-
-//     if (shouldFallbackLegacy) {
-//       console.warn(`[mrr:${clientName}] Auth failure on v2 headers, trying legacy fallback...`);
-      
-//       // IMPORTANT: Generate a FRESH nonce for the retry attempt
-//       nonce = nextMrrNonce(clientName);
-//       signString = `${clientConfig.apiKey}${nonce}${sigEndpoint}`;
-//       const legacySig = createHash('sha1').update(String(signString + clientConfig.apiSecret)).digest('hex');
-
-//       const legacyResponse = await send({
-//         'x-mrr-key': clientConfig.apiKey,
-//         'x-mrr-nonce': nonce,
-//         'x-mrr-signature': legacySig,
-//       }, nonce, body);
-
-//       statusCode = legacyResponse.statusCode;
-//       const legacyText = await legacyResponse.body.text();
-//       try {
-//         data = legacyText ? JSON.parse(legacyText) : {};
-//       } catch {
-//         data = { success: false, message: legacyText };
-//       }
-//     }
-
-//     // If final data still reports failure, ensure statusCode reflects it
-//     if (data && data.success === false && statusCode === 200) {
-//       console.error(`[mrr:${clientName}] API Error: ${data.message || 'Unauthorized'}`);
-//       statusCode = 401; // Treat as Unauthorized for the frontend
-//     }
-
-//     return { statusCode, data, clientName };
-//   });
-// }
-
 async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw }) {
   const { clientName, clientConfig } = resolveMrrClient(clientNameRaw);
   return runMrrCallInOrder(clientName, async () => {
@@ -585,7 +496,9 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
 
     // --- FALLBACK TO LEGACY (SHA1 CONCAT) ---
     const authMessage = String(data?.data?.message || data?.message || '');
-    const isSigError = !data.success && (authMessage.includes('Signature Failure') || authMessage.includes('Invalid signature'));
+    const isSigError = !data.success && /signature|unauthorized|authenticated|invalid/i.test(authMessage);
+    const isAuthFailureMessage = /signature|unauthorized|authenticated|invalid/i.test(authMessage);
+    const isSigError = !data.success && isAuthFailureMessage; // Only fallback if data.success is explicitly false or missing
 
     if (isSigError) {
       console.warn(`[mrr:${clientName}] HMAC failed, retrying with Legacy SHA1 Concatenation...`);
@@ -602,24 +515,36 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
       data = JSON.parse(retryText);
     }
 
-    // Force 401 if MRR returns success: false
+    // Force error status if MRR returns success: false or an error message
     let finalStatus = response.statusCode;
-    if (!data.success && finalStatus === 200) finalStatus = 401;
-
-    console.log(`[mrr:${clientName}] 
-    endpoint=${normalizedEndpoint} nonce=${currentNonce} status=${finalStatus}`);
+    const finalMsg = String(data?.data?.message || data?.message || '');
+    if ((data?.success === false || /unauthorized|invalid|failure|authenticated/i.test(finalMsg)) && finalStatus < 400) finalStatus = 401;
+    const finalMsg = String(data?.data?.message || data?.message || ''); // Re-evaluate finalMsg after potential retry
+    
+    // If the HTTP status is 200 but the message indicates an auth failure, force 401
+    if (finalStatus === 200 && isAuthFailureMessage) {
+        finalStatus = 401;
+    } else if (data?.success === false && finalStatus < 400) { // If success is explicitly false, and status is not already an error
+        finalStatus = 401;
+    }
+    
+    console.log(`[mrr:${clientName}] endpoint=${normalizedEndpoint} nonce=${currentNonce} status=${finalStatus} msg=${data?.message || 'OK'}`);
 
     return { statusCode: finalStatus, data, clientName };
   });
 }
 
-async function mrrRequest(endpoint, req, res, method = 'GET') {
-  const { client: _ignoredClient, ...forwardQuery } = req.query || {};
+async function mrrRequest(endpoint, req, res, method = 'GET', body = undefined) {
+  const { client: clientQuery, ...forwardQuery } = req.query || {};
+  // Default to primary client if 'ALL' is passed to a non-supporting endpoint
+  const targetClient = String(clientQuery || '').toUpperCase() === 'ALL' ? defaultMrrClient : clientQuery;
+
   const { statusCode, data, clientName } = await mrrApiCall({
     endpoint,
     method,
-    clientNameRaw: req.query.client,
+    clientNameRaw: targetClient,
     query: forwardQuery,
+    body: body, // Pass the body explicitly for non-GET requests
   });
   res.set('X-MRR-Client', clientName);
   res.status(statusCode).json(data);
@@ -650,7 +575,36 @@ function extractRigInfo(payload) {
   return { miningAlgorithm: '', stratumHost: '', stratumPort: null, username: '', password: '' };
 }
 
-app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => mrrRequest('/rig/mine', req, res)));
+app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
+  const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
+
+  if (clientParam === 'ALL') {
+    const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
+    const allRigs = [];
+    const errors = [];
+
+    for (const clientName of allClientNames) {
+      try {
+        const { data, statusCode } = await mrrApiCall({
+          endpoint: '/rig/mine',
+          clientNameRaw: clientName,
+        });
+        if (statusCode === 200 && data?.success && Array.isArray(data.rigs)) {
+          allRigs.push(...data.rigs.map(rig => ({ ...rig, mrrClient: clientName }))); // Add client identifier
+        } else {
+          errors.push({ client: clientName, message: data?.message || `Failed to fetch rigs (status: ${statusCode})` });
+        }
+      } catch (err) {
+        errors.push({ client: clientName, message: err.message });
+      }
+    }
+    res.json({ success: true, rigs: allRigs, errors: errors.length > 0 ? errors : undefined });
+  } else {
+    // Existing logic for single client
+    await mrrRequest('/rig/mine', req, res);
+  }
+}));
+
 app.get('/api/v2/mrr/balance', asyncHandler(async (req, res) => mrrRequest('/account/balance', req, res)));
 app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => mrrRequest('/info/algos', req, res)));
 app.get('/api/v2/mrr/profiles', asyncHandler(async (req, res) => mrrRequest('/profile', req, res)));
@@ -682,6 +636,11 @@ app.get('/api/v2/mrr/rig/:rigIds/pool', asyncHandler(async (req, res) => {
   }));
 
   res.json({ success: true, data: results });
+}));
+
+app.put('/api/v2/mrr/rig/:rigId/pool', asyncHandler(async (req, res) => {
+  // The MRR API expects pool details in the body for a PUT request
+  await mrrRequest(`/rig/${req.params.rigId}/pool`, req, res, 'PUT', req.body);
 }));
 
 app.get('/api/v2/mrr/rig/:rigIds/info', asyncHandler(async (req, res) => {

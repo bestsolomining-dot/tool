@@ -232,20 +232,21 @@ export default function Pools() {
     }
   }
 
-  async function verifyAllOnce({ resetStop = true, keepRunning = false, targetPools = pools } = {}) {
-    if (!Array.isArray(targetPools) || targetPools.length === 0 || playing) return
+  async function verifyAllOnce({ resetStop = true, keepRunning = false, targetPools } = {}) {
+    const poolsToVerify = targetPools || poolsRef.current
+    if (!Array.isArray(poolsToVerify) || poolsToVerify.length === 0 || playing) return
     setPlaying(true)
     setError('')
     setResponse(null)
     setVerifyResults([])
-    setProgress({ current: 0, total: targetPools.length })
+    setProgress({ current: 0, total: poolsToVerify.length })
     if (resetStop) stopRef.current = false
 
     try {
-      for (let i = 0; i < targetPools.length; i++) {
+      for (let i = 0; i < poolsToVerify.length; i++) {
         if (stopRef.current) break
 
-        const pool = targetPools[i]
+        const pool = poolsToVerify[i]
         const poolId = ph.getId(pool)
         const key = ph.getKey(pool, i)
         const controller = new AbortController()
@@ -303,9 +304,9 @@ export default function Pools() {
           ...prev.filter(item => item.key !== key),
           { key, label: ph.getLabel(pool, i), result },
         ])
-        setProgress({ current: i + 1, total: targetPools.length })
+        setProgress({ current: i + 1, total: poolsToVerify.length })
 
-        if (stopRef.current || i >= targetPools.length - 1) break
+        if (stopRef.current || i >= poolsToVerify.length - 1) break
         await new Promise(resolve => {
           const startedAt = Date.now()
           const timer = setInterval(() => {
@@ -376,6 +377,56 @@ export default function Pools() {
   function verifyAlgorithm(algorithm) {
     const targetPools = pools.filter(pool => ph.getAlgo(pool) === algorithm)
     verifyAllOnce({ targetPools })
+  }
+
+  async function importXlsx(file) {
+    if (!file) return;
+    if (!ph.XLSX) {
+      setError('XLSX library not loaded. Please install it with: npm install xlsx');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = e.target.result;
+        const workbook = ph.XLSX.read(data, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const json = ph.XLSX.utils.sheet_to_json(sheet);
+
+        const importedPools = json.map((row, i) => ({
+          name: row.name || row['Pool Name'] || row.label || `Imp-${i}`,
+          algorithm: row.algorithm || row.Algorithm || row.miningAlgorithm || '',
+          stratumHostname: row.stratumHostname || row.stratumHost || row.host || row['Stratum Host'] || '',
+          stratumPort: Number(row.stratumPort || row.port || row.Port || 3333),
+          username: row.username || row.Username || '',
+          password: row.password || row.Password || 'x',
+          key: `imp_${Date.now()}_${i}`
+        }));
+
+        if (importedPools.length === 0) throw new Error('No valid pool rows found in XLSX');
+        // Run verification on the imported list immediately
+        await verifyAllOnce({ targetPools: importedPools, resetStop: true });
+      } catch (err) {
+        setError('Import Failed: ' + err.message);
+      }
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  async function importFromUrl() {
+    const url = 'https://notepad.vn/01WUDFi17';
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      setPools(ph.normalizeList(data));
+    } catch (err) {
+      setError('URL Sync Failed: ' + err.message + '. Ensure the link returns raw JSON.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function verifyImported() {
@@ -552,6 +603,10 @@ export default function Pools() {
           <button className="btn-pro" onClick={startRun} disabled={playing || running}>
             {running ? 'Running...' : 'Auto'}
           </button>
+          {/* Sync Remote Config */}
+          <button className="btn-pro secondary" onClick={importFromUrl} disabled={playing || running}>
+            Sync Remote
+          </button>
           {/* Stop button (conditional) */}
           {(playing || running) && (
             <button className="btn-pro" onClick={stopAutomation}>Stop</button>
@@ -572,7 +627,7 @@ export default function Pools() {
             </label>
           </div>
           {/* Time information block – pushed to the end on flex row, wraps below on small screens */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '3rem   ', marginRight: 'auto', background: 'rgba(92, 92, 92, 0.2)', padding: '4px 8px', borderRadius: '6px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '0.9rem', marginRight: 'auto', background: 'rgba(92, 92, 92, 0.2)', padding: '4px 8px', borderRadius: '6px' }}>
             {/* Delay input */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
               <label style={{ fontSize: '10px', fontWeight: 'bold' }}>DELAY (5s)</label>

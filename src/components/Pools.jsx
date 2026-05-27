@@ -87,7 +87,7 @@ export default function Pools() {
   useEffect(() => {
     function onPointerDown(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setDropdownOpen(false)
+        setSelectorOpen(false)
       }
     }
 

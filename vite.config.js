@@ -7,8 +7,11 @@ export default defineConfig(({ command }) => ({
   plugins: [react(), command === 'build' ? cloudflare() : undefined].filter(Boolean),
   server: {
     host: true,
+    watch: {
+      usePolling: true,
+    },
     proxy: {
-      '/api': 'http://0.0.0.0:3000',
+      '/api': 'http://localhost:3000',
     },
   },
 }))

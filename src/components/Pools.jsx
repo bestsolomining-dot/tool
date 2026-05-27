@@ -22,11 +22,15 @@ export default function Pools() {
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [mrrRigs, setMrrRigs] = useState(null)
   const [inspectData, setInspectData] = useState(null)
+  const [runCount, setRunCount] = useState(0)
+  const [currentRunStartTime, setCurrentRunStartTime] = useState(null)
+  const [currentRunElapsed, setCurrentRunElapsed] = useState(0)
 
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false) // State for Pool Selection Modal
   const runTimerRef = useRef(null)
   const countdownTimerRef = useRef(null)
+  const elapsedTimerRef = useRef(null)
   const stopRef = useRef(false)
   const activeRequestRef = useRef(null)
   const dropdownRef = useRef(null) // Kept for legacy or cleanup
@@ -98,6 +102,8 @@ export default function Pools() {
   useEffect(() => {
     return () => {
       if (runTimerRef.current) clearInterval(runTimerRef.current)
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
       if (activeRequestRef.current) activeRequestRef.current.abort()
     }
   }, [])
@@ -319,17 +325,30 @@ export default function Pools() {
   async function startRun() {
     if (running || playing) return
     setRunning(true)
+    setRunCount(0)
     stopRef.current = false
 
-    const intervalMs = 5 * 60 * 1000
+    const intervalMs = 10000
 
     const executeCycle = async () => {
       if (stopRef.current) return
 
+      setCurrentRunStartTime(new Date())
+      setCurrentRunElapsed(0)
+      setRunCount(prev => prev + 1)
       setNextRunCountdown(null)
       if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
+
+      elapsedTimerRef.current = setInterval(() => {
+        setCurrentRunElapsed(prev => prev + 1)
+      }, 1000)
 
       await verifyAllOnce({ resetStop: false, keepRunning: true })
+
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
+
+      if (stopRef.current) return
 
       const finishedAt = new Date()
       setLastRunTime(finishedAt.toLocaleTimeString())
@@ -337,21 +356,21 @@ export default function Pools() {
       // Start countdown for next run
       let remaining = intervalMs / 1000
       setNextRunCountdown(remaining)
+      setCurrentRunStartTime(null)
 
       countdownTimerRef.current = setInterval(() => {
         remaining -= 1
         setNextRunCountdown(remaining > 0 ? remaining : 0)
         if (remaining <= 0) clearInterval(countdownTimerRef.current)
       }, 1000)
+
+      runTimerRef.current = setTimeout(executeCycle, intervalMs)
     }
 
     await executeCycle()
     if (stopRef.current) {
       setRunning(false)
-      return
     }
-
-    runTimerRef.current = setInterval(executeCycle, intervalMs)
   }
 
   function verifyAlgorithm(algorithm) {
@@ -362,6 +381,9 @@ export default function Pools() {
   function stopAutomation() {
     stopRef.current = true
     setRunning(false)
+    setRunCount(0)
+    setCurrentRunStartTime(null)
+    setCurrentRunElapsed(0)
     if (runTimerRef.current) {
       clearInterval(runTimerRef.current)
       runTimerRef.current = null
@@ -375,7 +397,7 @@ export default function Pools() {
       activeRequestRef.current.abort()
       activeRequestRef.current = null
     }
-    setLastRunTime(null) // Clear the last run time when automation is stopped
+    setLastRunTime(null)
   }
 
   const openPoolEditor = (item) => {
@@ -409,7 +431,7 @@ export default function Pools() {
 
   const handleExportResults = () => {
     const resultsToExport = verifyResults.filter(item => !item.result?.pending);
-    
+
     const data = resultsToExport.map(item => {
       const p = item.result?.poolDetails || item.result?.requestBody || {};
       const success = ph.isVerifySuccess(item.result);
@@ -451,12 +473,12 @@ export default function Pools() {
   return (
     <div className="card pools-manager">
       <div className="section-header">
-        <h2>Stratum Pools</h2>
+        <h2>Pools Management</h2>
       </div>
       <div className="pool-actions" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
         <div className="pool-actions">
           <button className="btn-pro primary" onClick={verify} disabled={loading || detailsLoading || playing || !selected}>
-          {loading ? 'Verifying...' : 'Verify Pool'}
+            {loading ? 'Verifying...' : 'Verify Pool'}
           </button>
 
           <button
@@ -478,44 +500,56 @@ export default function Pools() {
             />
           </div>
 
-          <button 
-            className="btn-pro secondary" 
-            onClick={handleExportResults} 
+          <button
+            className="btn-pro secondary"
+            onClick={handleExportResults}
             disabled={completedResults.length === 0}
             title="Export completed verification results to XLSX"
           >
             Export Results
           </button>
 
-          <button className="btn-pro" onClick={() => verifyAllOnce()} disabled={playing || running}>
+          <button className="btn-pro" onClick={() => verifyAllOnce()} disabled={playing || running} >
             {playing ? 'Verifying...' : `Verify All (${verificationDelay}ms)`}
           </button>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '120px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '200px' }}>
             <button className="btn-pro" onClick={startRun} disabled={playing || running}>
-              {running ? 'Running...' : 'Auto Run (10m)'}
-            
-            <div style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>
-              {running && nextRunCountdown !== null && (
-                <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 'bold' }}>
-                  Next run in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
-                </div>
-              )}
-              {lastRunTime && (
-                <div style={{ fontSize: '10px', color: '#059669' }}>
-                  Finished: {lastRunTime}
-                </div>
-              )}
-            </div>
+              {running ? 'Running...' : 'Auto Run'}
+
+              <div style={{ minHeight: '60px', display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '10px' }}>
+                {running && (
+                  <>
+                    <div style={{ color: '#f59e0b', fontWeight: 'bold' }}>
+                      Run #{runCount}
+                    </div>
+                    {currentRunStartTime && (
+                      <div style={{ color: '#8b5cf6' }}>
+                        Elapsed: {Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s
+                      </div>
+                    )}
+                    {nextRunCountdown !== null && (
+                      <div style={{ color: '#3b82f6', fontWeight: 'bold' }}>
+                        Next in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
+                      </div>
+                    )}
+                  </>
+                )}
+                {lastRunTime && (
+                  <div style={{ color: '#059669' }}>
+                    Finished: {lastRunTime}
+                  </div>
+                )}
+              </div>
             </button>
-            
+
           </div>
           {(playing || running) && (
-              <button className="btn-pro" onClick={stopAutomation} style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>Stop Automation</button>
-            )}
+            <button className="btn-pro" onClick={stopAutomation} style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>Stop Automation</button>
+          )}
         </div>
         <div>
-          <div className="pool-main-content" style={{ flex: 1, minWidth: '320px' }}>
+          <div className="pool-main-content" style={{ flex: 1, minWidth: '360px' }}>
             {progress.total > 0 && (
               <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', marginBottom: '12px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <div
@@ -548,7 +582,7 @@ export default function Pools() {
                     <strong>{successCount}</strong>
                   </div>
                   <div>
-                    <span>Fail</span>
+                    <span>Error</span>
                     <strong>{failCount}</strong>
                   </div>
                   <div className="wide">
@@ -566,7 +600,7 @@ export default function Pools() {
                       <details className="verify-item" key={item.key}>
                         <summary>
                           <span
-                            className={`verify-status ${pending ? 'pending' : success ? 'success' : 'fail'}`}
+                            className={`verify-status ${pending ? 'pending' : success ? 'success' : 'error'}`}
                             onClick={event => {
                               if (pending) return
                               event.preventDefault()
@@ -576,7 +610,7 @@ export default function Pools() {
                             style={{ cursor: pending ? 'wait' : 'pointer' }}
                             title={pending ? "Verifying..." : "Click to open Pool Editor"}
                           >
-                            {pending ? 'Checking' : success ? 'Success' : 'Fail'}
+                            {pending ? 'Checking' : success ? 'Success' : 'Error'}
                           </span>
                           <button
                             type="button"
@@ -649,7 +683,9 @@ export default function Pools() {
                   {poolAlgorithmGroups.map(([algorithm, count]) => (
                     <div className="algorithm-row" key={algorithm}>
                       <span>{algorithm}</span>
-                      <strong>{count}</strong>
+                      <strong style={{ marginLeft: 'auto', marginRight: '3rem', flexWrap: 'wrap', alignItems: 'flex-start', display: 'flex', gap: '6.5rem' }}>
+                        {count}
+                      </strong>
                       <button
                         type="button"
                         className="btn-pro secondary"

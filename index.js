@@ -808,6 +808,13 @@ app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
           rental = { ...found, ...rental };
         }
       }
+
+      // Fetch associated pools for this rental to provide "Full Info" automatically
+      const poolRes = await mrrApiCall({ endpoint: `/rental/${rentalId}/pool`, clientNameRaw: clientName });
+      if (poolRes.statusCode === 200 && poolRes.data?.success) {
+        const pData = poolRes.data.data || poolRes.data;
+        rental.pools = Array.isArray(pData.pools) ? pData.pools : (Array.isArray(pData) ? pData : []);
+      }
       
       // Attach a normalized object for the UI to consume easily
       const normalized = extractRentalInfo(rental);

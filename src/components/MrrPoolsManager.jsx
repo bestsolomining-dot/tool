@@ -64,7 +64,7 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
       setPoolData({ success: false, message: err.message });
     } finally {
       setLoading(false);
-    } 
+    }
   };
 
   const callMrrFunction = () => {
@@ -132,15 +132,15 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
       </div>
 
       <div className="market-inputs" style={{ gap: '10px', marginBottom: '15px' }}>
-        <input 
-          className="input-pro" 
-          placeholder="Specific Rig ID" 
-          value={rigId} 
-          onChange={(e) => setRigId(e.target.value)} 
+        <input
+          className="input-pro"
+          placeholder="Specific Rig ID"
+          value={rigId}
+          onChange={(e) => setRigId(e.target.value)}
         />
-        <button 
-          className="btn-pro secondary" 
-          disabled={!rigId.trim() || loading} 
+        <button
+          className="btn-pro secondary"
+          disabled={!rigId.trim() || loading}
           onClick={() => fetchPools('rig')}
         >
           Fetch Rig Pools
@@ -148,23 +148,23 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
       </div>
 
       <div className="market-inputs" style={{ gap: '10px' }}>
-        <input 
-          className="input-pro" 
-          placeholder="Specific Rental ID" 
-          value={rentalId} 
-          onChange={(e) => setRentalId(e.target.value)} 
+        <input
+          className="input-pro"
+          placeholder="Specific Rental ID"
+          value={rentalId}
+          onChange={(e) => setRentalId(e.target.value)}
         />
-        <button 
-          className="btn-pro secondary" 
-          disabled={!rentalId.trim() || loading} 
+        <button
+          className="btn-pro secondary"
+          disabled={!rentalId.trim() || loading}
           onClick={() => fetchPools('rental')}
         >
           Fetch Rental Pools
         </button>
-        <button 
-          className="btn-pro" 
+        <button
+          className="btn-pro"
           style={{ background: '#744b71' }}
-          disabled={!rentalId.trim() || loading} 
+          disabled={!rentalId.trim() || loading}
           onClick={fetchRentalInfo}
         >
           Fetch Status
@@ -203,24 +203,24 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
       </details>
 
       {/* Rented Status Modal */}
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
         title={`Rental Status: #${rentalInfo?.id}`}
         maxWidth="500px"
       >
         {rentalInfo && (
           <div style={{ padding: '0 10px 10px' }}>
             <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-               <h3 style={{ margin: '0 0 8px 0', color: '#f8fafc', fontSize: '1.1rem' }}>
-                 {rentalInfo.name || `Rental #${rentalInfo.id}`}
-               </h3>
-               <span style={{ 
-                 display: 'inline-block', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold',
-                 color: '#20775a', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)' 
-               }}>
-                 {String(rentalInfo.status || 'RENTED').toUpperCase()}
-               </span>
+              <h3 style={{ margin: '0 0 8px 0', color: '#f8fafc', fontSize: '1.1rem' }}>
+                {rentalInfo.name || `Rental #${rentalInfo.id}`}
+              </h3>
+              <span style={{
+                display: 'inline-block', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold',
+                color: '#20775a', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)'
+              }}>
+                {String(rentalInfo.status || 'RENTED').toUpperCase()}
+              </span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>

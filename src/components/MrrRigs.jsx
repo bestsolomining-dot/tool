@@ -31,7 +31,7 @@ function getRentalEndTime(rental) {
 }
 
 function getRentalAlgorithm(rental) {
-  return rental?.rig?.type || rental?.algo || rental?.algorithm || rental?.normalized?.algo || 'N/A';
+  return rental?.rig?.type || rental?.algorithm || rental?.algorithm || rental?.normalized?.algorithm || 'N/A';
 }
 
 function getRentalAdvertisedHashrate(rental) {
@@ -103,6 +103,14 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
         }
 
         setRigs(rigList);
+
+        // Auto-fetch detail info for rented rigs so "More Info" isn't required manually
+        rigList.forEach(rig => {
+          const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
+          if (statusStr.includes('rented')) {
+            fetchRigDetailInfo(rig);
+          }
+        });
       } else {
         setError(result.data?.message || 'Failed to fetch MRR rigs');
       }
@@ -240,8 +248,8 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
             return (
               <div key={rig.id} style={{padding: '1px 2px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {isMine ? (
-                  <div style={{ padding: '1px 2px' }}>
-                    <span style={{ background: '#231b27', color: 'white', fontSize: '9px', padding: '2px 8px', borderRadius: '5px', fontWeight: 'bold', textTransform: 'uppercase', display: 'inline-block' }}>
+                  <div style={{ padding: '2px 2px' }}>
+                    <span style={{ background: '#5c005f', color: 'white', fontSize: '9px', padding: '2px 8px', borderRadius: '5px', fontWeight: 'bold', textTransform: 'uppercase', display: 'inline-block' }}>
                       {idLabel}: #{displayId} 
                       {rig.mrrClient && (
                         <span style={{ padding: '3px 3px 3px 3px', marginTop: '-10px', fontSize: '13px', opacity: 1.5, marginTop: '3px', marginLeft: '3px', color: rig.mrrClient === 'SL' ? '#3b82f6' : rig.mrrClient === 'BT' ? '#fbbf24' : rig.mrrClient === 'ALL' ? '#ef4444' : 'inherit' }}>
@@ -251,7 +259,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                     </span>
                   </div>
                 ) : (
-                  <div style={{ height: '30px' }} />
+                  <div style={{ height: '-30px' }} />
                 )}
                 <div className="rig-card" style={{ 
                   background: isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)', 
@@ -286,11 +294,11 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12px', marginBottom: '15px' }}>
                 <div>
                   <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>Algorithm</div>
-                  <div style={{ color: '#60a5fa' }}>{info?.algo || rig.algo || rig.algorithm || 'N/A'}</div>
+                  <div style={{ color: '#60a5fa' }}>{info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>
-                    {isRented ? 'Avg Hashrate' : 'Hashrate'}
+                    Average Hashrate
                   </div>
                   <div>
                     {(() => {
@@ -306,7 +314,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                           return hr.average;
                         }
                         // Fallback to "nice" formatted strings or advertised rate
-                        return hr.nice || hr.advertised?.nice || hr.advertised?.hash || hr.advertised || '0';
+                        return hr.advertised?.nice || hr.nice || hr.advertised?.hash || hr.advertised || '0';
                       }
                       return hr;
                     })()}
@@ -371,6 +379,19 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                     Pools
                   </button>
                 )}
+
+                {isRented && info && (
+                  <button 
+                    className="btn-pro secondary" 
+                    style={{ width: '36px', fontSize: '14px', padding: '6px 0', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+                    onClick={() => fetchRigDetailInfo(rig)}
+                    disabled={infoLoadingId === rig.id}
+                    title="Refresh Stats"
+                  >
+                    {infoLoadingId === rig.id ? '...' : '↻'}
+                  </button>
+                )}
+
                 <button 
                   className="btn-pro" 
                   style={{ flex: 1, fontSize: '11px', padding: '6px' }} 

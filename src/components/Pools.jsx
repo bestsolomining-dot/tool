@@ -354,7 +354,7 @@ export default function Pools() {
       }, 1000)
 
       if (runVerifyAllInAuto) {
-        await verifyAllOnce({ resetStop: false, keepRunning: true })
+        await verifyAllOnce({ resetStop: false, keepRunning: true, targetPools: poolsRef.current })
       }
 
       if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)

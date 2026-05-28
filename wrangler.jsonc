@@ -34,7 +34,15 @@
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 */
-	// "vars": {  "MY_VARIABLE": "production_value" }
+	"vars": {
+		"NICEHASH_API_KEY": "e760c6cb-1f22-498c-8f8b-c6b7d159a43a",
+		"NICEHASH_API_SECRET": "63f890e0-47b8-4903-888e-670a48b8c66e07662c64-d4b9-4787-888b-82103f6f3630",
+		"NICEHASH_ORG_ID": "54546561-12c8-472e-84d2-d7842603417a",
+		"NICEHASH_ENVIRONMENT": "production",
+		"MRR_KEY_RIG_BT": "95333",
+		"MRR_SECRET_RIG_BT": "215286466f284346e969064278456184",
+		"MRR_DEFAULT_CLIENT": "BT"
+	}
 	/**
 	 * Service Bindings (communicate between multiple Workers)
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings

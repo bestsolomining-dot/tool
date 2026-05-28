@@ -195,15 +195,22 @@ export default function MrrPoolsManager({ onCall, mrrClient }) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
               <div className="stat-box" style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px' }}>
                 <div style={{ fontSize: '9px', opacity: 0.5, marginBottom: '4px', textTransform: 'uppercase' }}>Algorithm</div>
-                <div style={{ fontWeight: 'bold', color: '#60a5fa' }}>{rentalInfo.algo || rentalInfo.rig?.type || 'N/A'}</div>
+                <div style={{ fontWeight: 'bold', color: '#60a5fa' }}>{rentalInfo.algo || rentalInfo.rig?.type || rentalInfo.type || rentalInfo.algorithm || rentalInfo.miningAlgorithm || 'N/A'}</div>
               </div>
               <div className="stat-box" style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px' }}>
                 <div style={{ fontSize: '9px', opacity: 0.5, marginBottom: '4px', textTransform: 'uppercase' }}>Hashrate</div>
                 <div style={{ fontWeight: 'bold', color: '#34d399' }}>
                   {(() => {
-                    const hr = rentalInfo?.hashrate;
-                    if (!hr) return '0';
-                    if (typeof hr === 'object') return hr.advertised?.nice || hr.advertised?.hashrate || hr.nice || hr.hashrate || '0';
+                    const hr = rentalInfo?.hashrate || rentalInfo?.rig?.hashrate;
+                    if (!hr) return '0 N/A';
+                    if (typeof hr === 'object') {
+                      // 'nice' hashrate usually includes the unit (e.g., "17.00T")
+                      if (hr.advertised?.nice) return hr.advertised.nice;
+                      if (hr.nice) return hr.nice;
+                      const val = hr.advertised?.hash || hr.hashrate || hr.hash || '0';
+                      const suffix = hr.advertised?.type || hr.suffix || '';
+                      return `${val} ${suffix}`.trim();
+                    }
                     return String(hr);
                   })()}
                 </div>
@@ -213,20 +220,23 @@ export default function MrrPoolsManager({ onCall, mrrClient }) {
                 <div style={{ fontWeight: 'bold', color: '#fbbf24' }}>
                   {(() => {
                     const p = rentalInfo?.price;
-                    if (p && typeof p === 'object') return p.paid || p.price || '0.00';
-                    return p || '0.00';
-                  })()} BTC
+                    const val = (p && typeof p === 'object') ? (p.paid || p.price || p.advertised || '0.00') : (p || '0.00');
+                    const cur = (p && typeof p === 'object' && p.currency) || rentalInfo.currency || rentalInfo.price_unit || 'BTC';
+                    // Prevent repeating the currency if it's already in the value string
+                    if (String(val).toUpperCase().includes(String(cur).toUpperCase())) return val;
+                    return `${val} ${cur}`;
+                  })()}
                 </div>
               </div>
               <div className="stat-box" style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px' }}>
                 <div style={{ fontSize: '9px', opacity: 0.5, marginBottom: '4px', textTransform: 'uppercase' }}>Type</div>
-                <div style={{ fontWeight: 'bold' }}>{rentalInfo.price_type || 'Day'}</div>
+                <div style={{ fontWeight: 'bold', textTransform: 'capitalize' }}>{rentalInfo.price_type || rentalInfo.price?.type || rentalInfo.price?.price_type || rentalInfo.rig?.price_type || 'Day'}</div>
               </div>
             </div>
 
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '6px', fontSize: '11px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
               <div style={{ marginBottom: '14px' }}><span style={{ opacity: 0.6 }}>Rig ID:</span> {rentalInfo.id}</div>
-              <div><span style={{ opacity: 0.6 }}>Duration:</span> {rentalInfo.hours} Hours</div>
+              <div><span style={{ opacity: 0.6 }}>Duration:</span> {rentalInfo.length || rentalInfo.hours || '0'} Hours</div>
             </div>
 
             <div className="modal-actions" style={{ justifyContent: 'center' }}>

@@ -15,6 +15,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   const [playing, setPlaying] = useState(false)
   const [running, setRunning] = useState(false)
   const [verificationDelay, setVerificationDelay] = useState(5000)
+  const [automationInterval, setAutomationInterval] = useState(300) // 5 minutes in seconds
   const [lastRunTime, setLastRunTime] = useState(null)
   const [rateLimitStatus, setRateLimitStatus] = useState(null)
   const [nextRunCountdown, setNextRunCountdown] = useState(null)
@@ -269,7 +270,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
         try {
           let details = pool
           if (poolId) {
-            let resDetails = await poolApi.get(poolId);
+            // Assuming poolApi.get accepts a signal or you use onCall directly
+            let resDetails = await poolApi.get(poolId, controller.signal);
             if (resDetails.status === 429) {
               const seconds = parseInt(resDetails.headers?.get('Retry-After') || resDetails.data?.headers?.['retry-after'], 10) || 30;
               setRateLimitStatus(`Rate limit hit on details. Waiting ${seconds}s...`);
@@ -335,7 +337,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
     setRunning(true)
     stopRef.current = false
 
-    const intervalMs = 5 * 60 * 1000
+    const intervalMs = automationInterval * 1000
 
     const executeCycle = async () => {
       if (stopRef.current) return
@@ -424,7 +426,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
   const handleExportResults = () => {
     const resultsToExport = verifyResults.filter(item => !item.result?.pending);
-    
+
     // 1. Export Pool Verification Results
     const poolData = resultsToExport.map(item => {
       const p = item.result?.poolDetails || item.result?.requestBody || {};
@@ -496,10 +498,10 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
       <div className="pool-actions" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', minWidth: '400px' }}>
         <div className="pool-actions">
           <button className="btn-pro primary" onClick={verify} disabled={loading || detailsLoading || playing || !selected || running}>
-          {loading ? 'Verifying...' : 'Verify Pool'}
+            {loading ? 'Verifying...' : 'Verify Pool'}
           </button>
-          
-          <div style={{ minHeight: '50px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
             <label style={{ fontSize: '10px', fontWeight: 'bold' }}>DELAY (MS)</label>
             <input
               type="number"
@@ -508,23 +510,22 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
               value={verificationDelay}
               onChange={e => setVerificationDelay(Number(e.target.value))}
             />
-            <div style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>
-              {running && nextRunCountdown !== null && (
-                <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 'bold' }}>
-                  Next run in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
-                </div>
-              )}
-              {lastRunTime && (
-                <div style={{ fontSize: '10px', color: '#059669' }}>
-                  Finished: {lastRunTime}
-                </div>
-              )}
-            </div>
           </div>
 
-          <button 
-            className="btn-pro secondary" 
-            onClick={handleExportResults} 
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <label style={{ fontSize: '10px', fontWeight: 'bold' }}>AUTO DELAY (S)</label>
+            <input
+              type="number"
+              className="input-pro"
+              style={{ width: '70px', padding: '4px' }}
+              value={automationInterval}
+              onChange={e => setAutomationInterval(Number(e.target.value))}
+            />
+          </div>
+
+          <button
+            className="btn-pro secondary"
+            onClick={handleExportResults}
             disabled={completedResults.length === 0}
             title="Export completed verification results to XLSX"
           >
@@ -541,8 +542,20 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
             </button>
           </div>
           {(playing || running) && (
-              <button className="btn-pro" onClick={stopAutomation} style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>Stop</button>
-            )}
+            <button className="btn-pro" onClick={stopAutomation} style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>Stop</button>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '18px' }}>
+              {running && nextRunCountdown !== null && (
+                <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 'bold' }}>
+                  Next auto-run in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
+                </div>
+              )}
+              {lastRunTime && (
+                <div style={{ fontSize: '11px', color: '#059669', marginLeft: 'auto' }}>
+                  Last Finished: {lastRunTime}
+                </div>
+              )}
+            </div>
         </div>
         <div>
           <div className="pool-main-content" style={{ flex: 1, minWidth: '500px', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -586,7 +599,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
                     <strong>{algorithmSummary || 'No completed checks'}</strong>
                   </div>
                 </div>
-                <div className="verify-list">
+                <div className="verify-list" >
                   {verifyResults.map(item => {
                     const pending = item.result?.pending
                     const success = !pending && ph.isVerifySuccess(item.result)
@@ -645,11 +658,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
             )}
           </div>
         </div>
-
       </div>
-
-
-
 
       <div className="pools-dashboard-layout" style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {sidebarVisible && (
@@ -664,7 +673,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
                   {poolAlgorithmGroups.map(([algorithm, count]) => (
                     <div className="algorithm-row" key={algorithm}>
                       <span>{algorithm}</span>
-                      <strong>{count}</strong>
+                      <strong style={{ marginLeft: 3 }}>{count}</strong>
                       <button
                         type="button"
                         className="btn-pro secondary"
@@ -681,7 +690,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
               )}
             </div>
 
-            {mrrRigs && (
+            {/* {mrrRigs && (
               <div className="pool-mrr-summary" style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div className="response-header compact" style={{ marginBottom: '10px' }}>
                   <h3 style={{ margin: 0, fontSize: '14px' }}>MRR Rigs Data</h3>
@@ -691,14 +700,14 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
                   {JSON.stringify(mrrRigs, null, 2)}
                 </pre>
               </div>
-            )}
+            )} */}
           </div>
         )}
 
 
       </div>
 
-      <div className="selection-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+      {/* <div className="selection-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
         <div className="pool-select-pro" ref={dropdownRef} style={{ flex: 1 }}>
           <button
             className="select-trigger-pro"
@@ -727,7 +736,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
           <button className="btn-pro" onClick={() => fetchMrrRigs()} title="Fetch MiningRigRentals data">MRR Rigs</button>
           <button className="btn-pro secondary" onClick={() => selected && openPoolEditor({ key: selectedId, label: selectedLabel })} disabled={!selected}>Edit Settings</button>
         </div>
-      </div>
+      </div> */}
 
       {error && <pre className="error-message">{error}</pre>}
 
@@ -772,30 +781,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
           })}
         </div>
       </Modal>
-
-      {!!inspectData && (
-        <Modal isOpen={true} onClose={() => setInspectData(null)} title="Inspect Response" maxWidth="90vw">
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
-            <button
-              className="text-button"
-              onClick={() => {
-                navigator.clipboard.writeText(JSON.stringify(inspectData, null, 2));
-                alert('Copied to clipboard');
-              }}
-            >
-              Copy JSON
-            </button>
-          </div>
-          <pre className="response-body modal" style={{ maxHeight: '70vh' }}>
-            {JSON.stringify(inspectData, null, 2)}
-          </pre>
-          <div className="modal-actions">
-            <button className="btn-pro secondary" onClick={() => setInspectData(null)}>
-              Dismiss
-            </button>
-          </div>
-        </Modal>
-      )}
     </div>
   )
 }

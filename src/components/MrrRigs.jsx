@@ -187,7 +187,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                   }}>
                   {(() => {
                     const s = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toUpperCase();
-                    return s.includes('AVAILABLE') ? 'NOT RENTED' : s.includes('RENTED') ? 'RENTED' : s;
+                    return s.includes('AVAILABLE') ? 'AVAILABLE' : s.includes('RENTED') ? 'RENTED' : s;
                   })()}
                 </span>
               </div>

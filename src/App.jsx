@@ -164,7 +164,7 @@ export default function App() {
         <div className="status-card">
           <div className="status-item">
             <span>Status:</span>
-            <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`}>
+            <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`} style={{ color: 'green' }}>
               {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
             </span>
           </div>

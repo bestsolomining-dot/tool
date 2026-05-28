@@ -29,7 +29,7 @@ export default function App() {
     const startedAt = performance.now();
     const method = options.method || 'GET';
 
-    const { query, section, ...fetchOptions } = options;
+    const { query, section, signal, ...fetchOptions } = options;
     let finalPath = path;
 
     const enrichedQuery = { ...query };
@@ -73,6 +73,7 @@ export default function App() {
       const res = await fetch(`${apiBase}${finalPath}`, {
         ...fetchOptions,
         method,
+        signal,
         headers,
         body,
         mode: 'cors',

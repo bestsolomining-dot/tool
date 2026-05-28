@@ -723,13 +723,47 @@ app.get('/api/v2/mrr/rig/:rigIds/pool', asyncHandler(async (req, res) => mrrRequ
 
 app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
+  const rentalId = req.params.rentalIds;
+
+  /** Helper to fetch rental detail with a fallback to the list for richer metadata */
+  async function fetchAggressiveRental(clientName) {
+    const { statusCode, data } = await mrrApiCall({
+      endpoint: `/rental/${rentalId}`,
+      clientNameRaw: clientName,
+    });
+
+    let rental = data?.data || data;
+    if (statusCode === 200 && data?.success && rental) {
+      // Fallback: Specific rental endpoints often miss algo/hashrate. 
+      // If missing, search for this ID in the active list which is usually "richer".
+      const hasAlgo = !!(rental.algo || rental.type || rental.algorithm || rental.miningAlgorithm || rental.rig?.type);
+      const hasHash = !!(rental.hashrate && (typeof rental.hashrate !== 'object' || rental.hashrate.hashrate || rental.hashrate.advertised || rental.hashrate.advertised?.nice));
+
+      if (!hasAlgo || !hasHash) {
+        const listRes = await mrrApiCall({ endpoint: '/rental', clientNameRaw: clientName });
+        let list = listRes.data?.success ? (Array.isArray(listRes.data.data) ? listRes.data.data : (listRes.data.data?.rentals || [])) : [];
+        let found = list.find(r => String(r.id) === String(rentalId));
+
+        if (!found) {
+          const histRes = await mrrApiCall({ endpoint: '/rental', query: { history: '1' }, clientNameRaw: clientName });
+          list = histRes.data?.success ? (Array.isArray(histRes.data.data) ? histRes.data.data : (histRes.data.data?.rentals || [])) : [];
+          found = list.find(r => String(r.id) === String(rentalId));
+        }
+
+        if (found) {
+          rental = { ...found, ...rental };
+          if (data.data) data.data = rental;
+          else Object.assign(data, rental);
+        }
+      }
+    }
+    return { statusCode, data };
+  }
+
   if (clientParam === 'ALL') {
     const clients = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
     for (const clientName of clients) {
-      const { statusCode, data } = await mrrApiCall({
-        endpoint: `/rental/${req.params.rentalIds}`,
-        clientNameRaw: clientName,
-      });
+      const { statusCode, data } = await fetchAggressiveRental(clientName);
       if (statusCode === 200 && data?.success) {
         res.set('X-MRR-Client', clientName);
         return res.json(data);
@@ -737,7 +771,9 @@ app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
     }
     return res.status(404).json({ success: false, message: 'Rental ID not found in any configured account.' });
   }
-  await mrrRequest(`/rental/${req.params.rentalIds}`, req, res);
+
+  const { statusCode, data } = await fetchAggressiveRental(clientParam);
+  res.status(statusCode).json(data);
 }));
 
 app.get('/api/v2/mrr/rental/:rentalIds/pool', asyncHandler(async (req, res) => mrrRequest(`/rental/${req.params.rentalIds}/pool`, req, res)));

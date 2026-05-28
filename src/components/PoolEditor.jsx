@@ -122,6 +122,11 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
       return
     }
 
+    if (poolDetails.name?.toLowerCase() === 'active') {
+      setEditorLoading(false)
+      return
+    }
+
     const payload = ph.buildVerifyBody(poolDetails)
     const missingFields = ph.getMissingVerifyFields(payload)
     setEditorVerifyBody(payload)

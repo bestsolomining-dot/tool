@@ -147,6 +147,27 @@ export const poolHelpers = {
       reader.readAsArrayBuffer(file);
     });
   },
+
+  /**
+   * Formats a raw hashrate number into a human-readable string.
+   * @param {number} hashrate - Hashrate in base units (H/s)
+   * @param {string} algo - Optional algorithm to determine base units
+   */
+  formatHashrate: (hashrate, algo = '') => {
+    if (!hashrate || isNaN(hashrate)) return '0 H/s';
+    const val = parseFloat(hashrate);
+    const units = ['H/s', 'KH/s', 'MH/s', 'GH/s', 'TH/s', 'PH/s'];
+    
+    // MRR values are often already in higher units depending on the algo,
+    // but standard normalization works best:
+    let i = 0;
+    let displayVal = val;
+    while (displayVal >= 1000 && i < units.length - 1) {
+      displayVal /= 1000;
+      i++;
+    }
+    return `${displayVal.toFixed(2)} ${units[i]}`;
+  },
 };
 
 /**

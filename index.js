@@ -21,7 +21,6 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   // Explicitly expose custom headers so the browser allows the frontend to read them
   res.setHeader('Access-Control-Expose-Headers', 'X-MRR-Client, Retry-After, X-RateLimit-Limit');
-  
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -574,6 +573,31 @@ async function mrrRequest(endpoint, req, res, method = 'GET', body = undefined) 
   res.status(statusCode).json(data);
 }
 
+/**
+ * Normalizes MRR Rental data to ensure Algorithm and Hashrate fields are present.
+ */
+function extractRentalInfo(rental) {
+  const algo = rental.algo || rental.type || rental.algorithm || rental.miningAlgorithm || rental.rig?.type || 'Unknown';
+  
+  let currentHash = 0;
+  let advertisedHash = 0;
+  let averageHash = 0;
+
+  if (rental.hashrate && typeof rental.hashrate === 'object') {
+    // MRR hashrate object structure
+    currentHash = parseFloat(rental.hashrate.hashrate || rental.hashrate.current || 0);
+    advertisedHash = parseFloat(rental.hashrate.advertised || 0);
+    averageHash = parseFloat(rental.hashrate.average || 0);
+  } else if (typeof rental.hashrate === 'number' || typeof rental.hashrate === 'string') {
+    currentHash = parseFloat(rental.hashrate);
+  }
+
+  return {
+    algo,
+    hashrate: { current: currentHash, advertised: advertisedHash, average: averageHash }
+  };
+}
+
 function extractRigInfo(payload) {
   const queue = [payload];
   while (queue.length > 0) {
@@ -730,10 +754,13 @@ app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
 
         if (found) {
           rental = { ...found, ...rental };
-          if (data.data) data.data = rental;
-          else Object.assign(data, rental);
         }
       }
+      
+      // Attach a normalized object for the UI to consume easily
+      const normalized = extractRentalInfo(rental);
+      if (data.data) data.data = { ...rental, normalized };
+      else Object.assign(data, { ...rental, normalized });
     }
     return { statusCode, data };
   }
@@ -755,6 +782,10 @@ app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
 }));
 
 app.get('/api/v2/mrr/rental/:rentalIds/pool', asyncHandler(async (req, res) => mrrRequest(`/rental/${req.params.rentalIds}/pool`, req, res)));
+
+app.get('/api/v2/mrr/rental/:rentalId/hashrate', asyncHandler(async (req, res) => {
+  await mrrRequest(`/rental/${req.params.rentalId}/hashrate`, req, res);
+}));
 
 app.put('/api/v2/mrr/rig/:rigId/pool', asyncHandler(async (req, res) => {
   // The MRR API expects pool details in the body for a PUT request
@@ -818,13 +849,16 @@ app.post('/api/v2/mrr/call', asyncHandler(async (req, res) => {
   res.status(statusCode).json(data);
 }));
 
-// Error handling wrapper for Express
+// --- SERVE FRONTEND ---
+// Serve static files from the 'dist' directory (created by npm run build)
+const distPath = path.join(process.cwd(), 'dist');
+app.use(express.static(distPath));
 
-// Example: Applying the wrapper to one route
-app.get('/api/v2/mining/address', asyncHandler(async (req, res) => {
-  const data = await NiceHashApp.mining.getMiningAddress();
-  res.json(data);
-}));
+// Catch-all route to serve the React app for any non-API request
+app.get('/:any*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile(path.join(distPath, 'index.html'));
+});
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, (err) => {

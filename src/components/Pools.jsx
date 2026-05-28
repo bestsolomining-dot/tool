@@ -14,7 +14,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   const [error, setError] = useState('')
   const [playing, setPlaying] = useState(false)
   const [running, setRunning] = useState(false)
-  const [verificationDelay, setVerificationDelay] = useState(5000)
+  const [verificationDelay, setVerificationDelay] = useState(5000) // Delay between individual pool verifications in bulk run
   const [automationInterval, setAutomationInterval] = useState(300) // 5 minutes in seconds
   const [lastRunTime, setLastRunTime] = useState(null)
   const [rateLimitStatus, setRateLimitStatus] = useState(null)
@@ -205,6 +205,10 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
       return
     }
 
+    if (selected.name?.toLowerCase() === 'active') {
+      return
+    }
+
     setLoading(true)
     setResponse(null)
     setVerifyResults([])
@@ -299,6 +303,16 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
         if (stopRef.current) break
 
         const pool = source[i]
+        if (pool.name?.toLowerCase() === 'active') {
+          const skipKey = ph.getKey(pool, i)
+          setVerifyResults(prev => [
+            ...prev.filter(item => item.key !== skipKey),
+            { key: skipKey, label: ph.getLabel(pool, i), result: { ok: true, data: { message: 'Skipped: Active Pool' } } },
+          ])
+          setProgress({ current: i + 1, total: source.length })
+          continue
+        }
+
         const poolId = ph.getId(pool)
         const key = ph.getKey(pool, i)
         const controller = new AbortController()
@@ -383,39 +397,49 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
     setCurrentRunStartTime(Date.now())
     stopRef.current = false
 
-    const intervalMs = automationInterval * 1000
+    const intervalMs = automationInterval * 1000; // Convert seconds to milliseconds
 
-    const executeCycle = async () => {
-      if (stopRef.current) return
-      setRunCount(prev => prev + 1)
+    const scheduleNextCycle = async () => {
+      if (stopRef.current) {
+        setRunning(false);
+        return;
+      }
 
-      setNextRunCountdown(null)
-      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
+      // Check if a verification cycle is still active before starting a new one
+      if (playing) {
+        runTimerRef.current = setTimeout(scheduleNextCycle, 1000);
+        return;
+      }
 
-      await verifyAllOnce({ resetStop: false, keepRunning: true })
+      setRunCount(prev => prev + 1);
+      setNextRunCountdown(null); // Clear previous countdown display
+      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
 
-      const finishedAt = new Date()
-      setLastRunTime(finishedAt.toLocaleTimeString())
+      await verifyAllOnce({ resetStop: false, keepRunning: true });
 
-      // Start countdown for next run
-      let remaining = intervalMs / 1000
-      setNextRunCountdown(remaining)
+      const finishedAt = new Date();
+      setLastRunTime(finishedAt.toLocaleTimeString());
+
+      if (stopRef.current) { // Check stopRef again after verifyAllOnce completes
+        setRunning(false);
+        return;
+      }
+
+      let remaining = intervalMs / 1000; // Total seconds for the next countdown
+      setNextRunCountdown(remaining);
 
       countdownTimerRef.current = setInterval(() => {
-        remaining -= 1
-        setNextRunCountdown(remaining > 0 ? remaining : 0)
-        if (remaining <= 0) clearInterval(countdownTimerRef.current)
-      }, 1000)
-    }
+        remaining -= 1;
+        setNextRunCountdown(remaining > 0 ? remaining : 0);
+        if (remaining <= 0) {
+          clearInterval(countdownTimerRef.current);
+          scheduleNextCycle(); // Start the next cycle immediately after the countdown finishes
+        }
+      }, 1000);
+    };
 
-    await executeCycle()
-    if (stopRef.current) {
-    
-      setRunning(false)
-      return
-    }
-
-    runTimerRef.current = setInterval(executeCycle, intervalMs)
+    // Start the first cycle immediately
+    scheduleNextCycle();
   }
 
   function verifyAlgorithm(algorithm) {
@@ -426,7 +450,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
   function stopAutomation() {
     stopRef.current = true
-    setRunning(false)
+    setRunning(false) // Set running to false immediately when stop is requested
     if (runTimerRef.current) {
       clearInterval(runTimerRef.current)
       runTimerRef.current = null
@@ -437,7 +461,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
       setNextRunCountdown(null)
     }
     if (activeRequestRef.current) {
-      activeRequestRef.current.abort()
+      activeRequestRef.current.abort() // Abort any ongoing fetch requests
       activeRequestRef.current = null
     }
     setCurrentRunStartTime(null)
@@ -525,8 +549,9 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
   const selectedLabel = selected ? ph.getLabel(selected) : 'Select a pool'
   const completedResults = verifyResults.filter(item => !item.result?.pending)
-  const successCount = completedResults.filter(item => ph.isVerifySuccess(item.result)).length
-  const failCount = completedResults.length - successCount
+  const skippedCount = completedResults.filter(item => item.result?.data?.message?.includes('Skipped')).length
+  const successCount = completedResults.filter(item => ph.isVerifySuccess(item.result) && !item.result?.data?.message?.includes('Skipped')).length
+  const failCount = completedResults.length - successCount - skippedCount
   const algorithmCounts = completedResults.reduce((counts, item) => {
     const algorithm = ph.getVerifyAlgo(item.result)
     counts[algorithm] = (counts[algorithm] || 0) + 1
@@ -553,7 +578,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>DELAY (MS)</label>
+            <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>DELAY (s)</label>
             <input
               type="number"
               className="input-pro"
@@ -564,7 +589,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>AUTO INTERVAL (S)</label>
+            <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>AUTO INTERVAL (s)</label>
             <input
               type="number"
               className="input-pro"
@@ -590,9 +615,12 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: '10px', padding: '4px 12px' }}>
+            Import XLSX
+          </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               id="verifySourceToggle"
               checked={verifyFromFile}
               onChange={(e) => setVerifyFromFile(e.target.checked)}
@@ -602,20 +630,19 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
               VERIFY FROM FILE ({filePools.length})
             </label>
           </div>
-          <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: '10px', padding: '4px 12px' }}>
-            Import XLSX
-          </button>
+          
           <input type="file" ref={fileInputRef} onChange={handleImportXlsx} accept=".xlsx,.xls" style={{ display: 'none' }} />
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button className="btn-pro" style={{ flex: 2 }} onClick={startRun} disabled={playing || running}>
+              {running ? 'Automation Active' : 'Start Auto Run'}
+            </button>
+            {(playing || running) && (
+              <button className="btn-pro" onClick={stopAutomation} style={{ flex: 1, background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>Stop</button>
+            )}
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn-pro" style={{ flex: 2 }} onClick={startRun} disabled={playing || running}>
-            {running ? 'Automation Active' : 'Start Auto Run'}
-          </button>
-          {(playing || running) && (
-            <button className="btn-pro" onClick={stopAutomation} style={{ flex: 1, background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>Stop</button>
-          )}
-        </div>
+
 
         {running && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
@@ -624,8 +651,12 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
               <span>Running #{runCount}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
-              <span>Session Duration:</span>
+              <span>Total Time Run:</span>
               <span>{Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
+              <span>Skipped Pools:</span>
+              <span>{skippedCount}</span>
             </div>
             {nextRunCountdown !== null && (
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#3b82f6' }}>
@@ -633,14 +664,15 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
                 <span>{Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s</span>
               </div>
             )}
-          </div>
-        )}
-
-        {lastRunTime && !running && !playing && (
+            {lastRunTime && !running && !playing && (
           <div style={{ color: '#059669', fontSize: '11px', textAlign: 'right' }}>
             Last cycle finished: {lastRunTime}
           </div>
         )}
+          </div>
+        )}
+
+        
 
         <div className="pool-main-content" style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {progress.total > 0 && (

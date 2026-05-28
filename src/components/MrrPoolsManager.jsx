@@ -82,10 +82,10 @@ export default function MrrPoolsManager({ onCall, mrrClient }) {
         setRentalInfo(info);
         setIsModalOpen(true);
       } else {
-        window.alert(result?.message || 'Rental not found or API error');
+        // Error will be handled by parent App.jsx's setError
       }
     } catch (err) {
-      window.alert(`Fetch Error: ${err.message}`);
+      // Error will be handled by parent App.jsx's setError
     } finally {
       setLoading(false);
     }

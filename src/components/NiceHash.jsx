@@ -6,6 +6,9 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
   const [localOrders, setLocalOrders] = useState([]);
   const [orderDetail, setOrderDetail] = useState(null);
   const [loadingLocal, setLoadingLocal] = useState(false);
+  const [priceInput, setPriceInput] = useState('');
+  const [limitInput, setLimitInput] = useState('');
+  const [refillInput, setRefillInput] = useState('');
 
   const orders = useMemo(() => {
     if (localOrders.length > 0) return localOrders; // localOrders is already processed
@@ -40,6 +43,8 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
     const data = await onCall(`/api/v2/hashpower/order/${encodeURIComponent(id)}`, { silent: true });
     if (data && !data.error) {
       setOrderDetail(data);
+      setPriceInput(data.price || '');
+      setLimitInput(data.limit || '');
     }
     setLoadingLocal(false);
   };
@@ -55,22 +60,18 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
   };
 
   const updateOrder = () => {
-    const price = window.prompt('Enter new price:');
-    const limit = window.prompt('Enter new limit:');
-    if (!price || !limit) return;
-
+    if (!priceInput || !limitInput) return;
     onCall(`/api/v2/hashpower/order/${encodeURIComponent(selectedOrderId)}/update`, {
       method: 'POST',
-      body: { price, limit }
+      body: { price: priceInput, limit: limitInput }
     });
   };
 
   const refillOrder = () => {
-    const amount = window.prompt('Enter refill amount:');
-    if (!amount) return;
+    if (!refillInput) return;
     onCall(`/api/v2/hashpower/order/${encodeURIComponent(selectedOrderId)}/refill`, {
       method: 'POST',
-      body: { amount }
+      body: { amount: refillInput }
     });
   };
 
@@ -116,10 +117,51 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
       
 
       {selectedOrderId && (
-        <div className="button-group" style={{ marginTop: '10px' }}>
-          <button className="btn-pro secondary" onClick={updateOrder}>Update Price/Limit</button>
-          <button className="btn-pro secondary" onClick={refillOrder}>Refill Order</button>
-          <button className="btn-pro status-error" style={{ background: '#ef4444' }} onClick={cancelOrder}>Cancel Order</button>
+        <div className="order-management-panel" style={{ marginTop: '15px', padding: '15px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px', alignItems: 'flex-end', marginBottom: '15px' }}>
+            <div>
+              <label className="label" style={{ fontSize: '10px', marginBottom: '4px', display: 'block' }}>NEW PRICE</label>
+              <input 
+                type="number" 
+                className="input-pro" 
+                value={priceInput} 
+                onChange={e => setPriceInput(e.target.value)} 
+                placeholder="0.0000"
+                step="0.0001"
+              />
+            </div>
+            <div>
+              <label className="label" style={{ fontSize: '10px', marginBottom: '4px', display: 'block' }}>NEW LIMIT</label>
+              <input 
+                type="number" 
+                className="input-pro" 
+                value={limitInput} 
+                onChange={e => setLimitInput(e.target.value)} 
+                placeholder="0.00"
+                step="0.01"
+              />
+            </div>
+            <button className="btn-pro primary" onClick={updateOrder}>Update</button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', alignItems: 'flex-end', marginBottom: '15px' }}>
+            <div>
+              <label className="label" style={{ fontSize: '10px', marginBottom: '4px', display: 'block' }}>REFILL AMOUNT</label>
+              <input 
+                type="number" 
+                className="input-pro" 
+                value={refillInput} 
+                onChange={e => setRefillInput(e.target.value)} 
+                placeholder="0.0000"
+                step="0.0001"
+              />
+            </div>
+            <button className="btn-pro" style={{ background: '#10b981' }} onClick={refillOrder}>Refill</button>
+          </div>
+
+          <button className="btn-pro status-error" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.2)', width: '100%' }} onClick={cancelOrder}>
+            Cancel Order
+          </button>
         </div>
       )}
 
@@ -139,6 +181,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '12px', fontSize: '11px' }}>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>STATUS</span> <strong style={{ color: orderDetail.status?.code === 'ACTIVE' ? '#10b981' : '#f87171' }}>{orderDetail.status?.code}</strong></div>
+            <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>POOL NAME</span> <strong>{orderDetail.pool?.name || 'N/A'}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>ALGO</span> <strong>{typeof orderDetail.algorithm === 'object' ? orderDetail.algorithm.algorithm : orderDetail.algorithm}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>MARKET</span> <strong>{orderDetail.market}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>PRICE</span> <strong style={{ color: '#f59e0b' }}>{orderDetail.price}</strong></div>
@@ -164,6 +207,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
             <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0 }}>
                 <tr>
+                  <th style={{ padding: '8px' }}>Pool</th>
                   <th style={{ padding: '8px' }}>Algo</th>
                   <th style={{ padding: '8px' }}>Price</th>
                   <th style={{ padding: '8px' }}>Speed</th>
@@ -176,6 +220,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
                   const algo = typeof o.algorithm === 'object' ? o.algorithm.algorithm : o.algorithm;
                   return (
                     <tr key={id || i} onClick={() => handleOrderSelect(id)} style={{ cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.02)' }} className="hover-row">
+                      <td style={{ padding: '8px' }}>{o.pool?.name || o.pool?.stratumHostname || 'N/A'}</td>
                       <td style={{ padding: '8px' }}>{algo}</td>
                       <td style={{ padding: '8px', color: '#f59e0b' }}>{o.price}</td>
                       <td style={{ padding: '8px' }}>{parseFloat(o.acceptedCurrentSpeed || 0).toFixed(6)}</td>

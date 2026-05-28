@@ -15,6 +15,7 @@ export default function HashpowerBot({ algorithm, market, onCall }) {
     checkInterval: 60000, // 1 minute
     maxPrice: '0.0100',
     stepDown: '0.0001',
+    limit: '0.00',
   });
   
   const timerRef = useRef(null);
@@ -77,7 +78,7 @@ export default function HashpowerBot({ algorithm, market, onCall }) {
       // 3. Compare and Adjust
       const myPrice = parseFloat(myOrder.price);
       const mySpeed = parseFloat(myOrder.acceptedCurrentSpeed);
-      const myLimit = parseFloat(myOrder.limit);
+      const myLimit = parseFloat(config.limit) > 0 ? parseFloat(config.limit) : parseFloat(myOrder.limit);
       const maxPriceThreshold = parseFloat(config.maxPrice) || 0;
       const stepDownDelta = parseFloat(config.stepDown) || 0;
       const minDelta = 0.0001; // Minimal increment to be above competitor
@@ -108,10 +109,14 @@ export default function HashpowerBot({ algorithm, market, onCall }) {
       }
 
       // 4. Update the order if price has changed
-      if (Math.abs(nextPrice - myPrice) > 0.00001) {
+      const targetLimit = parseFloat(config.limit) > 0 ? config.limit : myOrder.limit;
+      const priceChanged = Math.abs(nextPrice - myPrice) > 0.00001;
+      const limitChanged = parseFloat(config.limit) > 0 && Math.abs(parseFloat(config.limit) - parseFloat(myOrder.limit)) > 0.001;
+
+      if (priceChanged || limitChanged) {
         await onCall(`/api/v2/hashpower/order/${myOrder.id}/update`, {
           method: 'POST',
-          body: { price: nextPrice.toFixed(8), limit: myOrder.limit },
+          body: { price: nextPrice.toFixed(8), limit: targetLimit },
           silent: true
         });
       }
@@ -149,9 +154,9 @@ export default function HashpowerBot({ algorithm, market, onCall }) {
         </div>
       </div>
 
-      <div className="field-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+      <div className="field-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
         <div className="field">
-          <label className="label">Max Price Threshold</label>
+          <label className="label">Price Threshold</label>
           <input 
             className="input-pro" 
             type="number" 
@@ -169,6 +174,17 @@ export default function HashpowerBot({ algorithm, market, onCall }) {
             step="0.0001"
             value={config.stepDown} 
             onChange={e => setConfig(prev => ({ ...prev, stepDown: e.target.value }))}
+            disabled={isRunning}
+          />
+        </div>
+        <div className="field">
+          <label className="label">Speed Limit</label>
+          <input 
+            className="input-pro" 
+            type="number" 
+            step="0.01"
+            value={config.limit} 
+            onChange={e => setConfig(prev => ({ ...prev, limit: e.target.value }))}
             disabled={isRunning}
           />
         </div>

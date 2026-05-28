@@ -22,7 +22,7 @@ export class MiningRigRentalsClient {
   async call({ method = 'GET', endpoint, query = {}, body = null }) {
     const nonce = this.getNextNonce();
     const requestMethod = method.toUpperCase();
-    
+
     // Ensure endpoint starts with / and remove trailing slashes for signature
     const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const cleanPath = path.replace(/\/+$/, '') || '/';
@@ -64,7 +64,7 @@ export class MiningRigRentalsClient {
     // --- Legacy Fallback ---
     // Some account types or endpoints require the older SHA1(key + nonce + endpoint + secret) format
     const isAuthError = !data.success && (
-      data.message?.includes('Signature') || 
+      data.message?.includes('Signature') ||
       data.data?.message?.includes('Signature') ||
       response.statusCode === 401
     );

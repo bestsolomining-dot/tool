@@ -320,7 +320,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         </button> */}
         {/* <button className="btn-pro secondary" onClick={() => openManagementModal('list_all_rigs')}>Marketplace Status</button>
         <button className="btn-pro secondary" onClick={() => openManagementModal('rental_history')}>Rental History</button> */}
-        <button className="btn-pro secondary" onClick={() => onCall('/api/v2/mrr/balance', { query: { client: mrrClient } })}>Balance</button>
+        <button className="btn-pro secondary" onClick={() => onCall('/api/v2/mrr/balance', { query: { client: mrrClient }, showModal: true })}>Balance</button>
       </div>
 
       {/* New Rental Notification Modal */}
@@ -382,18 +382,11 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         title={
           activeModal === 'list' ? 'Rigs Manager' : 
           // activeModal === 'list_all_rigs' ? 'All Available Rigs' :
-          activeModal === 'rental_history' ? 'Rental History' :
-          'Active Rentals'
+          activeModal === 'rental_history' ? 'Rental History' : 'Active Rentals'
         }
         maxWidth="1200px"
       >
-        <div style={{ 
-          maxHeight: '75vh', 
-          overflowY: 'auto', 
-          padding: '5px',
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(255,255,255,0.2) transparent'
-        }}>
+        <div style={{ padding: '5px' }}> {/* Removed maxHeight and overflowY: 'auto' from here */}
           {activeModal === 'list' && (
             <MrrRigs 
               mrrClient={mrrClient} 
@@ -415,8 +408,17 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
 
           {modalLoading && <div style={{ textAlign: 'center', padding: '40px' }}>Loading data from MiningRigRentals...</div>}
           
-          {!modalLoading && activeModal === 'rental' && <MrrRentalsTable data={modalData} />}
-          {!modalLoading && activeModal === 'rental_history' && <MrrRentalsTable data={modalData} />}
+          {!modalLoading && (activeModal === 'rental' || activeModal === 'rental_history') && (
+            <div style={{ 
+              maxHeight: '75vh', 
+              overflowY: 'auto', 
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(255,255,255,0.2) transparent'
+            }}>
+              <MrrRentalsTable data={modalData} />
+            </div>
+          )}
+
         </div>
         
         <div className="modal-actions" style={{ marginTop: '20px', textAlign: 'right' }}>

@@ -98,7 +98,7 @@ export default function Pools() {
   useEffect(() => {
     function onPointerDown(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setDropdownOpen(false)
+        setSelectorOpen(false)
       }
     }
 
@@ -193,7 +193,8 @@ export default function Pools() {
 
       if (result.status === 429) {
         const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
-        const seconds = parseInt(retryAfter, 5) || 10;
+        // Ensure base-10 parsing for the retry delay
+        const seconds = parseInt(retryAfter, 10) || 10;
         setRateLimitStatus(`Rate limit hit. Retrying in ${seconds}s...`);
         try {
           await new Promise(r => setTimeout(r, seconds * 1000));
@@ -271,7 +272,7 @@ export default function Pools() {
           if (poolId) {
             let resDetails = await poolApi.get(poolId);
             if (resDetails.status === 429) {
-              const seconds = parseInt(resDetails.headers?.get('Retry-After') || resDetails.data?.headers?.['retry-after'], 5) || 10;
+              const seconds = parseInt(resDetails.headers?.get('Retry-After') || resDetails.data?.headers?.['retry-after'], 10) || 10;
               setRateLimitStatus(`Rate limit hit on details. Waiting ${seconds}s...`);
               try {
                 await new Promise(r => setTimeout(r, seconds * 1000));
@@ -288,7 +289,7 @@ export default function Pools() {
 
           if (result.status === 429) {
             const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
-            const seconds = parseInt(retryAfter, 5) || 10;
+            const seconds = parseInt(retryAfter, 10) || 10;
             setRateLimitStatus(`Rate limit hit on verify. Waiting ${seconds}s...`);
             try {
               await new Promise(r => setTimeout(r, seconds * 1000));

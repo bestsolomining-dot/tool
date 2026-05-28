@@ -4,7 +4,12 @@ import { cloudflare } from '@cloudflare/vite-plugin'
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({
-  plugins: [react(), command === 'build' ? cloudflare() : undefined].filter(Boolean),
+  plugins: [
+    react(),
+    command === 'build'
+      ? cloudflare({ configPath: 'wrangler.generated.toml' })
+      : undefined,
+  ].filter(Boolean),
   server: {
     host: true,
     proxy: {

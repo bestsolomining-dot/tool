@@ -28,19 +28,17 @@ export default function Pools() {
 
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false) // State for Pool Selection Modal
+  const [enableVerifyAllButton, setEnableVerifyAllButton] = useState(true)
+  const [enableVerifyImportedButton, setEnableVerifyImportedButton] = useState(true)
+  const [runVerifyAllInAuto, setRunVerifyAllInAuto] = useState(false)
   const runTimerRef = useRef(null)
   const countdownTimerRef = useRef(null)
   const elapsedTimerRef = useRef(null)
   const stopRef = useRef(false)
   const activeRequestRef = useRef(null)
-  const dropdownRef = useRef(null) // Kept for legacy or cleanup
-
-  const [enableVerifyAllButton, setEnableVerifyAllButton] = useState(true)
-  const [enableVerifyImportedButton, setEnableVerifyImportedButton] = useState(true)
-  const [runVerifyAllInAuto, setRunVerifyAllInAuto] = useState(true)
   const fileInputRef = useRef(null)
   const poolsRef = useRef([])
-  useEffect(() => { poolsRef.current = pools }, [pools])
+  const dropdownRef = useRef(null) // Kept for legacy or cleanup
 
   const openNewPoolEditor = () => {
     const editor = {
@@ -80,6 +78,10 @@ export default function Pools() {
       setSelectedId('')
     })
   }, [])
+
+  useEffect(() => {
+    poolsRef.current = pools
+  }, [pools])
 
   async function fetchMrrRigs() {
     setLoading(true);
@@ -193,7 +195,6 @@ export default function Pools() {
 
       if (result.status === 429) {
         const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
-        // Ensure base-10 parsing for the retry delay
         const seconds = parseInt(retryAfter, 10) || 10;
         setRateLimitStatus(`Rate limit hit. Retrying in ${seconds}s...`);
         try {
@@ -355,7 +356,7 @@ export default function Pools() {
       }, 1000)
 
       if (runVerifyAllInAuto) {
-        await verifyAllOnce({ resetStop: false, keepRunning: true, targetPools: poolsRef.current })
+        await verifyAllOnce({ resetStop: false, keepRunning: true })
       }
 
       if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
@@ -377,13 +378,9 @@ export default function Pools() {
     }
 
     await executeCycle()
-    if (stopRef.current) {
-      
+    if (stopRef.current) { // If stopped during the first cycle
       setRunning(false)
-
     }
-
-
   }
 
   function verifyAlgorithm(algorithm) {
@@ -391,10 +388,63 @@ export default function Pools() {
     verifyAllOnce({ targetPools })
   }
 
+  async function importXlsx(file) {
+    if (!file) return;
+    if (!ph.XLSX) {
+      setError('XLSX library not loaded. Please install it with: npm install xlsx');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = e.target.result;
+        const workbook = ph.XLSX.read(data, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const json = ph.XLSX.utils.sheet_to_json(sheet);
+
+        const importedPools = json.map((row, i) => ({
+          name: row.name || row['Pool Name'] || row.label || `Imp-${i}`,
+          algorithm: row.algorithm || row.Algorithm || row.miningAlgorithm || '',
+          stratumHostname: row.stratumHostname || row.stratumHost || row.host || row['Stratum Host'] || '',
+          stratumPort: Number(row.stratumPort || row.port || row.Port || 3333),
+          username: row.username || row.Username || '',
+          password: row.password || row.Password || 'x',
+          key: `imp_${Date.now()}_${i}`
+        }));
+
+        if (importedPools.length === 0) throw new Error('No valid pool rows found in XLSX');
+        // Run verification on the imported list immediately
+        await verifyAllOnce({ targetPools: importedPools, resetStop: true });
+      } catch (err) {
+        setError('Import Failed: ' + err.message);
+      }
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  async function importFromUrl() {
+    const url = 'https://notepad.vn/01WUDFi17';
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      setPools(ph.normalizeList(data));
+    } catch (err) {
+      setError('URL Sync Failed: ' + err.message + '. Ensure the link returns raw JSON.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function verifyImported() {
     const input = prompt('Paste pool JSON object or array to verify (one-time run):');
     if (!input) return;
     try {
+      if (!ph.XLSX) {
+        throw new Error('XLSX library not loaded. Cannot import files.');
+      }
       const parsed = JSON.parse(input);
       const list = Array.isArray(parsed) ? parsed : [parsed];
       const targetPools = list.map((p, i) => ({
@@ -526,7 +576,7 @@ export default function Pools() {
       )}
       <div className="pool-actions" style={{ minWidth: '500px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
         <div className="pool-actions" style={{ width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'left', gap: '0.8rem', marginBottom: '1rem' }}>
-
+          
           {/* Export button */}
           <button
             className="btn-pro secondary"
@@ -562,30 +612,34 @@ export default function Pools() {
           <button className="btn-pro" onClick={startRun} disabled={playing || running}>
             {running ? 'Running...' : 'Auto'}
           </button>
+          {/* Sync Remote Config */}
+          <button className="btn-pro secondary" onClick={importFromUrl} disabled={playing || running}>
+            Sync Remote
+          </button>
           {/* Stop button (conditional) */}
           {(playing || running) && (
             <button className="btn-pro" onClick={stopAutomation}>Stop</button>
           )}
           {/* Checkboxes for control */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginLeft: '1rem', borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '1rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', opacity: 0.8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginLeft: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem' }}>
               <input type="checkbox" checked={enableVerifyAllButton} onChange={(e) => setEnableVerifyAllButton(e.target.checked)} />
-              Enable 'Verify All'
+              Enable 'Verify All' Button
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', opacity: 0.8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem' }}>
               <input type="checkbox" checked={enableVerifyImportedButton} onChange={(e) => setEnableVerifyImportedButton(e.target.checked)} />
-              Enable 'Import/Verify'
+              Enable 'Verify Imported/XLSX' Buttons
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', opacity: 0.8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem' }}>
               <input type="checkbox" checked={runVerifyAllInAuto} onChange={(e) => setRunVerifyAllInAuto(e.target.checked)} />
-              Auto Pass: Run Verify Pass
+              Run 'Verify All' in Auto Mode
             </label>
           </div>
           {/* Time information block – pushed to the end on flex row, wraps below on small screens */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '0.9rem', marginRight: 'auto', background: 'rgba(92, 92, 92, 0.2)', padding: '4px 8px', borderRadius: '6px' }}>
             {/* Delay input */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <label style={{ fontSize: '10px', fontWeight: 'bold' }}>DELAY (5s)</label>
+              <label style={{ fontSize: '10px', fontWeight: 'bold' }}>MRR_KEY_RIG_BT</label>
               <input
                 type="number"
                 className="input-pro"

@@ -14,7 +14,7 @@ export default function Pools() {
   const [error, setError] = useState('')
   const [playing, setPlaying] = useState(false)
   const [running, setRunning] = useState(false)
-  const [verificationDelay, setVerificationDelay] = useState(5000)
+  const [verificationDelay, setVerificationDelay] = useState(3000)
   const [lastRunTime, setLastRunTime] = useState(null)
   const [rateLimitStatus, setRateLimitStatus] = useState(null)
   const [nextRunCountdown, setNextRunCountdown] = useState(null)
@@ -28,11 +28,16 @@ export default function Pools() {
 
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false) // State for Pool Selection Modal
+  const [enableVerifyAllButton, setEnableVerifyAllButton] = useState(true)
+  const [enableVerifyImportedButton, setEnableVerifyImportedButton] = useState(true)
+  const [runVerifyAllInAuto, setRunVerifyAllInAuto] = useState(false)
   const runTimerRef = useRef(null)
   const countdownTimerRef = useRef(null)
   const elapsedTimerRef = useRef(null)
   const stopRef = useRef(false)
   const activeRequestRef = useRef(null)
+  const fileInputRef = useRef(null)
+  const poolsRef = useRef([])
   const dropdownRef = useRef(null) // Kept for legacy or cleanup
 
   const openNewPoolEditor = () => {
@@ -73,6 +78,10 @@ export default function Pools() {
       setSelectedId('')
     })
   }, [])
+
+  useEffect(() => {
+    poolsRef.current = pools
+  }, [pools])
 
   async function fetchMrrRigs() {
     setLoading(true);
@@ -186,7 +195,7 @@ export default function Pools() {
 
       if (result.status === 429) {
         const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
-        const seconds = parseInt(retryAfter, 10) || 10;
+        const seconds = parseInt(retryAfter, 3) || 3;
         setRateLimitStatus(`Rate limit hit. Retrying in ${seconds}s...`);
         try {
           await new Promise(r => setTimeout(r, seconds * 1000));
@@ -330,7 +339,7 @@ export default function Pools() {
     setRunCount(0)
     stopRef.current = false
 
-    const intervalMs = 10000
+    const intervalMs = 1000
 
     const executeCycle = async () => {
       if (stopRef.current) return
@@ -351,7 +360,7 @@ export default function Pools() {
       }
 
       if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
-      
+
       if (stopRef.current) return
 
       // Start countdown for next run
@@ -415,7 +424,7 @@ export default function Pools() {
   }
 
   async function importFromUrl() {
-    const url = 'https://notepad.vn/01WUDFi17';
+    const url = '';
     setLoading(true);
     setError('');
     try {
@@ -467,7 +476,7 @@ export default function Pools() {
       activeRequestRef.current.abort()
       activeRequestRef.current = null
     }
-    setLastRunTime(null)
+    setLastRunTime(new Date().toLocaleTimeString())
   }
 
   const openPoolEditor = (item) => {
@@ -567,7 +576,7 @@ export default function Pools() {
       )}
       <div className="pool-actions" style={{ minWidth: '500px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
         <div className="pool-actions" style={{ width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'left', gap: '0.8rem', marginBottom: '1rem' }}>
-          
+
           {/* Export button */}
           <button
             className="btn-pro secondary"
@@ -600,7 +609,7 @@ export default function Pools() {
             Verify Imported
           </button>
           {/* Auto Run button (standalone) */}
-          <button className="btn-pro" onClick={startRun} disabled={playing || running}>
+          <button className="btn-pro" onClick={startRun} disabled={playing || running} style={{ backgroundColor: '#f59e0b' }}>
             {running ? 'Running...' : 'Auto'}
           </button>
           {/* Sync Remote Config */}
@@ -609,7 +618,7 @@ export default function Pools() {
           </button>
           {/* Stop button (conditional) */}
           {(playing || running) && (
-            <button className="btn-pro" onClick={stopAutomation}>Stop</button>
+            <button className="btn-pro" onClick={stopAutomation} style={{ backgroundColor: '#ef4444' }}>Stop</button>
           )}
           {/* Checkboxes for control */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginLeft: '1rem' }}>
@@ -630,7 +639,7 @@ export default function Pools() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '0.9rem', marginRight: 'auto', background: 'rgba(92, 92, 92, 0.2)', padding: '4px 8px', borderRadius: '6px' }}>
             {/* Delay input */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <label style={{ fontSize: '10px', fontWeight: 'bold' }}>DELAY (5s)</label>
+              <label style={{ fontSize: '10px', fontWeight: 'bold' }}>DELAY (3s)</label>
               <input
                 type="number"
                 className="input-pro"
@@ -638,35 +647,32 @@ export default function Pools() {
                 value={verificationDelay}
                 onChange={e => setVerificationDelay(Number(e.target.value))}
               />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '1rem', marginLeft: 'auto', background: 'rgba(0,0,0,0.2)', padding: '4px 8px', borderRadius: '6px' }}>
-              {running && (
-                <>
-                  <div style={{ color: '#f59e0b', fontWeight: 'bold' }}>
-                    Running #{runCount}
-                  </div>
-                  {currentRunStartTime && (
-                    <div style={{ color: '#8b5cf6' }}>
-                      Elapsed: {Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '1rem', marginLeft: 'auto', background: 'rgba(0,0,0,0.2)', padding: '4px 8px', borderRadius: '6px' }}>
+                {running && (
+                  <>
+                    <div style={{ color: '#f59e0b', fontWeight: 'bold' }}>
+                      Running #{runCount}
                     </div>
-                  )}
-                  {nextRunCountdown !== null && (
-                    <div style={{ color: '#3b82f6', fontWeight: 'bold' }}>
-                      Next in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
-                    </div>
-                  )}
-                </>
-              )}
-
+                    {currentRunStartTime && (
+                      <div style={{ color: '#8b5cf6' }}>
+                        Elapsed: {Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s
+                      </div>
+                    )}
+                    {nextRunCountdown !== null && (
+                      <div style={{ color: '#3b82f6', fontWeight: 'bold' }}>
+                        Next in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
+                      </div>
+                    )}
+                  </>
+                )}
               {lastRunTime && !running && !playing && (
-                <div style={{ color: '#059669' }}>
+                <div style={{ color: '#059669', fontWeight: 'bold' }}>
                   Finished: {lastRunTime}
                 </div>
               )}
+              </div>
             </div>
           </div>
-
           <div>
             <div className="pool-main-content" style={{ flex: 1, minWidth: '500px' }}>
               {progress.total > 0 && (

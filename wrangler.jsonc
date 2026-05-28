@@ -23,10 +23,10 @@
 		"NICEHASH_API_SECRET": "",
 		"NICEHASH_ORG_ID": "",
 		"NICEHASH_ENVIRONMENT": "production",
-		"RIG_API_KEY_BT": "",
-		"RIG_API_SECRET_BT": "",
-		"RIG_API_KEY_SL": "",
-		"RIG_API_SECRET_SL": ""
+		"MRR_KEY_RIG_BT": "",
+		"MRR_SECRET_RIG_BT": "",
+		"MRR_KEY_RIG_SL": "",
+		"MRR_SECRET_RIG_SL": ""
 	}
 	
 }

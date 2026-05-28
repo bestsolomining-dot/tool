@@ -93,8 +93,9 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
         if (endpoint === '/rig') {
           const myRigsResult = await poolApi.mrrRigs(mrrClient, '/rig/mine');
           if (myRigsResult.ok) {
-            const myRigsPayload = myRigsResult.data?.data || myRigsResult.data;
-            const myIds = new Set((Array.isArray(myRigsPayload) ? myRigsPayload : (myRigsPayload?.rigs || [])).map(r => String(r.id)));
+            const myRigsPayload = myRigsResult.data?.data || myRigsResult.data || [];
+            const myRigsArray = Array.isArray(myRigsPayload) ? myRigsPayload : (myRigsPayload.rigs || []);
+            const myIds = new Set(myRigsArray.map(r => String(r.id || r.rigid || r.rig_id || '').trim()).filter(Boolean));
             setUserRigIds(myIds);
           }
         } else {
@@ -113,16 +114,20 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
   };
 
   const fetchRigDetailInfo = async (rig) => {
-    const rigId = rig.id;
+    const rigId = rig.id || rig.rigid || rig.rig_id;
     const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
     const isRented = statusStr.includes('rented');
-    const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id;
+    const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id || rig.id;
 
     setInfoLoadingId(rigId);
     try {
+      const apiBase = window.location.port === '5173'
+        ? `${window.location.protocol}//${window.location.hostname}:3000`
+        : '';
+
       const url = (isRented && rentalId)
-        ? `http://localhost:3000/api/v2/mrr/rental/${encodeURIComponent(rentalId)}?client=${mrrClient}` 
-        : `http://localhost:3000/api/v2/mrr/rig/${encodeURIComponent(rigId)}/info?client=${mrrClient}`;
+        ? `${apiBase}/api/v2/mrr/rental/${encodeURIComponent(rentalId)}?client=${mrrClient}` 
+        : `${apiBase}/api/v2/mrr/rig/${encodeURIComponent(rigId)}/info?client=${mrrClient}`;
 
       const result = await fetch(url);
       const data = await result.json();
@@ -141,7 +146,11 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
             endTime: getRentalEndTime(rental),
             advertised: getRentalAdvertisedHashrate(rental),
             average: getRentalAverageHashrate(rental),
-            pools,
+            pools: pools.map(p => ({
+              host: p.host || p.stratumHost || rental.rig?.stratumHost || 'N/A',
+              port: p.port || p.stratumPort || rental.rig?.stratumPort || 'N/A',
+              username: p.user || p.username || rental.rig?.username || 'N/A',
+            })),
             isRental: true,
           };
         } else {
@@ -212,13 +221,14 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
           scrollbarColor: 'rgba(255,255,255,0.1) transparent',
           overscrollBehavior: 'contain'
         }}>
-          <div className="rig-grid" style={{ 
+        <div className="rig-grid" style={{ 
           display: 'grid', 
           gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
           gap: '15px' 
         }}>
           {filteredRigs.map((rig) => {
-            const isMine = userRigIds.has(String(rig.id));
+            const rigId = rig.id || rig.rigid || rig.rig_id;
+            const isMine = rigId && userRigIds.has(String(rigId));
             const info = enrichedInfo[rig.id];
             
             const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();

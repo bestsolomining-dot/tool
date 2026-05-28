@@ -5,6 +5,7 @@ import HashpowerBot from './src/components/HashpowerBot';
 import NiceHash from './src/components/NiceHash';
 import MiningRigRental from './src/components/MiningRigRental';
 import MiningRigSection from './src/components/MiningRigSection'; // New import
+import HashrateCalculator from './src/components/HashrateCalculator';
 import MrrPoolsManager from './src/components/MrrPoolsManager';
 import './src/App.css';
 
@@ -159,10 +160,17 @@ export default function App() {
   const handleOpenMrrPools = useCallback(async (rig) => {
     if (!rig || !mrrClient || mrrClient === 'ALL') return;
 
-    const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
+    // Support both rig object and raw ID (fallback)
+    const rigObj = typeof rig === 'object' ? rig : { id: rig };
+    const statusStr = String(typeof rigObj.status === 'object' ? rigObj.status.status : rigObj.status || '').toLowerCase();
     const isRented = statusStr.includes('rented');
-    const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id || '';
-    const rigId = rig.id || '';
+    const rentalId = String(rigObj.rentalid || rigObj.current_rental_id || rigObj.rental_id || rigObj.id || '').trim();
+    const rigId = String(rigObj.rigid || rigObj.rig_id || rigObj.id || '').trim();
+
+    // Prevent calling invalid endpoints that lead to 401/404 errors
+    if (isRented && !rentalId) return;
+    if (!isRented && !rigId) return;
+
     const path = (isRented && rentalId)
       ? `/api/v2/mrr/rental/${encodeURIComponent(rentalId)}/pool`
       : `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
@@ -219,6 +227,10 @@ export default function App() {
               <div style={{ marginTop: '5px' }}>
                 <HashpowerBot algorithm={algorithm} market={market} onCall={handleHashpowerCall} />
               </div>
+            </article>
+
+            <article className="panel">
+              <HashrateCalculator />
             </article>
           </div>
 

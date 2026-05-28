@@ -161,14 +161,28 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
             const info = enrichedInfo[rig.id];
 
             return (
-              <div key={rig.id} className="rig-card" style={{ 
-                background: isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)', 
-                border: isMine ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)', 
-                borderRadius: '8px', 
-                padding: '15px',
-                position: 'relative'
-              }}>
-                {isMine && <span style={{ position: 'absolute', top: '1px', left: '10px', background: '#494947', color: 'white', fontSize: '9px', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>Rig ID: #{rig.id} {rig.mrrClient && `[${rig.mrrClient}]`}</span>}
+              <div key={rig.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {isMine ? (
+                  <div style={{ paddingLeft: '4px' }}>
+                    <span style={{ padding: '4px 8px', paddingBottom: '-50px', paddingTop: '-50px', background: '#231b27', color: 'white', fontSize: '9px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase', display: 'inline-block' }}>
+                      Rig ID: #{rig.id} 
+                      {rig.mrrClient && (
+                        <span style={{ marginLeft: '3px', color: rig.mrrClient === 'SL' ? '#3b82f6' : rig.mrrClient === 'BT' ? '#fbbf24' : rig.mrrClient === 'ALL' ? '#ef4444' : 'inherit' }}>
+                          [{rig.mrrClient}]
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ height: '19px' }} />
+                )}
+                <div className="rig-card" style={{ 
+                  background: isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)', 
+                  border: isMine ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)', 
+                  borderRadius: '8px', 
+                  padding: '15px',
+                  position: 'relative'
+                }}>
                 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -263,6 +277,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                   {infoLoadingId === rig.id ? '...' : info ? 'Hide Info' : 'More Info'}
                 </button>
               </div>
+            </div>
             </div>
             );
           })}

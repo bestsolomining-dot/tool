@@ -21,6 +21,7 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   // Explicitly expose custom headers so the browser allows the frontend to read them
   res.setHeader('Access-Control-Expose-Headers', 'X-MRR-Client, Retry-After, X-RateLimit-Limit');
+  
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -855,8 +856,7 @@ const distPath = path.join(process.cwd(), 'dist');
 app.use(express.static(distPath));
 
 // Catch-all route to serve the React app for any non-API request
-app.get('/:any*', (req, res, next) => {
-  if (req.path.startsWith('/api/')) return next();
+app.get(/^(?!\/api).+/, (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 

@@ -87,8 +87,8 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
   }, [localOrders]);
 
   return (
-    <div className="rig-section nh-theme">
-      <h3 className="section-title">NiceHash</h3>
+    <div className="rig-section nh-theme" style={{ marginTop: '5px', paddingTop: '5px', paddingBottom: '5px' }}>
+      <h2 className="section-title" style={{paddingBottom: '10px' }}>NiceHash</h2>
       <div className="button-group">
         <button className="btn-pro" onClick={fetchOrders}>Orders List</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/mining/address')}>Mining Address</button>
@@ -184,7 +184,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>POOL NAME</span> <strong>{orderDetail.pool?.name || 'N/A'}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>ALGO</span> <strong>{typeof orderDetail.algorithm === 'object' ? orderDetail.algorithm.algorithm : orderDetail.algorithm}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>MARKET</span> <strong>{orderDetail.market}</strong></div>
-            <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>PRICE</span> <strong style={{ color: '#f59e0b' }}>{orderDetail.price}</strong></div>
+            <div><span style={{ opacity: 0.8, display: 'block', fontSize: '9px' }}>PRICE</span> <strong style={{ color: '#f59e0b' }}>{orderDetail.price}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>LIMIT</span> <strong>{orderDetail.limit}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>CURR. SPEED</span> <strong>{parseFloat(orderDetail.acceptedCurrentSpeed || 0).toFixed(7)}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>RIGS</span> <strong>{orderDetail.rigsCount}</strong></div>

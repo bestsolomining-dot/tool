@@ -575,7 +575,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
         <button className="btn-pro primary" style={{ width: '100%' }} onClick={verify} disabled={loading || detailsLoading || playing || !selected || running}>
           {loading ? 'Verifying...' : 'Verify Pool'}
         </button>
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
             <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>DELAY (s)</label>
@@ -607,7 +606,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
             onClick={handleExportResults}
             disabled={completedResults.length === 0}
           >
-            Export Results
+            Export (verified: {completedResults.length})
           </button>
           <button className="btn-pro" style={{ width: '100%' }} onClick={() => verifyAllOnce()} disabled={playing || running}>
             Verify All
@@ -630,7 +629,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
               VERIFY FROM FILE ({filePools.length})
             </label>
           </div>
-          
+
           <input type="file" ref={fileInputRef} onChange={handleImportXlsx} accept=".xlsx,.xls" style={{ display: 'none' }} />
           <div style={{ display: 'flex', gap: '10px' }}>
             <button className="btn-pro" style={{ flex: 2 }} onClick={startRun} disabled={playing || running}>
@@ -642,8 +641,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
           </div>
         </div>
 
-
-
         {running && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
             <div style={{ color: '#f59e0b', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
@@ -653,6 +650,11 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
               <span>Total Time Run:</span>
               <span>{Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s</span>
+              {lastRunTime && !playing && (
+                <div style={{ color: '#059669', fontSize: '11px', textAlign: 'right' }}>
+                  Last cycle finished: {lastRunTime}
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
               <span>Skipped Pools:</span>
@@ -664,15 +666,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
                 <span>{Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s</span>
               </div>
             )}
-            {lastRunTime && !running && !playing && (
-          <div style={{ color: '#059669', fontSize: '11px', textAlign: 'right' }}>
-            Last cycle finished: {lastRunTime}
           </div>
         )}
-          </div>
-        )}
-
-        
 
         <div className="pool-main-content" style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {progress.total > 0 && (
@@ -804,54 +799,9 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
                 <pre className="response-body compact">No pools loaded.</pre>
               )}
             </div>
-
-            {/* {mrrRigs && (
-              <div className="pool-mrr-summary" style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div className="response-header compact" style={{ marginBottom: '10px' }}>
-                  <h3 style={{ margin: 0, fontSize: '14px' }}>MRR Rigs Data</h3>
-                  <button className="text-button" onClick={() => setMrrRigs(null)}>Clear</button>
-                </div>
-                <pre className="response-body compact" style={{ fontSize: '11px', maxHeight: '300px', overflow: 'auto', background: 'rgba(0,0,0,0.2)' }}>
-                  {JSON.stringify(mrrRigs, null, 2)}
-                </pre>
-              </div>
-            )} */}
           </div>
         )}
-
-
       </div>
-
-      {/* <div className="selection-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-        <div className="pool-select-pro" ref={dropdownRef} style={{ flex: 1 }}>
-          <button
-            className="select-trigger-pro"
-            onClick={() => setSelectorOpen(true)}
-          >
-            <span className="current-selection">{selectedLabel}</span>
-            <span className="count-badge">{pools.length}</span>
-          </button>
-          {rateLimitStatus && (
-            <div style={{ color: '#f59e0b', fontSize: '11px', marginTop: '6px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span className="spinner-mini"></span> {rateLimitStatus}
-            </div>
-          )}
-        </div>
-        <div className="actions" style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-          <button className="btn-pro secondary" onClick={() => setSidebarVisible(!sidebarVisible)}>{sidebarVisible ? 'Hide Sidebar' : 'Show Sidebar'}</button>
-          <select 
-            className="select-pro" 
-            style={{ width: '80px', padding: '4px', fontSize: '11px' }} 
-            value={mrrClient || ''} 
-            onChange={e => setMrrClient(e.target.value)}
-          >
-            <option value="BT">BT</option>
-            <option value="SL">SL</option>
-          </select>
-          <button className="btn-pro" onClick={() => fetchMrrRigs()} title="Fetch MiningRigRentals data">MRR Rigs</button>
-          <button className="btn-pro secondary" onClick={() => selected && openPoolEditor({ key: selectedId, label: selectedLabel })} disabled={!selected}>Edit Settings</button>
-        </div>
-      </div> */}
 
       {error && <pre className="error-message">{error}</pre>}
 

@@ -1,0 +1,136 @@
+{
+    "success": true,
+    "data": {
+        "id": "3676300",
+        "owner": "rammer",
+        "renter": "merc",
+        "hashrate": {
+            "advertised": {
+                "hash": "17",
+                "type": "th",
+                "nice": "17.00T"
+            },
+            "average": {
+                "hash": "11.925962352629",
+                "type": "th",
+                "nice": "11.93T",
+                "percent": "70.15"
+            }
+        },
+        "price": {
+            "type": "legacy",
+            "advertised": "0.00000520",
+            "paid": "0.00001105",
+            "currency": "BTC"
+        },
+        "price_converted": {
+            "type": "th",
+            "advertised": "0.00000520",
+            "currency": "BTC"
+        },
+        "length": "3",
+        "extended": "0",
+        "extensions": [],
+        "start": "2022-03-02 15:37:03 UTC",
+        "end": "2022-03-02 18:37:03 UTC",
+        "ended": true,
+        "refunded": true,
+        "rig": {
+            "id": "153561",
+            "name": "S9 SE - Rammer 05",
+            "owner": "rammer",
+            "type": "sha256",
+            "status": {
+                "status": "rented",
+                "hours": "9.1619",
+                "rented": true,
+                "online": true,
+                "rental_id": "3703107"
+            },
+            "online": true,
+            "xnonce": "no",
+            "poolstatus": "online",
+            "region": "eu",
+            "rpi": "94.68",
+            "suggested_diff": "",
+            "optimal_diff": {
+                "min": "27939.677",
+                "max": "167638.063"
+            },
+            "ndevices": "1",
+            "device_memory": null,
+            "extensions": true,
+            "price": {
+                "type": "th",
+                "BTC": {
+                    "currency": "BTC",
+                    "price": "0.00000529",
+                    "hour": "0.000002645000",
+                    "minhrs": "0.00000794",
+                    "maxhrs": "0.00006348",
+                    "enabled": true
+                },
+                "LTC": {
+                    "currency": "",
+                    "price": 0,
+                    "hour": 0,
+                    "minhrs": 0,
+                    "maxhrs": 0,
+                    "enabled": false
+                },
+                "DOGE": {
+                    "currency": "",
+                    "price": 0,
+                    "hour": 0,
+                    "minhrs": 0,
+                    "maxhrs": 0,
+                    "enabled": false
+                },
+                "ETH": {
+                    "currency": "",
+                    "price": 0,
+                    "hour": 0,
+                    "minhrs": 0,
+                    "maxhrs": 0,
+                    "enabled": false
+                },
+                "BCH": {
+                    "currency": "",
+                    "price": 0,
+                    "hour": 0,
+                    "minhrs": 0,
+                    "maxhrs": 0,
+                    "enabled": false
+                }
+            },
+            "minhours": "3",
+            "maxhours": "24",
+            "hashrate": {
+                "advertised": {
+                    "hash": 12,
+                    "type": "th",
+                    "nice": "12.00T"
+                },
+                "last_5min": {
+                    "hash": "15.617",
+                    "type": "th",
+                    "nice": "15.62T"
+                },
+                "last_15min": {
+                    "hash": "13.014",
+                    "type": "th",
+                    "nice": "13.01T"
+                },
+                "last_30min": {
+                    "hash": "10.737",
+                    "type": "th",
+                    "nice": "10.74T"
+                }
+            },
+            "description": "",
+            "available_status": "available",
+            "shorturl": "http://rig.rent/rigs/153561",
+            "device_ram": "0"
+        }
+    }
+}

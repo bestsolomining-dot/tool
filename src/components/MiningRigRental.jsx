@@ -18,7 +18,9 @@ function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'ite
 
 function calculateRemainingTime(endTime) {
   if (!endTime) return null;
-  const end = new Date(endTime + ' UTC'); // Assuming 'UTC' is needed based on example
+  const normalizedEndTime = /\bUTC\b/i.test(String(endTime)) ? String(endTime) : `${endTime} UTC`;
+  const end = new Date(normalizedEndTime);
+  if (Number.isNaN(end.getTime())) return 'Expired';
   const now = new Date();
   const diffMs = end.getTime() - now.getTime();
 
@@ -39,7 +41,7 @@ function calculateRemainingTime(endTime) {
   return parts.join(' ');
 }
 
-function CountdownTimer({ endTime }) {
+export function CountdownTimer({ endTime }) {
   const [remaining, setRemaining] = useState(() => calculateRemainingTime(endTime));
   const timerRef = useRef(null);
 
@@ -175,8 +177,8 @@ export function MrrPoolsTable({ data }) {
   const rawResults = extractArray(data, ['pools', 'data', 'result']);
   
   // If the extracted array contains objects that are pools themselves (flat list), wrap them
-  const results = rawResults.length > 0 && !rawResults[0].pools && (rawResults[0].host || rawResults[0].stratumHost)
-    ? [{ id: 'Active Configuration', pools: rawResults }]
+  const results = rawResults.length > 0 && !rawResults[0].pools && (rawResults[0].user || rawResults[0].host || rawResults[0].stratumHost)
+    ? [{ id: 'Pools', pools: rawResults }]
     : rawResults;
   
   if (!results.length) return <div style={{ padding: '30px', textAlign: 'center', opacity: 0.5 }}>No pool data found.</div>;
@@ -185,7 +187,7 @@ export function MrrPoolsTable({ data }) {
     <div className="mrr-pools-modal-content">
       {results.map((res, idx) => (
         <div key={res.rigId || res.id || idx} style={{ marginBottom: '25px', borderBottom: '1px solid #333', paddingBottom: '15px' }}>
-          <h4 style={{ color: '#ff53cb', margin: '25px 5px 10px 0' }}>{res.rigId ? `Rig ID: ${res.rigId}` : res.id ? `Rental ID: ${res.id}` : 'Target ID: N/A'}</h4>
+          <h4 style={{ color: '#ff1cbb', margin: '25px 5px 10px 0' }}>{res.rigId ? `Rig ID: ${res.rigId}` : res.id ? `Rental ID: ${res.id}` : 'Target ID: N/A'}</h4>
           <table className="pro-table">
             <thead>
               <tr><th>Priority</th><th>Host</th><th>Worker</th><th>Algo</th></tr>
@@ -207,7 +209,7 @@ export function MrrPoolsTable({ data }) {
   );
 }
 
-export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algorithm, showRentalsInline = false }) {
+export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algorithm, showRentalsInline = false, onOpenMrrPools }) {
   const [activeModal, setActiveModal] = useState(null); // 'list', 'pool', 'rental'
   const [modalData, setModalData] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
@@ -297,9 +299,8 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
   };
 
   return (
-    <div className="rig-section mrr-theme" style={{ marginTop: '30px', borderTop: '1px solid #444', paddingTop: '20px' }}>
-      <h3 className="section-title">Mining Rig Rentals</h3>
-      
+    <div className="rig-section nh-theme" style={{ marginTop: '5px', paddingTop: '5px', paddingBottom: '5px' }}>
+      <h2 className="section-title" style={{paddingBottom: '10px' }}>Mining Rig Rentals</h2>
       {/* Client Selector */}
       <div className="market-inputs">
         <select className="select-pro" value={mrrClient || 'BT'} onChange={(e) => setMrrClient(e.target.value)}>
@@ -370,7 +371,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         <MrrRigs 
           mrrClient={mrrClient} 
           algo={algorithm}
-          onOpenPool={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/pool`, { query: { client: mrrClient } })}
+          onOpenPool={onOpenMrrPools}
           onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
         />
       </div>
@@ -391,7 +392,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
             <MrrRigs 
               mrrClient={mrrClient} 
               algo={algorithm}
-              onOpenPool={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/pool`, { query: { client: mrrClient } })}
+              onOpenPool={onOpenMrrPools}
               onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
             />
           )}
@@ -401,7 +402,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
               mrrClient={mrrClient} 
               endpoint="/rig" 
               algo={algorithm} 
-              onOpenPool={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/pool`, { query: { client: mrrClient } })} 
+              onOpenPool={onOpenMrrPools}
               onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })} 
             />
           )}

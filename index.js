@@ -578,24 +578,70 @@ async function mrrRequest(endpoint, req, res, method = 'GET', body = undefined) 
  * Normalizes MRR Rental data to ensure Algorithm and Hashrate fields are present.
  */
 function extractRentalInfo(rental) {
-  const algo = rental.algo || rental.type || rental.algorithm || rental.miningAlgorithm || rental.rig?.type || 'Unknown';
-  
+  // MRR often puts the algorithm slug in .rig.type for rentals, but top-level .type is price type.
+  const algo = rental.algo || rental.algorithm || rental.miningAlgorithm || rental.rig?.algo || rental.rig?.algorithm || rental.rig?.type || 'Unknown';
+  const type = rental.price_type || rental.price?.type || rental.type || 'Day';
+  const duration = rental.length || rental.hours || rental.rig?.hours || '0';
+  const rigId = rental.rig?.id || rental.rigid || rental.rig_id || rental.rigId || 'N/A';
+  const percent = rental.hashrate?.average?.percent || rental.rig?.hashrate?.average?.percent || '0';
+  const endTime = rental.end || rental.rig?.status?.end || '';
+
   let currentHash = 0;
   let advertisedHash = 0;
   let averageHash = 0;
+  let hashrateSuffix = '';
 
-  if (rental.hashrate && typeof rental.hashrate === 'object') {
-    // MRR hashrate object structure
-    currentHash = parseFloat(rental.hashrate.hashrate || rental.hashrate.current || 0);
-    advertisedHash = parseFloat(rental.hashrate.advertised || 0);
-    averageHash = parseFloat(rental.hashrate.average || 0);
-  } else if (typeof rental.hashrate === 'number' || typeof rental.hashrate === 'string') {
-    currentHash = parseFloat(rental.hashrate);
+  // Check both top level and rig object for hashrate data
+  // Prioritize rig hashrate if top-level is empty or zero
+  let hr = rental.hashrate;
+  if (!hr || (typeof hr === 'object' && !hr.hashrate && !hr.current && !hr.advertised && !hr.nice)) {
+    // If top-level hashrate is missing or empty, try rig hashrate
+    hr = rental.rig?.hashrate || rental.rig?.hash;
   }
 
+  if (hr && typeof hr === 'object') {
+    // MRR hashrate object structure
+    currentHash = parseFloat(hr.hashrate || hr.current || hr.hash || 0);
+    
+    if (hr.advertised && typeof hr.advertised === 'object') {
+      advertisedHash = parseFloat(hr.advertised.hash || hr.advertised.hashrate || 0);
+      hashrateSuffix = hr.advertised.type || hr.advertised.suffix || '';
+    } else {
+      advertisedHash = parseFloat(hr.advertised || 0);
+    }
+
+    if (hr.average && typeof hr.average === 'object') {
+      averageHash = parseFloat(hr.average.hash || hr.average.hashrate || 0);
+      hashrateSuffix = hashrateSuffix || hr.average.type || hr.average.suffix || '';
+    } else {
+      averageHash = parseFloat(hr.average || 0);
+    }
+    
+    hashrateSuffix = hashrateSuffix || hr.suffix || '';
+  } else if (typeof hr === 'number' || typeof hr === 'string') {
+    currentHash = parseFloat(hr);
+    // We might not have a suffix if it's just a number/string
+  }
+
+  // Determine a 'nice' formatted hashrate for display
+  const niceHashrate = (hr && typeof hr === 'object' && hr.nice) ||
+                       (hr && typeof hr === 'object' && hr.advertised?.nice) ||
+                       (advertisedHash > 0 ? `${advertisedHash} ${hashrateSuffix}`.trim() : 
+                       (currentHash > 0 ? `${currentHash} ${hashrateSuffix}`.trim() : '0 N/A'));
+
+  const niceAverageHashrate = (hr && typeof hr === 'object' && hr.average?.nice) || 
+                              (averageHash > 0 ? `${averageHash.toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');
+
   return {
-    algo,
-    hashrate: { current: currentHash, advertised: advertisedHash, average: averageHash }
+    algo, // Algorithm name (e.g., "SHA256")
+    type, // Algorithm type (e.g., "GPU", "CPU")
+    duration,
+    rigId,
+    endTime,
+    percent,
+    hashrate: { current: currentHash, advertised: advertisedHash, average: averageHash, suffix: hashrateSuffix },
+    niceHashrate: niceHashrate,
+    niceAverageHashrate: niceAverageHashrate,
   };
 }
 
@@ -735,14 +781,19 @@ app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
       clientNameRaw: clientName,
     });
 
-    let rental = data?.data || data;
+    let rental = data?.data; // The actual rental object is inside 'data' property of the response
     if (statusCode === 200 && data?.success && rental) {
       // Fallback: Specific rental endpoints often miss algo/hashrate. 
       // If missing, search for this ID in the active list which is usually "richer".
-      const hasAlgo = !!(rental.algo || rental.type || rental.algorithm || rental.miningAlgorithm || rental.rig?.type);
-      const hasHash = !!(rental.hashrate && (typeof rental.hashrate !== 'object' || rental.hashrate.hashrate || rental.hashrate.advertised || rental.hashrate.advertised?.nice));
+      
+      // Check normalized values to see if we actually found useful info
+      const initialNorm = extractRentalInfo(rental);
+      const hasAlgo = initialNorm.algo !== 'Unknown';
+      // hasHash should check if we have a meaningful non-zero average hashrate
+      const hasHash = initialNorm.niceAverageHashrate !== '0 N/A' && initialNorm.niceAverageHashrate !== '0.00 N/A';
+      const hasDuration = initialNorm.duration !== '0';
 
-      if (!hasAlgo || !hasHash) {
+      if (!hasAlgo || !hasHash || !hasDuration) {
         const listRes = await mrrApiCall({ endpoint: '/rental', clientNameRaw: clientName });
         let list = listRes.data?.success ? (Array.isArray(listRes.data.data) ? listRes.data.data : (listRes.data.data?.rentals || [])) : [];
         let found = list.find(r => String(r.id) === String(rentalId));

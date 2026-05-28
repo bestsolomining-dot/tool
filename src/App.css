@@ -97,7 +97,8 @@
 
 .panel {
   background: var(--panel-bg);
-  padding: 20px;
+  padding: 5px;
+  max-width: "600px";
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   border: 1px solid var(--border-color);

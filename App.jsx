@@ -19,6 +19,9 @@ export default function App() {
   const [algorithm, setAlgorithm] = useState(''); // Initialize with empty string
   const [market, setMarket] = useState(''); // Initialize with empty string
   const [mrrClient, setMrrClient] = useState('BT'); // Default to BT to prevent initial errors
+  const [mrrPoolData, setMrrPoolData] = useState(null);
+  const [mrrPoolRigId, setMrrPoolRigId] = useState('');
+  const [mrrPoolRentalId, setMrrPoolRentalId] = useState('');
 
   const scrollToPools = useCallback(() => {
     const poolsEl = document.querySelector('.pools-section');
@@ -153,6 +156,23 @@ export default function App() {
     return callApi(path, { ...opts, section: 'hashpower' });
   }, [callApi]);
 
+  const handleOpenMrrPools = useCallback(async (rig) => {
+    if (!rig || !mrrClient || mrrClient === 'ALL') return;
+
+    const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
+    const isRented = statusStr.includes('rented');
+    const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id || '';
+    const rigId = rig.id || '';
+    const path = (isRented && rentalId)
+      ? `/api/v2/mrr/rental/${encodeURIComponent(rentalId)}/pool`
+      : `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
+
+    const result = await handleMiningCall(path, { query: { client: mrrClient }, silent: true });
+    setMrrPoolData(result);
+    setMrrPoolRigId(isRented ? '' : String(rigId || ''));
+    setMrrPoolRentalId(isRented ? String(rentalId || '') : '');
+  }, [handleMiningCall, mrrClient]);
+
   return (
     <div className="app-shell" style={{ padding: '0 20px 40px', maxWidth: '1600px', margin: '0 auto' }}>
       <header className="app-header" style={{ 
@@ -164,8 +184,8 @@ export default function App() {
         alignItems: 'flex-end'
       }}>
         <div className="brand-block" style={{ flex: 1 }}>
-          <h1>Ben Tre Mining Tool</h1>
-          <p className="subtitle" style={{ opacity: 0.6, fontSize: '0.95rem', maxWidth: '600px', marginTop: '8px' }}>
+          <h2>Ben Tre Mining Tool</h2>
+          <p className="subtitle" style={{ opacity: 0.5, fontSize: '0.95rem', maxWidth: '600px', marginTop: '8px' }}>
             A powerful desktop tool for Nicehash miners. Manage rigs, monitor stats, and automate hashpower purchases with ease.
           </p>
         </div>
@@ -203,11 +223,22 @@ export default function App() {
           </div>
 
           <article className="panel">
-            <MiningRigSection onCall={handleMiningCall} mrrClient={mrrClient} setMrrClient={setMrrClient} />
+            <MiningRigSection
+              onCall={handleMiningCall}
+              mrrClient={mrrClient}
+              setMrrClient={setMrrClient}
+              onOpenMrrPools={handleOpenMrrPools}
+            />
           </article>
 
           <article className="panel">
-            <MrrPoolsManager onCall={handleMiningCall} mrrClient={mrrClient} />
+            <MrrPoolsManager
+              onCall={handleMiningCall}
+              mrrClient={mrrClient}
+              externalPoolData={mrrPoolData}
+              externalRigId={mrrPoolRigId}
+              externalRentalId={mrrPoolRentalId}
+            />
           </article>
         </section>
 

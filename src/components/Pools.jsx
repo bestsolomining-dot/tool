@@ -21,8 +21,13 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   const [nextRunCountdown, setNextRunCountdown] = useState(null)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const [sidebarVisible, setSidebarVisible] = useState(true)
+  const [runCount, setRunCount] = useState(0)
+  const [currentRunStartTime, setCurrentRunStartTime] = useState(null)
+  const [currentRunElapsed, setCurrentRunElapsed] = useState(0)
   const [mrrRigs, setMrrRigs] = useState(null)
   const [inspectData, setInspectData] = useState(null)
+  const [filePools, setFilePools] = useState([])
+  const [verifyFromFile, setVerifyFromFile] = useState(false)
 
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false) // State for Pool Selection Modal
@@ -31,6 +36,31 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   const stopRef = useRef(false)
   const activeRequestRef = useRef(null)
   const dropdownRef = useRef(null) // Kept for legacy or cleanup
+  const fileInputRef = useRef(null)
+
+  const handleImportXlsx = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await ph.parseXlsx(file);
+      const mapped = data.map(row => ({
+        name: row['Pool Name'] || row.name || 'Imported Pool',
+        miningAlgorithm: row['Algorithm'] || row.algorithm || row.miningAlgorithm || '',
+        stratumHost: row['Stratum Host'] || row.stratumHost || row.stratumHostname || row.host || '',
+        stratumPort: Number(row['Port'] || row.stratumPort || row.port || 0),
+        username: row['Username'] || row.username || '',
+        password: row['Password'] || row.password || 'x',
+        poolVerificationServiceLocation: row['Market'] || row.location || 'ANY'
+      }));
+      const normalized = ph.normalizeList(mapped);
+      setFilePools(normalized);
+      setVerifyFromFile(true);
+    } catch (err) {
+      setError(`Import failed: ${err.message}`);
+    } finally {
+      e.target.value = '';
+    }
+  };
 
   const openNewPoolEditor = () => {
     const editor = {
@@ -68,6 +98,19 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   useEffect(() => {
     loadPools();
   }, []);
+
+  // Update the elapsed time counter every second while automation is running
+  useEffect(() => {
+    let interval;
+    if (running && currentRunStartTime) {
+      interval = setInterval(() => {
+        setCurrentRunElapsed(Math.floor((Date.now() - currentRunStartTime) / 1000));
+      }, 1000);
+    } else {
+      setCurrentRunElapsed(0);
+    }
+    return () => clearInterval(interval);
+  }, [running, currentRunStartTime]);
 
   // Automatically clear MRR results when client changes to prevent data mixing
   useEffect(() => {
@@ -241,20 +284,21 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
     }
   }
 
-  async function verifyAllOnce({ resetStop = true, keepRunning = false, targetPools = pools } = {}) {
-    if (!Array.isArray(targetPools) || targetPools.length === 0 || playing) return
+  async function verifyAllOnce({ resetStop = true, keepRunning = false, targetPools = null } = {}) {
+    const source = targetPools || (verifyFromFile ? filePools : pools);
+    if (!Array.isArray(source) || source.length === 0 || playing) return
     setPlaying(true)
     setError('')
     setResponse(null)
     setVerifyResults([])
-    setProgress({ current: 0, total: targetPools.length })
+    setProgress({ current: 0, total: source.length })
     if (resetStop) stopRef.current = false
 
     try {
-      for (let i = 0; i < targetPools.length; i++) {
+      for (let i = 0; i < source.length; i++) {
         if (stopRef.current) break
 
-        const pool = targetPools[i]
+        const pool = source[i]
         const poolId = ph.getId(pool)
         const key = ph.getKey(pool, i)
         const controller = new AbortController()
@@ -313,9 +357,9 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
           ...prev.filter(item => item.key !== key),
           { key, label: ph.getLabel(pool, i), result },
         ])
-        setProgress({ current: i + 1, total: targetPools.length })
+        setProgress({ current: i + 1, total: source.length })
 
-        if (stopRef.current || i >= targetPools.length - 1) break
+        if (stopRef.current || i >= source.length - 1) break
         await new Promise(resolve => {
           const startedAt = Date.now()
           const timer = setInterval(() => {
@@ -335,12 +379,15 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   async function startRun() {
     if (running || playing) return
     setRunning(true)
+    setRunCount(0)
+    setCurrentRunStartTime(Date.now())
     stopRef.current = false
 
     const intervalMs = automationInterval * 1000
 
     const executeCycle = async () => {
       if (stopRef.current) return
+      setRunCount(prev => prev + 1)
 
       setNextRunCountdown(null)
       if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
@@ -363,7 +410,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
     await executeCycle()
     if (stopRef.current) {
-      setLastRunTime(new Date().toLocaleTimeString())
+    
       setRunning(false)
       return
     }
@@ -372,7 +419,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   }
 
   function verifyAlgorithm(algorithm) {
-    const targetPools = pools.filter(pool => ph.getAlgo(pool) === algorithm)
+    const base = verifyFromFile ? filePools : pools;
+    const targetPools = base.filter(pool => ph.getAlgo(pool) === algorithm)
     verifyAllOnce({ targetPools })
   }
 
@@ -392,6 +440,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
       activeRequestRef.current.abort()
       activeRequestRef.current = null
     }
+    setCurrentRunStartTime(null)
+    setRunCount(0)
     setLastRunTime(null) // Clear the last run time when automation is stopped
   }
 
@@ -485,8 +535,9 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   const algorithmSummary = Object.entries(algorithmCounts)
     .map(([algorithm, count]) => `${algorithm}: ${count}`)
     .join(', ')
+  const activePoolSource = verifyFromFile ? filePools : pools
   const poolAlgorithmGroups = Object.entries(
-    pools.reduce((groups, pool) => {
+    activePoolSource.reduce((groups, pool) => {
       const algorithm = ph.getAlgo(pool)
       groups[algorithm] = (groups[algorithm] || 0) + 1
       return groups
@@ -495,168 +546,200 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
   return (
     <div className="card pools-manager" >
-      <div className="pool-actions" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', minWidth: '400px' }}>
-        <div className="pool-actions">
-          <button className="btn-pro primary" onClick={verify} disabled={loading || detailsLoading || playing || !selected || running}>
-            {loading ? 'Verifying...' : 'Verify Pool'}
-          </button>
+      <div className="pool-actions-container" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '1.5rem' }}>
+        <button className="btn-pro primary" style={{ width: '100%' }} onClick={verify} disabled={loading || detailsLoading || playing || !selected || running}>
+          {loading ? 'Verifying...' : 'Verify Pool'}
+        </button>
 
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <label style={{ fontSize: '10px', fontWeight: 'bold' }}>DELAY (MS)</label>
+            <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>DELAY (MS)</label>
             <input
               type="number"
               className="input-pro"
-              style={{ width: '70px', padding: '4px' }}
+              style={{ width: '100%', padding: '6px' }}
               value={verificationDelay}
               onChange={e => setVerificationDelay(Number(e.target.value))}
             />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <label style={{ fontSize: '10px', fontWeight: 'bold' }}>AUTO DELAY (S)</label>
+            <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>AUTO INTERVAL (S)</label>
             <input
               type="number"
               className="input-pro"
-              style={{ width: '70px', padding: '4px' }}
+              style={{ width: '100%', padding: '6px' }}
               value={automationInterval}
               onChange={e => setAutomationInterval(Number(e.target.value))}
             />
           </div>
+        </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
           <button
             className="btn-pro secondary"
+            style={{ width: '100%' }}
             onClick={handleExportResults}
             disabled={completedResults.length === 0}
-            title="Export completed verification results to XLSX"
           >
             Export Results
           </button>
-
-          <button className="btn-pro" onClick={() => verifyAllOnce()} disabled={playing || running}>
-            {playing ? 'Verifying...' : `Verify All (${verificationDelay}ms)`}
+          <button className="btn-pro" style={{ width: '100%' }} onClick={() => verifyAllOnce()} disabled={playing || running}>
+            Verify All
           </button>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '120px' }}>
-            <button className="btn-pro" onClick={startRun} disabled={playing || running}>
-              {running ? 'Running...' : 'Auto'}
-            </button>
-          </div>
-          {(playing || running) && (
-            <button className="btn-pro" onClick={stopAutomation} style={{ minHeight: '24px', display: 'flex', flexDirection: 'column' }}>Stop</button>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '18px' }}>
-              {running && nextRunCountdown !== null && (
-                <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 'bold' }}>
-                  Next auto-run in: {Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s
-                </div>
-              )}
-              {lastRunTime && (
-                <div style={{ fontSize: '11px', color: '#059669', marginLeft: 'auto' }}>
-                  Last Finished: {lastRunTime}
-                </div>
-              )}
-            </div>
         </div>
-        <div>
-          <div className="pool-main-content" style={{ flex: 1, minWidth: '500px', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {progress.total > 0 && (
-              <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', marginBottom: '12px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <div
-                  className="verify-progress-bar-fill"
-                  style={{
-                    width: `${(progress.current / progress.total) * 100}%`,
-                    height: '100%',
-                    background: '#3b82f6',
-                    transition: 'width 0.3s ease'
-                  }}
-                />
-                <small style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', fontSize: '10px', lineHeight: '18px', fontWeight: 'bold', textShadow: '0 0 3px black' }}>
-                  {Math.round((progress.current / progress.total) * 100)}% ({progress.current}/{progress.total})
-                </small>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input 
+              type="checkbox" 
+              id="verifySourceToggle"
+              checked={verifyFromFile}
+              onChange={(e) => setVerifyFromFile(e.target.checked)}
+              style={{ width: '16px', height: '16px' }}
+            />
+            <label htmlFor="verifySourceToggle" style={{ fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+              VERIFY FROM FILE ({filePools.length})
+            </label>
+          </div>
+          <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: '10px', padding: '4px 12px' }}>
+            Import XLSX
+          </button>
+          <input type="file" ref={fileInputRef} onChange={handleImportXlsx} accept=".xlsx,.xls" style={{ display: 'none' }} />
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="btn-pro" style={{ flex: 2 }} onClick={startRun} disabled={playing || running}>
+            {running ? 'Automation Active' : 'Start Auto Run'}
+          </button>
+          {(playing || running) && (
+            <button className="btn-pro" onClick={stopAutomation} style={{ flex: 1, background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>Stop</button>
+          )}
+        </div>
+
+        {running && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+            <div style={{ color: '#f59e0b', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Cycle Status:</span>
+              <span>Running #{runCount}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
+              <span>Session Duration:</span>
+              <span>{Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s</span>
+            </div>
+            {nextRunCountdown !== null && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#3b82f6' }}>
+                <span>Next run in:</span>
+                <span>{Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s</span>
               </div>
-            )}
-            {verifyResults.length > 0 ? (
-              <div className="results-wrapper">
-                <div className="verify-summary">
-                  <div>
-                    <span>Target pools</span>
-                    <strong>{pools.length}</strong>
-                  </div>
-                  <div>
-                    <span>Verified</span>
-                    <strong>{completedResults.length}</strong>
-                  </div>
-                  <div>
-                    <span>Success</span>
-                    <strong>{successCount}</strong>
-                  </div>
-                  <div>
-                    <span>Fail</span>
-                    <strong>{failCount}</strong>
-                  </div>
-                  <div className="wide">
-                    <span>Algorithm</span>
-                    <strong>{algorithmSummary || 'No completed checks'}</strong>
-                  </div>
-                </div>
-                <div className="verify-list" >
-                  {verifyResults.map(item => {
-                    const pending = item.result?.pending
-                    const success = !pending && ph.isVerifySuccess(item.result)
-                    const logs = ph.getVerifyLogs(item.result)
-                    const algorithm = ph.getVerifyAlgo(item.result)
-                    return (
-                      <details className="verify-item" key={item.key}>
-                        <summary>
-                          <span
-                            className={`verify-status ${pending ? 'pending' : success ? 'success' : 'fail'}`}
-                            onClick={event => {
-                              if (pending) return
-                              event.preventDefault()
-                              event.stopPropagation()
-                              openPoolEditor(item)
-                            }}
-                            style={{ cursor: pending ? 'wait' : 'pointer' }}
-                            title={pending ? "Verifying..." : "Click to open Pool Editor"}
-                          >
-                            {pending ? 'Checking' : success ? 'Success' : 'Fail'}
-                          </span>
-                          <button
-                            type="button"
-                            className="pool-editor-link"
-                            onClick={event => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              openPoolEditor(item)
-                            }}
-                            disabled={pending}
-                          >
-                            {item.label} <span style={{ fontSize: '0.9em', opacity: 0.7 }}>✎</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="text-button"
-                            style={{ fontSize: '10px', marginLeft: 'auto', marginRight: '10px' }}
-                            onClick={event => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              setInspectData(item.result)
-                            }}
-                          >
-                            Inspect
-                          </button>
-                          <span className="verify-algorithm">{algorithm}</span>
-                          <small>{pending ? 'Waiting for response' : ph.getVerifyMessage(item.result)}</small>
-                        </summary>
-                      </details>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : (
-              <pre className="response-body compact">{response ? JSON.stringify(response, null, 2) : 'No response yet'}</pre>
             )}
           </div>
+        )}
+
+        {lastRunTime && !running && !playing && (
+          <div style={{ color: '#059669', fontSize: '11px', textAlign: 'right' }}>
+            Last cycle finished: {lastRunTime}
+          </div>
+        )}
+
+        <div className="pool-main-content" style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {progress.total > 0 && (
+            <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div
+                className="verify-progress-bar-fill"
+                style={{
+                  width: `${(progress.current / progress.total) * 100}%`,
+                  height: '100%',
+                  background: '#3b82f6',
+                  transition: 'width 0.3s ease'
+                }}
+              />
+              <small style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', fontSize: '10px', lineHeight: '18px', fontWeight: 'bold', textShadow: '0 0 3px black' }}>
+                {Math.round((progress.current / progress.total) * 100)}% ({progress.current}/{progress.total})
+              </small>
+            </div>
+          )}
+          {verifyResults.length > 0 ? (
+            <div className="results-wrapper">
+              <div className="verify-summary">
+                <div>
+                  <span>Target pools</span>
+                  <strong>{verifyFromFile ? filePools.length : pools.length}</strong>
+                </div>
+                <div>
+                  <span>Verified</span>
+                  <strong>{completedResults.length}</strong>
+                </div>
+                <div>
+                  <span>Success</span>
+                  <strong>{successCount}</strong>
+                </div>
+                <div>
+                  <span>Fail</span>
+                  <strong>{failCount}</strong>
+                </div>
+                <div className="wide">
+                  <span>Algorithm</span>
+                  <strong>{algorithmSummary || 'No completed checks'}</strong>
+                </div>
+              </div>
+              <div className="verify-list" >
+                {verifyResults.map(item => {
+                  const pending = item.result?.pending
+                  const success = !pending && ph.isVerifySuccess(item.result)
+                  const logs = ph.getVerifyLogs(item.result)
+                  const algorithm = ph.getVerifyAlgo(item.result)
+                  return (
+                    <details className="verify-item" key={item.key}>
+                      <summary>
+                        <span
+                          className={`verify-status ${pending ? 'pending' : success ? 'success' : 'fail'}`}
+                          onClick={event => {
+                            if (pending) return
+                            event.preventDefault()
+                            event.stopPropagation()
+                            openPoolEditor(item)
+                          }}
+                          style={{ cursor: pending ? 'wait' : 'pointer' }}
+                          title={pending ? "Verifying..." : "Click to open Pool Editor"}
+                        >
+                          {pending ? 'Checking' : success ? 'Success' : 'Fail'}
+                        </span>
+                        <button
+                          type="button"
+                          className="pool-editor-link"
+                          onClick={event => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            openPoolEditor(item)
+                          }}
+                          disabled={pending}
+                        >
+                          {item.label} <span style={{ fontSize: '0.9em', opacity: 0.7 }}>✎</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="text-button"
+                          style={{ fontSize: '10px', marginLeft: 'auto', marginRight: '10px' }}
+                          onClick={event => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            setInspectData(item.result)
+                          }}
+                        >
+                          Inspect
+                        </button>
+                        <span className="verify-algorithm">{algorithm}</span>
+                        <small>{pending ? 'Waiting for response' : ph.getVerifyMessage(item.result)}</small>
+                      </summary>
+                    </details>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            <pre className="response-body compact">{response ? JSON.stringify(response, null, 2) : 'No response yet'}</pre>
+          )}
         </div>
       </div>
 
@@ -666,7 +749,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
             <div className="pool-algorithm-summary" style={{ marginTop: 0 }}>
               <div className="response-header compact">
                 <h3>Algorithm Summary</h3>
-                <span>{poolAlgorithmGroups.length} types / {pools.length} pools</span>
+                <span>{poolAlgorithmGroups.length} types / {activePoolSource.length} pools</span>
               </div>
               {poolAlgorithmGroups.length > 0 ? (
                 <div className="algorithm-grid">

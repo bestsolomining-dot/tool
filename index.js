@@ -453,28 +453,6 @@ function sanitizeMrrEndpoint(rawEndpoint) {
   return normalized.replace(/\/+$/, '') || '/';
 }
 
-function extractRigInfo(mrrApiResponseData) {
-  // The mrrApiResponseData is the 'data' field from mrrApiCall, e.g., { success: true, data: ... }
-  // We need to look inside mrrApiResponseData.data
-  const payload = mrrApiResponseData?.data;
-
-  if (!payload) {
-    return { miningAlgorithm: '', stratumHost: '', stratumPort: null, username: '', password: '' };
-  }
-
-  const queue = [payload];
-  while (queue.length) {
-    const node = queue.shift();
-    if (!node || typeof node !== 'object') continue;
-    for (const value of Object.values(node)) {
-      if (Array.isArray(value)) return value;
-      if (value && typeof value === 'object') queue.push(value);
-    }
-  }
-
-  return [];
-}
-
 async function runMrrCallInOrder(clientName, task) {
   const previous = mrrQueueByClient.get(clientName) || Promise.resolve();
   const current = previous

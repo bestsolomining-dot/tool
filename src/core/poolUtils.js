@@ -128,6 +128,25 @@ export const poolHelpers = {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
     XLSX.writeFile(workbook, filename);
   },
+
+  parseXlsx: async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          resolve(jsonData);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  },
 };
 
 /**

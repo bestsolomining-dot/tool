@@ -17,7 +17,6 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
-	
 	"vars": {
 		"NICEHASH_API_KEY": "",
 		"NICEHASH_API_SECRET": "",
@@ -28,5 +27,4 @@
 		"MRR_KEY_RIG_SL": "",
 		"MRR_SECRET_RIG_SL": ""
 	}
-	
 }

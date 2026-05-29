@@ -55,7 +55,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
   const [infoLoadingId, setInfoLoadingId] = useState(null);
 
   // More granular status filtering: 'available', 'rented', or 'all'
-  const [statusFilter, setStatusFilter] = useState(endpoint === '/rig' ? initialStatus : 'all');
+  const [statusFilter, setStatusFilter] = useState(endpoint === '/rig' ? initialStatus : 'rented');
 
   // Debug count to see if items are being filtered out
   const totalFetchedCount = rigs.length;
@@ -222,11 +222,11 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
         
         <div className="rig-grid-container" style={{ 
           minHeight: '800px',
-          maxHeight: '800px',
+          maxHeight: 'auto',
           overflowY: 'auto', 
           paddingRight: '8px',
           scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(255,255,255,0.1) transparent',
+          scrollbarColor: 'rgba(143, 64, 64, 0.59) transparent',
           overscrollBehavior: 'contain'
         }}>
         <div className="rig-grid" style={{ 

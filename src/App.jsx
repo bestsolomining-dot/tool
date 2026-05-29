@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import Pools from './components/Pools';
 import Modal from './components/Modal';
+import HashrateCalculator from './components/HashrateCalculator';
 import HashpowerBot from './components/HashpowerBot';
 import NiceHash from './components/NiceHash';
 import MiningRigRental from './components/MiningRigRental';
@@ -13,6 +14,7 @@ export default function App() {
   const [lastCall, setLastCall] = useState(null);
   const [activeSection, setActiveSection] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
+  const [calculatorModalOpen, setCalculatorModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
   const [algorithm, setAlgorithm] = useState('');
   const [market, setMarket] = useState('');
@@ -173,6 +175,15 @@ export default function App() {
 
       <main className="dashboard">
         <section className="quick-actions">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
+              <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>Open the hashrate calculator in a popup modal.</p>
+            </div>
+            <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
+              Open Calculator
+            </button>
+          </div>
           <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <article className="panel">
               <NiceHash
@@ -215,6 +226,15 @@ export default function App() {
         <pre className="response-body modal" style={{ maxHeight: '60vh', overflow: 'auto' }}>
           {JSON.stringify(modalContent || output, null, 2)}
         </pre>
+      </Modal>
+
+      <Modal
+        isOpen={calculatorModalOpen}
+        onClose={() => setCalculatorModalOpen(false)}
+        title="Hashrate Calculator"
+        maxWidth="700px"
+      >
+        <HashrateCalculator />
       </Modal>
     </div>
   );

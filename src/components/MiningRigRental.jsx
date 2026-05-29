@@ -6,13 +6,21 @@ import Modal from './Modal';
 function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'items', 'data']) {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return [];
+
   for (const key of keys) {
     if (Array.isArray(payload[key])) return payload[key];
   }
-  // If payload.data is an object, recurse once to look for keys inside the envelope
-  if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+
+  // If payload.data contains an array, return it directly
+  if (Array.isArray(payload.data)) {
+    return payload.data;
+  }
+
+  // If payload.data is an object, recurse once to look for array keys inside the envelope
+  if (payload.data && typeof payload.data === 'object') {
     return extractArray(payload.data, keys);
   }
+
   return [];
 }
 

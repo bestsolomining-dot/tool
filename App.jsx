@@ -5,7 +5,6 @@ import HashpowerBot from './src/components/HashpowerBot';
 import NiceHash from './src/components/NiceHash';
 import MiningRigRental from './src/components/MiningRigRental';
 import MiningRigSection from './src/components/MiningRigSection'; // New import
-import HashrateCalculator from './src/components/HashrateCalculator';
 import MrrPoolsManager from './src/components/MrrPoolsManager';
 import './src/App.css';
 
@@ -243,10 +242,6 @@ export default function App() {
                   setNhClient={setNhClient}
                 />
               </div>
-            </article>
-
-            <article className="panel">
-              <HashrateCalculator />
             </article>
           </div>
 

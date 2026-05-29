@@ -14,8 +14,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   const [error, setError] = useState('')
   const [playing, setPlaying] = useState(false)
   const [running, setRunning] = useState(false)
-  const [verificationDelay, setVerificationDelay] = useState(5000) // Delay between individual pool verifications in bulk run
-  const [automationInterval, setAutomationInterval] = useState(300) // 5 minutes in seconds
+  const [verificationDelay, setVerificationDelay] = useState(3000) // Delay between individual pool verifications in bulk run
+  const [automationInterval, setAutomationInterval] = useState(3) // 3 minutes in seconds
   const [lastRunTime, setLastRunTime] = useState(null)
   const [rateLimitStatus, setRateLimitStatus] = useState(null)
   const [nextRunCountdown, setNextRunCountdown] = useState(null)
@@ -650,12 +650,13 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
               <span>Total Time Run:</span>
               <span>{Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s</span>
-              {lastRunTime && !playing && (
-                <div style={{ color: '#059669', fontSize: '11px', textAlign: 'right' }}>
-                  Last cycle finished: {lastRunTime}
-                </div>
-              )}
             </div>
+            {lastRunTime && !playing && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8, color: '#059669' }}>
+                <span>Last Finished:</span>
+                <span>{lastRunTime}</span>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
               <span>Skipped Pools:</span>
               <span>{skippedCount}</span>

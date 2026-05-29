@@ -245,7 +245,13 @@ poolHelpers.normalizeMrrPoolsForExport = (mrrPoolData) => {
  * Shared API Actions
  */
 export const poolApi = {
-  list: (client) => apiFetch(`/api/v2/pools${client ? `?client=${client}` : ''}`),
+  list: (client, params = {}) => {
+    const query = new URLSearchParams({
+      ...(client ? { client } : {}),
+      ...params
+    });
+    return apiFetch(`/api/v2/pools?${query.toString()}`);
+  },
   get: (id, client, signal) => {
     const url = `/api/v2/pool/${encodeURIComponent(id)}${client ? `?client=${client}` : ''}`;
     return apiFetch(url, { signal });

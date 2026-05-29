@@ -43,14 +43,16 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     if (!file) return;
     try {
       const data = await ph.parseXlsx(file);
+      // Helper to strip protocol prefixes like stratum+tcp:// from the hostname
+      const cleanHost = (h) => String(h || '').replace(/^(stratum\+tcp:\/\/|stratum\+ssl:\/\/|stratum:\/\/|tcp:\/\/|ssl:\/\/)/i, '').trim();
       const mapped = data.map(row => ({
-        name: row['Pool Name'] || row.name || 'Imported Pool',
-        miningAlgorithm: row['Algorithm'] || row.algorithm || row.miningAlgorithm || '',
-        stratumHost: row['Stratum Host'] || row.stratumHost || row.stratumHostname || row.host || '',
-        stratumPort: Number(row['Port'] || row.stratumPort || row.port || 0),
-        username: row['Username'] || row.username || '',
-        password: row['Password'] || row.password || 'x',
-        poolVerificationServiceLocation: row['Market'] || row.location || 'ANY'
+        name: String(row['Pool Name'] || row.name || row['Name'] || row['poolName'] || 'Imported Pool').trim(),
+        miningAlgorithm: String(row['Algorithm'] || row.algorithm || row.miningAlgorithm || row['Algo'] || row['algo'] || '').trim(),
+        stratumHost: cleanHost(row['Stratum Host'] || row.stratumHost || row.stratumHostname || row.host || row['Host'] || row['host'] || ''),
+        stratumPort: Number(row['Port'] || row.stratumPort || row.port || row['port'] || 3333), // Ensure port is always a number, default to 3333
+        username: String(row['Username'] || row.username || row['User'] || row['user'] || '').trim(),
+        password: String(row['Password'] || row.password || row['Pass'] || row['pass'] || 'x').trim(),
+        poolVerificationServiceLocation: String(row['Market'] || row.location || row['Location'] || row['market'] || 'ANY').trim()
       }));
       const normalized = ph.normalizeList(mapped);
       setFilePools(normalized);
@@ -85,7 +87,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   async function loadPools() {
     setLoading(true);
     try {
-      const result = await poolApi.list(nhClient); // Pass nhClient to the API call
+      const result = await poolApi.list(nhClient, { size: 1000 }); // Increase size to load more pools
       const normalized = ph.normalizeList(result.data);
       setPools(normalized);
       return normalized;

@@ -221,7 +221,7 @@ const getNiceHashApp = (client) => ({
 
   // --- POOL MANAGEMENT ---
   pools: {
-    getPools: () => client.call({ method: 'GET', path: '/main/api/v2/pools' }),
+    getPools: (query) => client.call({ method: 'GET', path: '/main/api/v2/pools', query }),
     getPoolDetails: (poolId) => client.call({ method: 'GET', path: `/main/api/v2/pool/${poolId}` }),
     createPool: (body) => client.call({ method: 'POST', path: '/main/api/v2/pool', body }),
     deletePool: (poolId) => client.call({ method: 'DELETE', path: `/main/api/v2/pool/${poolId}` }),
@@ -374,7 +374,7 @@ app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res
 app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.updatePriceLimit(req.params.orderId, req.body))));
 
 // Pools
-app.get('/api/v2/pools', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.getPools())));
+app.get('/api/v2/pools', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.getPools(req.query))));
 app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.getPoolDetails(req.params.poolId))));
 app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.createPool(req.body))));
 app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.verifyPool(req.body))));

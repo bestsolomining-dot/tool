@@ -98,7 +98,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
   }, [nhClient]); // No need to add fetchOrders here as it's not wrapped in useCallback, but it's safe.
 
   return (
-    <div className="rig-section nh-theme" style={{ marginTop: '5px', paddingTop: '5px', paddingBottom: '5px' }}>
+    <div className="rig-section nh-theme" style={{ marginLeft: '5px', marginRight: '5px', marginTop: '5px', paddingTop: '5px', paddingBottom: '5px' }}>
       <h2 className="section-title" style={{paddingBottom: '10px' }}>NiceHash</h2>
 
       <div className="market-inputs" style={{ marginBottom: '15px' }}>

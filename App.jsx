@@ -245,9 +245,7 @@ export default function App() {
               </div>
             </article>
 
-            <article className="panel">
-              <HashrateCalculator />
-            </article>
+            
           </div>
 
           <article className="panel">
@@ -267,7 +265,11 @@ export default function App() {
               externalRigId={mrrPoolRigId}
               externalRentalId={mrrPoolRentalId}
             />
+            <article className="panel">
+              <HashrateCalculator />
+            </article>
           </article>
+          
         </section>
 
         <section className="pools-section">

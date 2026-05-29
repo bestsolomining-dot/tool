@@ -262,7 +262,7 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
             </div>
 
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '6px', fontSize: '11px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ marginBottom: '8px' }}><span style={{ opacity: 0.8 }}>Rental ID:</span> {rentalInfo.id || rentalInfo.rental_id}</div>
+              <div style={{ marginBottom: '8px' }}><span style={{ opacity: 0.8 }}>Rental</span> {rentalInfo.id || rentalInfo.rental_id}</div>
               <div style={{ marginBottom: '14px' }}><span style={{ opacity: 0.8 }}>Rig ID:</span> {rentalInfo.normalized?.rigId || rentalInfo.rig?.id || rentalInfo.rigid || 'N/A'}</div>
               <div>
                 <span style={{ opacity: 0.6 }}>Duration:</span> {rentalInfo.normalized?.duration || rentalInfo.length || rentalInfo.hours || '0'} Hours
@@ -270,7 +270,7 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
             </div>
 
             {rentalInfo.pools && rentalInfo.pools.length > 0 && (
-              <div style={{ marginTop: '20px', maxHeight: '200px', overflowY: 'auto', paddingRight: '5px' }}>
+              <div style={{ frontSize: '8px', marginTop: '20px', maxHeight: '100px', overflowY: 'auto', paddingRight: '1px' }}>
                 <MrrPoolsTable data={{ pools: rentalInfo.pools }} />
               </div>
             )}

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Pools from './src/components/Pools';
 import Modal from './src/components/Modal';
 import HashpowerBot from './src/components/HashpowerBot';
@@ -19,6 +19,7 @@ export default function App() {
   const [modalContent, setModalContent] = useState(null);
   const [algorithm, setAlgorithm] = useState(''); // Initialize with empty string
   const [market, setMarket] = useState(''); // Initialize with empty string
+  const [nhClient, setNhClient] = useState('BT');
   const [mrrClient, setMrrClient] = useState('BT'); // Default to BT to prevent initial errors
   const [mrrPoolData, setMrrPoolData] = useState(null);
   const [mrrPoolRigId, setMrrPoolRigId] = useState('');
@@ -38,8 +39,11 @@ export default function App() {
 
     const enrichedQuery = { ...query };
     // NiceHash API v2 requires a 'ts' parameter. MRR does not.
-    if (path.startsWith('/api/v2/') && !path.startsWith('/api/v2/mrr/') && !enrichedQuery.ts) {
-      enrichedQuery.ts = Date.now();
+    if (path.startsWith('/api/v2/') && !path.startsWith('/api/v2/mrr/')) {
+      if (!enrichedQuery.ts) enrichedQuery.ts = Date.now();
+      if (!enrichedQuery.client) {
+        enrichedQuery.client = nhClient;
+      }
     }
 
     if (Object.keys(enrichedQuery).length > 0) {
@@ -147,7 +151,13 @@ export default function App() {
       if (!options.silent) setLoading(false);
     }
 
-  }, []);
+  }, [nhClient]);
+
+  // Clear output when switching accounts to prevent showing stale data
+  useEffect(() => {
+    setOutput(null);
+    setError('');
+  }, [nhClient, mrrClient]);
 
   const handleMiningCall = useCallback((path, opts = {}) => {
     return callApi(path, { ...opts, section: 'mining' });
@@ -212,20 +222,26 @@ export default function App() {
           <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <article className="panel">
               <NiceHash
+                key={nhClient}
                 output={output}
                 onCall={handleMiningCall}
                 algorithm={algorithm}
                 market={market}
+                nhClient={nhClient}
+                setNhClient={setNhClient}
               />
-              {/* <div style={{ marginTop: '10px' }}>
-                <button className="btn-pro secondary" onClick={scrollToPools}>Manage Pools</button>
-              </div> */}
             </article>
 
             <article className="panel">
               
               <div style={{ marginTop: '5px' }}>
-                <HashpowerBot algorithm={algorithm} market={market} onCall={handleHashpowerCall} />
+                <HashpowerBot 
+                  algorithm={algorithm} 
+                  market={market} 
+                  onCall={handleHashpowerCall} 
+                  nhClient={nhClient}
+                  setNhClient={setNhClient}
+                />
               </div>
             </article>
 

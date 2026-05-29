@@ -57,11 +57,19 @@ app.use((req, res, next) => {
 /**
  * NiceHashApp organizes API calls into logical domains.
  */
-const config = {
-  apiKey: process.env.NICEHASH_API_KEY,
-  apiSecret: process.env.NICEHASH_API_SECRET,
-  orgId: process.env.NICEHASH_ORG_ID,
-  environment: process.env.NICEHASH_ENVIRONMENT || 'production'
+const nhConfigs = {
+  BT: {
+    apiKey: normalizeCredential(process.env.NICEHASH_API_KEY),
+    apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET),
+    orgId: normalizeCredential(process.env.NICEHASH_ORG_ID),
+    environment: normalizeCredential(process.env.NICEHASH_ENVIRONMENT || 'production')
+  },
+  PH: {
+    apiKey: normalizeCredential(process.env.NICEHASH_API_KEY_PH),
+    apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET_PH),
+    orgId: normalizeCredential(process.env.NICEHASH_ORG_ID_PH),
+    environment: normalizeCredential(process.env.NICEHASH_ENVIRONMENT_PH || process.env.NICEHASH_ENVIRONMENT || 'production')
+  }
 };
 
 const mrrConfigs = {
@@ -73,7 +81,7 @@ const mrrConfigs = {
     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_SL),
     apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_SL),
   },
-  VN: {
+  ALL: {
     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_VN),
     apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_VN),
   },
@@ -87,13 +95,29 @@ const defaultMrrClient = (function () {
   return 'BT';
 })();
 
-if (!config.apiKey || !config.apiSecret || !config.orgId) {
-  console.warn('NICEHASH_API_KEY, NICEHASH_API_SECRET, and NICEHASH_ORG_ID are required for NiceHash v2 requests.');
+const nhInstances = new Map();
+
+function resolveNhClient(clientNameRaw) {
+  const clientName = String(clientNameRaw || 'BT').trim().toUpperCase();
+  const targetName = nhConfigs[clientName] ? clientName : 'BT';
+
+  if (!nhInstances.has(targetName)) {
+    const cfg = nhConfigs[targetName];
+    if (cfg.apiKey && cfg.apiSecret && cfg.orgId) {
+      const newClient = new NiceHashClient({ ...cfg, name: targetName });
+      nhInstances.set(targetName, newClient);
+      return { client: newClient, clientName: targetName };
+    }
+    
+    // If target (like PH) isn't configured, fallback to BT but warn the dev
+    const btClient = nhInstances.get('BT');
+    if (targetName !== 'BT') console.warn(`[api:warn] Client "${targetName}" is not fully configured in .env. Falling back to BT.`);
+    return { client: btClient, clientName: 'BT' };
+  }
+  return { client: nhInstances.get(targetName) || nhInstances.get('BT'), clientName: targetName };
 }
 
-const client = new NiceHashClient(config);
-
-const NiceHashApp = {
+const getNiceHashApp = (client) => ({
   // --- PUBLIC DATA ---
   public: {
     getTime: () => client.getServerTime(),
@@ -167,7 +191,7 @@ const NiceHashApp = {
   hashpower: {
     getBusinessBuyerStats: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/business/buyer/stats' }),
     getBusinessBuyerInfo: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/business/buyers/info' }),
-    getMyOrders: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/myOrders', query: { orgId: config.orgId, ...query } }),
+    getMyOrders: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/myOrders', query: { orgId: client.orgId, ...query } }),
     createOrder: (orderData) => client.call({ method: 'POST', path: '/main/api/v2/hashpower/order', body: orderData }),
     getOrderDetail: (orderId) => client.call({ method: 'GET', path: `/main/api/v2/hashpower/order/${orderId}`, query: { ts: Date.now().toString() } }),
     cancelOrder: (orderId) => client.call({ method: 'DELETE', path: `/main/api/v2/hashpower/order/${orderId}` }),
@@ -198,7 +222,7 @@ const NiceHashApp = {
     deletePool: (poolId) => client.call({ method: 'DELETE', path: `/main/api/v2/pool/${poolId}` }),
     verifyPool: (body) => client.call({ method: 'POST', path: '/main/api/v2/pools/verify', body }),
   }
-};
+});
 
 /**
  * Express API Endpoints
@@ -218,14 +242,31 @@ const asyncHandler = fn => (req, res, next) => {
   });
 };
 
+// MRR Middleware to resolve client and attach app helper
+app.use('/api/v2', (req, res, next) => {
+  if (req.path.startsWith('/mrr/') || req.path === '/algos/mapping') return next();
+  
+  try {
+    const { client, clientName } = resolveNhClient(req.query.client);
+    if (client) {
+      req.nhApp = getNiceHashApp(client);
+      res.set('X-NH-Client', clientName);
+    }
+    next();
+  } catch (err) {
+    next();
+  }
+});
+
 // Public
-app.get('/api/v2/time', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getTime())));
-app.get('/api/v2/algorithms', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getAlgorithms())));
-app.get('/api/v2/public/currency-algos', asyncHandler(async (req, res) => res.json(await NiceHashApp.easyMining.getCurrencyAlgos())));
-app.get('/api/v2/mining/markets', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getMarkets())));
-app.get('/api/v2/public/stats/24h', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getGlobalStats24h())));
+app.get('/api/v2/time', asyncHandler(async (req, res) => res.json(await req.nhApp.public.getTime())));
+app.get('/api/v2/algorithms', asyncHandler(async (req, res) => res.json(await req.nhApp.public.getAlgorithms())));
+app.get('/api/v2/public/currency-algos', asyncHandler(async (req, res) => res.json(await req.nhApp.easyMining.getCurrencyAlgos())));
+app.get('/api/v2/mining/markets', asyncHandler(async (req, res) => res.json(await req.nhApp.public.getMarkets())));
+app.get('/api/v2/public/stats/24h', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getGlobalStats24h())));
 app.get('/api/v2/algos/mapping', asyncHandler(async (req, res) => {
-  const nhResponse = await NiceHashApp.public.getAlgorithms();
+  const { client: nhClient, clientName: nhClientName } = resolveNhClient(req.query.client);
+  const nhResponse = await getNiceHashApp(nhClient).public.getAlgorithms();
   const { data: mrrResponse, clientName } = await mrrApiCall({
     endpoint: '/info/algos',
     method: 'GET',
@@ -252,6 +293,7 @@ app.get('/api/v2/algos/mapping', asyncHandler(async (req, res) => {
   }).filter((item) => item.nicehash);
 
   res.set('X-MRR-Client', clientName);
+  res.set('X-NH-Client', nhClientName);
   res.json({
     success: true,
     data: {
@@ -266,25 +308,25 @@ app.get('/api/v2/algos/mapping', asyncHandler(async (req, res) => {
 }));
 
 // Accounting
-app.get('/api/v2/accounting/balances', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.getBalances())));
-app.get('/api/v2/accounting/balance/:currency', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.getBalance(req.params.currency))));
-app.post('/api/v2/accounting/withdrawal', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.createWithdrawal(req.body))));
-app.get('/api/v2/mining/address', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getMiningAddress())));
+app.get('/api/v2/accounting/balances', asyncHandler(async (req, res) => res.json(await req.nhApp.accounting.getBalances())));
+app.get('/api/v2/accounting/balance/:currency', asyncHandler(async (req, res) => res.json(await req.nhApp.accounting.getBalance(req.params.currency))));
+app.post('/api/v2/accounting/withdrawal', asyncHandler(async (req, res) => res.json(await req.nhApp.accounting.createWithdrawal(req.body))));
+app.get('/api/v2/mining/address', asyncHandler(async (req, res) => res.json(await req.nhApp.mining.getMiningAddress())));
 
 // Mining
-app.get('/api/v2/mining/rigs2', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigs())));
-app.get('/api/v2/mining/rig/:rigId', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigDetails(req.params.rigId))));
-app.post('/api/v2/mining/rigs/status', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.setRigStatus(req.body))));
-app.get('/api/v2/mining/payouts', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getPayouts())));
-app.get('/api/v2/mining/history', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigsStatsHistory(req.query))));
-app.get('/api/v2/mining/algo-stats', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getAlgoStats())));
+app.get('/api/v2/mining/rigs2', asyncHandler(async (req, res) => res.json(await req.nhApp.mining.getRigs())));
+app.get('/api/v2/mining/rig/:rigId', asyncHandler(async (req, res) => res.json(await req.nhApp.mining.getRigDetails(req.params.rigId))));
+app.post('/api/v2/mining/rigs/status', asyncHandler(async (req, res) => res.json(await req.nhApp.mining.setRigStatus(req.body))));
+app.get('/api/v2/mining/payouts', asyncHandler(async (req, res) => res.json(await req.nhApp.mining.getPayouts())));
+app.get('/api/v2/mining/history', asyncHandler(async (req, res) => res.json(await req.nhApp.mining.getRigsStatsHistory(req.query))));
+app.get('/api/v2/mining/algo-stats', asyncHandler(async (req, res) => res.json(await req.nhApp.mining.getAlgoStats())));
 
 // Hashpower
 app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
   const query = { ...req.query };
   if (!query.ts) query.ts = Date.now().toString();
   console.log('Backend received /api/v2/hashpower/myOrders with query:', query);
-  const data = await NiceHashApp.hashpower.getMyOrders(query);
+  const data = await req.nhApp.hashpower.getMyOrders(query);
 
   // Save to CSV on the server side (current path)
   const list = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
@@ -319,18 +361,18 @@ app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
   }
   res.json(data);
 }));
-app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getOrderDetail(req.params.orderId))));
-app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.createOrder(req.body))));
-app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getOrderBook(req.query))));
-app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.cancelOrder(req.params.orderId))));
-app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.refillOrder(req.params.orderId, req.body))));
-app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.updatePriceLimit(req.params.orderId, req.body))));
+app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderDetail(req.params.orderId))));
+app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.createOrder(req.body))));
+app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderBook(req.query))));
+app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.cancelOrder(req.params.orderId))));
+app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.refillOrder(req.params.orderId, req.body))));
+app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.updatePriceLimit(req.params.orderId, req.body))));
 
 // Pools
-app.get('/api/v2/pools', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.getPools())));
-app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.getPoolDetails(req.params.poolId))));
-app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.createPool(req.body))));
-app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.verifyPool(req.body))));
+app.get('/api/v2/pools', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.getPools())));
+app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.getPoolDetails(req.params.poolId))));
+app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.createPool(req.body))));
+app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.verifyPool(req.body))));
 
 // --- MINING RIG RENTALS V2 ---
 function nextMrrNonce(clientName) {
@@ -949,7 +991,10 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 if (process.env.RUN_MAIN === 'true') {
   try {
     // Connectivity check on startup
-    NiceHashApp.public.getTime().then(t => console.log('✅ Connection verified. Server Time:', new Date(t).toLocaleString()));
+    const { client } = resolveNhClient('BT');
+    if (client) {
+      getNiceHashApp(client).public.getTime().then(t => console.log('✅ Connection verified. Server Time:', new Date(t).toLocaleString()));
+    }
   } catch (error) {
     console.error('❌ Connectivity Error:', error.message);
   }

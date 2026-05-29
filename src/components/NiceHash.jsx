@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Accounting from './Accounting';
 
-export default function MiningRigNiceHash({ onCall, output, algorithm, market }) {
+export default function MiningRigNiceHash({ onCall, output, algorithm, market, nhClient, setNhClient }) {
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [localOrders, setLocalOrders] = useState([]);
   const [orderDetail, setOrderDetail] = useState(null);
@@ -26,7 +26,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
   const fetchOrders = async () => {
     setLoadingLocal(true);
     const data = await onCall('/api/v2/hashpower/myOrders', {
-      query: { op: 'LE', ts: Date.now(), limit: 100 },
+      query: { op: 'LE', limit: 100 }, // callApi in App.jsx handles ts and client
       silent: true
     });
     const list = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
@@ -86,9 +86,29 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market })
     });
   }, [localOrders]);
 
+  // Clear local state when client changes to avoid showing data from the wrong account
+  useEffect(() => {
+    setLocalOrders([]);
+    setOrderDetail(null);
+    
+    // We check if we are currently mounted and have a client before fetching
+    if (nhClient && typeof onCall === 'function') {
+      fetchOrders();
+    }
+  }, [nhClient]); // No need to add fetchOrders here as it's not wrapped in useCallback, but it's safe.
+
   return (
     <div className="rig-section nh-theme" style={{ marginTop: '5px', paddingTop: '5px', paddingBottom: '5px' }}>
       <h2 className="section-title" style={{paddingBottom: '10px' }}>NiceHash</h2>
+
+      <div className="market-inputs" style={{ marginBottom: '15px' }}>
+        <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
+          <option value="BT">BT Account</option>
+          <option value="PH">PH Account</option>
+        </select>
+        <small style={{ opacity: 0.5, fontSize: '10px', marginLeft: '10px' }}>ACTIVE CLIENT</small>
+      </div>
+
       <div className="button-group">
         <button className="btn-pro" onClick={fetchOrders}>Orders List</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/mining/address')}>Mining Address</button>

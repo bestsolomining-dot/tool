@@ -7,7 +7,7 @@ import { apiFetch } from '../core/poolUtils';
  * Automates interactions with the NiceHash Hashpower Market.
  * Monitors market prices and provides a foundation for automated ordering.
  */
-export default function HashpowerBot({ algorithm, market, onCall }) {
+export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT', setNhClient }) {
   const [isRunning, setIsRunning] = useState(false);
   const [logs, setLogs] = useState([]);
   const [marketData, setMarketData] = useState(null);
@@ -34,8 +34,9 @@ export default function HashpowerBot({ algorithm, market, onCall }) {
         query: { 
           op: 'LE', 
           ts: Date.now(), 
-          active: true, 
-          limit: 1000 
+          active: true,
+          limit: 1000,
+          client: nhClient
         },
         silent: true
       });
@@ -63,7 +64,7 @@ export default function HashpowerBot({ algorithm, market, onCall }) {
 
       // 2. Get order book for the specific algorithm and market
       const bookData = await onCall('/api/v2/hashpower/order-book', {
-        query: { algorithm, market },
+        query: { algorithm, market, client: nhClient },
         silent: true
       });
 
@@ -116,6 +117,7 @@ export default function HashpowerBot({ algorithm, market, onCall }) {
       if (priceChanged || limitChanged) {
         await onCall(`/api/v2/hashpower/order/${myOrder.id}/update`, {
           method: 'POST',
+          query: { client: nhClient },
           body: { price: nextPrice.toFixed(8), limit: targetLimit },
           silent: true
         });
@@ -142,12 +144,20 @@ export default function HashpowerBot({ algorithm, market, onCall }) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRunning, algorithm, market, config.checkInterval, onCall]);
+  }, [isRunning, algorithm, market, config.checkInterval, onCall, nhClient]);
 
   return (
     <div className="bot-panel" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
       <div className="panel-header" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>Hashpower Automator</h3>
+        {setNhClient && (
+          <div className="market-inputs" style={{ marginBottom: 0 }}>
+            <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)} disabled={isRunning}>
+              <option value="BT">BT Account</option>
+              <option value="PH">PH Account</option>
+            </select>
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className={`status-dot ${isRunning ? 'active' : ''}`} style={{ width: '8px', height: '8px', borderRadius: '50%', background: isRunning ? '#10b981' : '#64748b' }} />
           <small style={{ fontWeight: 'bold', opacity: 0.8 }}>{isRunning ? 'RUNNING' : 'IDLE'}</small>

@@ -69,6 +69,10 @@ export class NiceHashClient {
         ? Object.fromEntries(new URLSearchParams(query).entries())
         : query,
     );
+    
+    // Remove 'client' from query before sending to NiceHash upstream, 
+    // as it is only intended for our backend's internal routing.
+    queryParams.delete('client');
 
     // For Hashpower Private API, ts and nonce MUST be in the query string
     if (path.includes('/hashpower/')) {

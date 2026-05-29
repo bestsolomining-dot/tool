@@ -1,0 +1,231 @@
+{
+    "success": true,
+    "data": [
+        {
+            "id": "3635",
+            "name": "Mega-sha256 Marian-- 12.5--TH--very stable",
+            "owner": "marian-sha256",
+            "type": "sha256",
+            "status": {
+                "status": "disabled",
+                "hours": 0,
+                "rented": false,
+                "online": true
+            },
+            "online": true,
+            "xnonce": "no",
+            "poolstatus": "online",
+            "region": "eu",
+            "rpi": "84.94",
+            "suggested_diff": "",
+            "optimal_diff": {
+                "min": "4850.638",
+                "max": "29103.830"
+            },
+            "ndevices": "6",
+            "extensions": true,
+            "price": {
+                "type": "th",
+                "BTC": {
+                    "currency": "BTC",
+                    "price": "0.00006900",
+                    "hour": "0.00003594",
+                    "minhrs": "0.00010781",
+                    "maxhrs": "0.00086250",
+                    "enabled": true
+                },
+                "LTC": {
+                    "currency": "",
+                    "price": 0,
+                    "hour": 0,
+                    "minhrs": 0,
+                    "maxhrs": 0,
+                    "enabled": false
+                },
+                "DOGE": {
+                    "currency": "",
+                    "price": 0,
+                    "hour": 0,
+                    "minhrs": 0,
+                    "maxhrs": 0,
+                    "enabled": false
+                },
+                "ETH": {
+                    "currency": "",
+                    "price": 0,
+                    "hour": 0,
+                    "minhrs": 0,
+                    "maxhrs": 0,
+                    "enabled": false
+                }
+            },
+            "minhours": "3",
+            "maxhours": "24",
+            "hashrate": {
+                "advertised": {
+                    "hash": 12.5,
+                    "type": "th",
+                    "nice": "12.50T"
+                },
+                "last_5min": {
+                    "hash": "7.058",
+                    "type": "th",
+                    "nice": "7.06T"
+                },
+                "last_15min": {
+                    "hash": "7.135",
+                    "type": "th",
+                    "nice": "7.13T"
+                },
+                "last_30min": {
+                    "hash": "7.214",
+                    "type": "th",
+                    "nice": "7.21T"
+                }
+            },
+            "description": null,
+            "shorturl": "http:\/\/rig.rent\/rigs\/3635"
+        },
+        {
+            "id": "15084",
+            "name": "AntMiner S3 #3",
+            "owner": "mps148",
+            "type": "sha256",
+            "status": {
+                "status": "rented",
+                "hours": "104.9797",
+                "rented": true,
+                "online": true
+            },
+            "online": true,
+            "xnonce": "no",
+            "poolstatus": "online",
+            "region": "eu",
+            "rpi": "100.00",
+            "suggested_diff": "",
+            "optimal_diff": {
+                "min": "153.668",
+                "max": "922.009"
+            },
+            "ndevices": "1",
+            "extensions": true,
+            "price": {
+                "type": "th",
+                "BTC": {
+                    "currency": "BTC",
+                    "price": "0.00009000",
+                    "hour": "0.00000025",
+                    "minhrs": "0.00000594",
+                    "maxhrs": "0.00004158",
+                    "enabled": true
+                },
+                "LTC": {
+                    "currency": "LTC",
+                    "price": "0.01093560",
+                    "hour": "0.00003007",
+                    "minhrs": "0.00072175",
+                    "maxhrs": "0.00505225",
+                    "enabled": true
+                },
+                "DOGE": {
+                    "currency": "",
+                    "price": 0,
+                    "hour": 0,
+                    "minhrs": 0,
+                    "maxhrs": 0,
+                    "enabled": false
+                },
+                "ETH": {
+                    "currency": "ETH",
+                    "price": "0.00248963",
+                    "hour": "0.00000685",
+                    "minhrs": "0.00016432",
+                    "maxhrs": "0.00115021",
+                    "enabled": true
+                }
+            },
+            "minhours": "24",
+            "maxhours": "168",
+            "hashrate": {
+                "advertised": {
+                    "hash": 0.066,
+                    "type": "th",
+                    "nice": "66.00G"
+                },
+                "last_5min": {
+                    "hash": "0.111",
+                    "type": "th",
+                    "nice": "111.05G"
+                },
+                "last_15min": {
+                    "hash": "0.107",
+                    "type": "th",
+                    "nice": "107.35G"
+                },
+                "last_30min": {
+                    "hash": "0.088",
+                    "type": "th",
+                    "nice": "88.22G"
+                }
+            },
+            "description": null,
+            "shorturl": "http:\/\/rig.rent\/rigs\/15084"
+        }
+    ]
+}
+
+## GET /rental/[ID1];[ID2];.../pool
+## Example:
+## $mrr->get("/rental/17/pool");
+## $mrr->get("/rental/26996;27004/pool");
+{
+    "success": true,
+    "data": {
+        "rigid": "17",
+        "pools": [
+            {
+                "priority": "0",
+                "type": "scrypt",
+                "host": "pool.ipominer.com",
+                "port": "3333",
+                "user": "merc.1",
+                "pass": "x",
+                "status": ""
+            }
+        ]
+    }
+}
+
+{
+    "success": true,
+    "data": [
+        {
+            "rigid": "26996",
+            "pools": [
+                {
+                    "priority": "0",
+                    "type": "scrypt",
+                    "host": "pool.ipominer.com",
+                    "port": "3333",
+                    "user": "merc.1",
+                    "pass": "x",
+                    "status": ""
+                }
+            ]
+        },
+        {
+            "rigid": "27004",
+            "pools": [
+                {
+                    "priority": "0",
+                    "type": "scrypt",
+                    "host": "pool.ipominer.com",
+                    "port": "3333",
+                    "user": "merc.1",
+                    "pass": "x",
+                    "status": ""
+                }
+            ]
+        }
+    ]
+}

@@ -585,110 +585,96 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
           <button className="btn-pro primary" style={{ width: '100%' }} onClick={verify} disabled={loading || detailsLoading || playing || !selected || running}>
             {loading ? 'Verifying...' : 'Verify Pool'}
           </button>
-          <div className="pool-controls-layout">
-            {/* Batch Configuration Group */}
-            <div className="pool-control-card">
-              <div className="control-header">
-                <span className="icon">⚙</span>
-                <h4>Batch Configuration</h4>
-              </div>
-              <div className="control-inputs">
-                <div className="input-field">
-                  <label>DELAY (ms)</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>DELAY (ms)</label>
                   <input
                     type="number"
                     className="input-pro"
+                    style={{ width: '100%', padding: '6px' }}
                     value={verificationDelay}
                     onChange={e => setVerificationDelay(Number(e.target.value))}
                   />
                 </div>
-                <div className="input-field">
-                  <label>AUTO INTERVAL (s)</label>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>AUTO INTERVAL (s)</label>
                   <input
                     type="number"
                     className="input-pro"
+                    style={{ width: '100%', padding: '6px' }}
                     value={automationInterval}
                     onChange={e => setAutomationInterval(Number(e.target.value))}
                   />
                 </div>
               </div>
-              <div className="control-buttons">
-                <button className="btn-pro" onClick={() => verifyAllOnce()} disabled={playing || running}>
-                  Verify All
-                </button>
-                <button
-                  className="btn-pro secondary"
-                  onClick={handleExportResults}
-                  disabled={completedResults.length === 0}
-                >
-                  Export Results ({completedResults.length})
-                </button>
-              </div>
+
+              <button className="btn-pro" style={{ width: '100%' }} onClick={() => verifyAllOnce()} disabled={playing || running}>
+                Verify All
+              </button>
+              <button
+                className="btn-pro secondary"
+                style={{ width: '100%' }}
+                onClick={handleExportResults}
+                disabled={completedResults.length === 0}
+              >
+                Export (verified: {completedResults.length})
+              </button>
             </div>
-
-            {/* Automation & Source Group */}
-            <div className={`pool-control-card automation-panel ${running ? 'active' : ''}`}>
-              <div className="control-header">
-                <span className="icon">🤖</span>
-                <h4>Automation & Source</h4>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: '10px', padding: '4px 12px' }}>
+                Import XLSX
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  id="verifySourceToggle"
+                  checked={verifyFromFile}
+                  onChange={(e) => setVerifyFromFile(e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                <label htmlFor="verifySourceToggle" style={{ fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  VERIFY FROM FILE ({filePools.length})
+                </label>
               </div>
 
-              <div className="source-selector">
-                <button className="btn-pro secondary sm" onClick={() => fileInputRef.current?.click()}>
-                  Import XLSX
-                </button>
-                <div className="checkbox-wrapper">
-                  <input
-                    type="checkbox"
-                    id="verifySourceToggle"
-                    checked={verifyFromFile}
-                    onChange={(e) => setVerifyFromFile(e.target.checked)}
-                  />
-                  <label htmlFor="verifySourceToggle">
-                    Verify from File ({filePools.length})
-                  </label>
-                </div>
-                <input type="file" ref={fileInputRef} onChange={handleImportXlsx} accept=".xlsx,.xls" style={{ display: 'none' }} />
-              </div>
-
-              <div className="automation-actions">
-                <button 
-                  className={`btn-pro ${running ? 'secondary' : 'primary'}`} 
-                  style={{ flex: 2 }} 
-                  onClick={startRun} 
-                  disabled={playing || (running && !stopRef.current)}
-                >
+              <input type="file" ref={fileInputRef} onChange={handleImportXlsx} accept=".xlsx,.xls" style={{ display: 'none' }} />
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className="btn-pro" style={{ flex: 2 }} onClick={startRun} disabled={playing || running}>
                   {running ? 'Automation Active' : 'Start Auto Run'}
                 </button>
                 {(playing || running) && (
-                  <button className="btn-pro stop-btn" onClick={stopAutomation} style={{ flex: 1 }}>Stop</button>
+                  <button className="btn-pro" onClick={stopAutomation} style={{ flex: 1, background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>Stop</button>
                 )}
               </div>
-
               {running && (
-                <div className="automation-status-bar">
-                  <div className="status-item">
-                    <span className="label">Cycle</span>
-                    <span className="value">#{runCount}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                  <div style={{ color: '#f59e0b', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Cycle Status:</span>
+                    <span>Running #{runCount}</span>
                   </div>
-                  <div className="status-item">
-                    <span className="label">Runtime</span>
-                    <span className="value">{Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
+                    <span>Total Time Run:</span>
+                    <span>{Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s</span>
+                    {lastRunTime && !playing && (
+                      <div style={{ color: '#059669', fontSize: '11px', textAlign: 'right' }}>
+                        Last cycle finished: {lastRunTime}
+                      </div>
+                    )}
                   </div>
-                  <div className="status-item">
-                    <span className="label">Skipped</span>
-                    <span className="value">{skippedCount}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
+                    <span>Skipped Pools:</span>
+                    <span>{skippedCount}</span>
                   </div>
                   {nextRunCountdown !== null && (
-                    <div className="status-item countdown">
-                      <span className="label">Next In</span>
-                      <span className="value">{Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#3b82f6' }}>
+                      <span>Next run in:</span>
+                      <span>{Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s</span>
                     </div>
                   )}
                 </div>
-              )}
-              {lastRunTime && !playing && running && (
-                <div className="last-run-note">Last cycle finished: {lastRunTime}</div>
               )}
             </div>
           </div>

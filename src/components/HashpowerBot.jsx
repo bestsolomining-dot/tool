@@ -32,7 +32,7 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
       // 1. Get my active orders to find the one we are managing
       const ordersData = await onCall('/api/v2/hashpower/myOrders', {
         query: { 
-          op: 'LE', 
+          op: 'PH', 
           ts: Date.now(), 
           active: true,
           limit: 1000,

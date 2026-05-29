@@ -99,6 +99,7 @@
   background: var(--panel-bg);
   padding: 5px;
   max-width: "600px";
+  max-height: "800px";
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   border: 1px solid var(--border-color);

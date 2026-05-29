@@ -1,6 +1,25 @@
 import * as XLSX from 'xlsx';
 
 const DEFAULT_VERIFICATION_LOCATION = 'ANY'
+
+/** Safely extracts an array from various MRR API response shapes */
+export function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'items', 'data']) {
+  if (!payload || typeof payload !== 'object') return [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.rigs)) return payload.rigs;
+  if (Array.isArray(payload.data)) return payload.data;
+  
+  for (const key of keys) {
+    if (Array.isArray(payload[key])) return payload[key];
+  }
+
+  // If payload.data contains an array, recurse once to look for array keys inside the envelope
+  if (payload.data && typeof payload.data === 'object') {
+    return extractArray(payload.data, keys);
+  }
+
+  return [];
+}
 const LOCATION_MAP = { // NiceHash API v2 pool verification service locations
   'EU': 'EUROPE',
   'EUROPE': 'EUROPE',
@@ -184,22 +203,76 @@ export const poolHelpers = {
   },
 };
 
+poolHelpers.normalizeMrrPoolsForExport = (mrrPoolData) => {
+  if (!mrrPoolData || mrrPoolData.success === false) return [];
+
+  let results = [];
+  // This logic is similar to MrrPoolsTable's data normalization
+  if (mrrPoolData?.data && typeof mrrPoolData.data === 'object' && !Array.isArray(mrrPoolData.data) && (mrrPoolData.data.pools || mrrPoolData.data.result)) {
+    results = [mrrPoolData.data];
+  } else {
+    const rawData = mrrPoolData.data || mrrPoolData;
+    const extracted = extractArray(rawData, ['pools', 'data', 'result']);
+    if (extracted.length > 0 && !extracted[0].pools && (extracted[0].user || extracted[0].host || extracted[0].stratumHost)) {
+      // It's a flat list of pools, not grouped by rig/rental
+      results = [{ id: 'UnknownRigOrRental', pools: extracted }];
+    } else {
+      results = extracted;
+    }
+  }
+
+  const exportableData = [];
+  results.forEach(item => {
+    const rigId = item.rigId || item.rigid || item.id || 'N/A';
+    const pools = Array.isArray(item.pools) ? item.pools : [];
+    pools.forEach(pool => {
+      exportableData.push({
+        'Rig/Rental ID': rigId,
+        'Priority': pool.priority,
+        'Host': pool.host || pool.stratumHost,
+        'Port': pool.port || pool.stratumPort,
+        'Username': pool.user || pool.username,
+        'Password': pool.pass || pool.password, // Include password for completeness, but be mindful of security
+        'Algorithm': pool.algo || pool.algorithm || pool.type,
+        'Status': pool.status,
+      });
+    });
+  });
+  return exportableData;
+};
+
 /**
  * Shared API Actions
  */
 export const poolApi = {
-  list: () => apiFetch('/api/v2/pools'),
-  get: (id) => apiFetch(`/api/v2/pool/${encodeURIComponent(id)}`),
-  verify: (body, signal) => apiFetch('/api/v2/pools/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal
-  }),
-  save: (body) => apiFetch('/api/v2/pool', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  }),
-  mrrRigs: (client) => apiFetch(`/api/v2/mrr/rigs${client ? `?client=${client}` : ''}`)
+  list: (client) => apiFetch(`/api/v2/pools${client ? `?client=${client}` : ''}`),
+  get: (id, client, signal) => {
+    const url = `/api/v2/pool/${encodeURIComponent(id)}${client ? `?client=${client}` : ''}`;
+    return apiFetch(url, { signal });
+  },
+  verify: (body, client, signal) => {
+    const url = `/api/v2/pools/verify${client ? `?client=${client}` : ''}`;
+    return apiFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal
+    });
+  },
+  save: (body, client) => {
+    const url = `/api/v2/pool${client ? `?client=${client}` : ''}`;
+    return apiFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  },
+  mrrRigs: (client, endpoint, params = {}) => {
+    const query = new URLSearchParams({
+      ...(client ? { client } : {}),
+      ...(endpoint ? { endpoint } : {}),
+      ...params
+    });
+    return apiFetch(`/api/v2/mrr/rigs?${query.toString()}`);
+  }
 };

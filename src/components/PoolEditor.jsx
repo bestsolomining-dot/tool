@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import Modal from './Modal'
-import { poolHelpers as ph, apiFetch, poolApi } from '../core/poolUtils'
+import { poolHelpers as ph, apiFetch, poolApi } from '../core/poolUtils' // Assuming nhClient is passed as a prop
 
-export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySuccess, initialPoolData, isNew, isPopout = false }) {
+export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySuccess, initialPoolData, isNew, isPopout = false, nhClient }) {
   const [editorBody, setEditorBody] = useState('')
-  const [editorVerifyBody, setEditorVerifyBody] = useState(null)
+  const [editorVerifyBody, setEditorVerifyBody] = useState(null) // This is the payload for verification
   const [editorResponse, setEditorResponse] = useState(null)
   const [editorSaveResponse, setEditorSaveResponse] = useState(null)
   const [editorError, setEditorError] = useState('')
@@ -138,7 +138,7 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
     }
 
     try {
-      const result = await callEditorApi(poolApi.verify(payload), 'Verify pool');
+      const result = await callEditorApi(poolApi.verify(payload, nhClient), 'Verify pool'); // Pass nhClient
       const enrichedResult = { ...result, poolDetails }
       setEditorResponse(enrichedResult)
 
@@ -177,7 +177,7 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
     }
 
     try {
-      const saveResult = await callEditorApi(poolApi.save(savePayload), 'Save pool');
+      const saveResult = await callEditorApi(poolApi.save(savePayload, nhClient), 'Save pool'); // Pass nhClient
       setEditorSaveResponse(saveResult)
 
       if (!saveResult.ok) {

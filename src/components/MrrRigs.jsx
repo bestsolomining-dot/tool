@@ -215,7 +215,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
 
       {error && <div className="error-message" style={{ margin: '15px 0', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '6px', color: '#f87171' }}><strong>Error:</strong> {error}</div>}
 
-      <div className="rig-list" style={{ marginTop: '15px' }}>
+      <div className="rig-list" style={{ marginTop: '15px', position: 'relative', flexGrow: 1, display: 'flex', flexDirection: 'column', maxHeight: 'auto', overflowY: 'auto', paddingRight: '2px', scrollbarWidth: 'thin', scrollbarColor: 'rgba(143, 64, 64, 0.59) transparent', overscrollBehavior: 'contain' }}>
         {filteredRigs.length === 0 && !loading && !error && (
           <div style={{ opacity: 0.5, textAlign: 'center', padding: '20px' }}>No rigs found for this account.</div>
         )}
@@ -238,7 +238,6 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
             const rigId = rig.id || rig.rigid || rig.rig_id;
             const isMine = rigId && userRigIds.has(String(rigId));
             const info = enrichedInfo[rig.id];
-            
             const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
             const isRented = statusStr.includes('rented');
             const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id;

@@ -39,6 +39,7 @@ export default function App() {
       if (!enrichedQuery.ts) enrichedQuery.ts = Date.now();
       if (!enrichedQuery.client) {
         enrichedQuery.client = nhClient;
+        console.log(`[App.jsx:callApi] Using nhClient: ${nhClient}`);
       }
     }
 

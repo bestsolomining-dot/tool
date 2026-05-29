@@ -104,12 +104,17 @@ function resolveNhClient(clientNameRaw) {
   if (!nhInstances.has(targetName)) {
     const cfg = nhConfigs[targetName];
     if (cfg.apiKey && cfg.apiSecret && cfg.orgId) {
-      const newClient = new NiceHashClient({ ...cfg, name: targetName });
-      nhInstances.set(targetName, newClient);
-      return { client: newClient, clientName: targetName };
+      try {
+        const newClient = new NiceHashClient({ ...cfg, name: targetName });
+        nhInstances.set(targetName, newClient);
+        return { client: newClient, clientName: targetName };
+      } catch (e) {
+        console.error(`[api:error] Failed to create NiceHashClient for "${targetName}" due to invalid configuration: ${e.message}`);
+        // Fallback to BT if client creation fails
+      }
     }
     
-    // If target (like PH) isn't configured, fallback to BT but warn the dev
+    // If target (like PH) isn't configured or client creation failed, fallback to BT and warn
     const btClient = nhInstances.get('BT');
     if (targetName !== 'BT') console.warn(`[api:warn] Client "${targetName}" is not fully configured in .env. Falling back to BT.`);
     return { client: btClient, clientName: 'BT' };

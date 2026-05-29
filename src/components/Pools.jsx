@@ -242,7 +242,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
   async function performVerification(payload, poolDetails) {
     try {
-      let result = await poolApi.verify(payload, nhClient);
+      let result = await poolApi.verify(payload, nhClient); // Pass nhClient
 
       if (result.status === 429) {
         const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
@@ -250,7 +250,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         setRateLimitStatus(`Rate limit hit. Retrying in ${seconds}s...`);
         try {
           await new Promise(r => setTimeout(r, seconds * 1000));
-          result = await poolApi.verify(payload, nhClient);
+          result = await poolApi.verify(payload, nhClient); // Pass nhClient
         } finally {
           setRateLimitStatus(null);
         }
@@ -282,7 +282,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     }
 
     try {
-      const result = await poolApi.verify(payload, nhClient, signal);
+      const result = await poolApi.verify(payload, nhClient, signal); // Pass nhClient
       return { ...result, poolDetails, requestBody: payload };
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -585,8 +585,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
           <button className="btn-pro primary" style={{ width: '100%' }} onClick={verify} disabled={loading || detailsLoading || playing || !selected || running}>
             {loading ? 'Verifying...' : 'Verify Pool'}
           </button>
-
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -680,11 +678,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
               )}
             </div>
           </div>
-
-
-
-
-
           <div className="pool-main-content" style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '650px', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
             {progress.total > 0 && (
               <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>

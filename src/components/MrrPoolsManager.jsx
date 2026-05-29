@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
 import { MrrPoolsTable, CountdownTimer } from './MiningRigRental'; // Import CountdownTimer
+import { poolHelpers as ph } from '../core/poolUtils'; // Import poolHelpers
 
 function formatHashrateValue(rate) {
   if (!rate) return '0 N/A';
@@ -124,6 +125,15 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
     });
   };
 
+  const handleExportMrrPools = () => {
+    if (poolData) {
+      const exportable = ph.normalizeMrrPoolsForExport(poolData);
+      if (exportable.length > 0) {
+        ph.exportToXlsx(exportable, `mrr_pools_export_${Date.now()}.xlsx`);
+      }
+    }
+  };
+
   useEffect(() => {
     if (externalRigId) setRigId(String(externalRigId));
   }, [externalRigId]);
@@ -142,6 +152,9 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
         <h3 style={{ margin: 0 }}>MRR Pool Manager</h3>
         <button className="btn-pro primary" onClick={() => fetchPools('all_rigs')} disabled={loading}>
           {loading ? 'Fetching...' : 'Get All Rig Pools'}
+        </button>
+        <button className="btn-pro secondary" onClick={handleExportMrrPools} disabled={!poolData || poolData.success === false || loading}>
+          Export Pools
         </button>
       </div>
 

@@ -173,21 +173,30 @@ export function MrrPoolsTable({ data }) {
     );
   }
 
-  // Normalize pool results into an array of objects containing a 'pools' property
-  const rawResults = extractArray(data, ['pools', 'data', 'result']);
-  
-  // If the extracted array contains objects that are pools themselves (flat list), wrap them
-  const results = rawResults.length > 0 && !rawResults[0].pools && (rawResults[0].user || rawResults[0].host || rawResults[0].stratumHost)
-    ? [{ id: 'Pools', pools: rawResults }]
-    : rawResults;
+  let results = [];
+
+  // Handle single rig/rental object wrapped in data envelope: { success: true, data: { rigid: "...", pools: [...] } }
+  if (data?.data && typeof data.data === 'object' && !Array.isArray(data.data) && (data.data.pools || data.data.result)) {
+    results = [data.data];
+  } else {
+    // Normalize pool results from various response shapes (lists or flat results)
+    const rawResults = extractArray(data, ['pools', 'data', 'result']);
+    
+    // If the extracted array contains objects that are pools themselves (flat list), wrap them
+    results = rawResults.length > 0 && !rawResults[0].pools && (rawResults[0].user || rawResults[0].host || rawResults[0].stratumHost)
+      ? [{ id: 'Pools', pools: rawResults }]
+      : rawResults;
+  }
   
   if (!results.length) return <div style={{ padding: '30px', textAlign: 'center', opacity: 0.5 }}>No pool data found.</div>;
 
   return (
     <div className="mrr-pools-modal-content">
       {results.map((res, idx) => (
-        <div key={res.rigId || res.id || idx} style={{ marginBottom: '25px', borderBottom: '1px solid #333', paddingBottom: '15px' }}>
-          <h4 style={{ color: '#ff1cbb', margin: '25px 5px 10px 0' }}>{res.rigId ? `Rig ID: ${res.rigId}` : res.id ? `Rental ID: ${res.id}` : 'Target ID: N/A'}</h4>
+        <div key={res.rigId || res.rigid || res.id || idx} style={{ marginBottom: '25px', borderBottom: '1px solid #333', paddingBottom: '15px' }}>
+          <h4 style={{ color: '#ff1cbb', margin: '25px 5px 10px 0' }}>
+            { (res.rigId || res.rigid) ? `Rig ID: ${res.rigId || res.rigid}` : res.id ? `Rental ID: ${res.id}` : 'Target ID: N/A'}
+          </h4>
           <table className="pro-table">
             <thead>
               <tr><th>Priority</th><th>Host</th><th>Worker</th><th>Algo</th></tr>

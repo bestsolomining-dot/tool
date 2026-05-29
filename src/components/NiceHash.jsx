@@ -26,7 +26,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
   const fetchOrders = async () => {
     setLoadingLocal(true);
     const data = await onCall('/api/v2/hashpower/myOrders', {
-      query: { op: 'LE', limit: 100 }, // callApi in App.jsx handles ts and client
+      query: { op: 'PH', limit: 1000 }, // callApi in App.jsx handles ts and client
       silent: true
     });
     const list = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);

@@ -177,11 +177,9 @@ export default function App() {
     // Prevent calling invalid endpoints that lead to 401/404 errors
     if (isRented && !rentalId) return;
     if (!isRented && !rigId) return;
-
     const path = (isRented && rentalId)
       ? `/api/v2/mrr/rental/${encodeURIComponent(rentalId)}/pool`
       : `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
-
     const result = await handleMiningCall(path, { query: { client: mrrClient }, silent: true });
     setMrrPoolData(result);
     setMrrPoolRigId(isRented ? '' : String(rigId || ''));
@@ -203,16 +201,19 @@ export default function App() {
           <p className="subtitle" style={{ opacity: 0.5, fontSize: '0.95rem', maxWidth: '600px', marginTop: '8px' }}>
             A powerful desktop tool for Nicehash miners. Manage rigs, monitor stats, and automate hashpower purchases with ease.
           </p>
-        </div>
-        <div className="status-card" style={{ marginBottom: '5px' }}>
-          <div className="status-item">
-            <span style={{ opacity: 0.5, marginRight: '8px' }}>SYSTEM:</span>
-            <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`}>
-              {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
-            </span>
+          <div className="status-card" style={{ marginBottom: '5px' }}>
+            <div className="status-item">
+              <span style={{ opacity: 0.5, marginRight: '8px' }}>SYSTEM:</span>
+              <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`}>
+                {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
+              </span>
+            </div>
           </div>
         </div>
       </header>
+      <section className="pools-section">
+        <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
+      </section>
       <main className="dashboard">
         <section className="quick-actions">
           <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -259,9 +260,6 @@ export default function App() {
               <HashrateCalculator />
             </article>
           </article>
-        </section>
-        <section className="pools-section">
-          <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
         </section>
       </main>
       <Modal

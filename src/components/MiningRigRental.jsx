@@ -198,7 +198,7 @@ export function MrrPoolsTable({ data }) {
                   <td>{p.priority}</td>
                   <td>{p.host || p.stratumHost}</td>
                   <td style={{ fontWeight: 'bold' }}>{p.user || p.username}</td>
-                  <td>{p.algo || p.algorithm}</td>
+                  {/* <td>{p.algo || p.algorithm}</td> */}
                 </tr>
               ))}
             </tbody>

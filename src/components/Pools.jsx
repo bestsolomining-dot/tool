@@ -14,8 +14,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   const [error, setError] = useState('')
   const [playing, setPlaying] = useState(false)
   const [running, setRunning] = useState(false)
-  const [verificationDelay, setVerificationDelay] = useState(5000) // Delay between individual pool verifications in bulk run
-  const [automationInterval, setAutomationInterval] = useState(300) // 5 minutes in seconds
+  const [verificationDelay, setVerificationDelay] = useState(3000) // Delay between individual pool verifications in bulk run
+  const [automationInterval, setAutomationInterval] = useState(30) // 30 seconds
   const [lastRunTime, setLastRunTime] = useState(null)
   const [rateLimitStatus, setRateLimitStatus] = useState(null)
   const [nextRunCountdown, setNextRunCountdown] = useState(null)

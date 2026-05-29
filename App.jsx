@@ -197,13 +197,10 @@ export default function App() {
         alignItems: 'flex-end'
       }}>
         <div className="brand-block" style={{ flex: 1 }}>
-          <h2>Ben Tre Mining Tool</h2>
-          <p className="subtitle" style={{ opacity: 0.5, fontSize: '0.95rem', maxWidth: '600px', marginTop: '8px' }}>
-            A powerful desktop tool for Nicehash miners. Manage rigs, monitor stats, and automate hashpower purchases with ease.
-          </p>
-          <div className="status-card" style={{ marginBottom: '5px' }}>
+          <h3>Ben Tre Mining Tool</h3>
+          <div className="status-card" style={{ marginBottom: '2px' }}>
             <div className="status-item">
-              <span style={{ opacity: 0.5, marginRight: '8px' }}>SYSTEM:</span>
+              <span style={{ opacity: 0.5, marginRight: '10px' }}>SYSTEM:</span>
               <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`}>
                 {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
               </span>
@@ -211,7 +208,20 @@ export default function App() {
           </div>
         </div>
       </header>
-      <section className="pools-section">
+      <section 
+        className="pools-section" 
+        style={{ 
+          maxHeight: '850px', 
+          overflowY: 'auto', 
+          marginBottom: '40px',
+          background: 'rgba(255, 255, 255, 0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          borderRadius: '16px',
+          padding: '24px',
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(255, 255, 255, 0.1) transparent'
+        }}
+      >
         <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
       </section>
       <main className="dashboard">

@@ -19,7 +19,6 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
   const [rentalInfo, setRentalInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
   const [mrrMethod, setMrrMethod] = useState('GET');
   const [mrrEndpoint, setMrrEndpoint] = useState('/rig/mine');
   const [mrrBody, setMrrBody] = useState('');
@@ -198,25 +197,6 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
         </div>
       )}
 
-      {/* <details style={{ marginTop: '30px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '20px' }}>
-        <summary style={{ cursor: 'pointer', listStyle: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: 0.7 }}>
-          <h4 style={{ margin: 0, fontSize: '0.9rem' }}>Manual API Executor</h4>
-          <span style={{ fontSize: '11px', color: '#3b82f6', textTransform: 'uppercase', fontWeight: 'bold' }}>Show Developer Tools</span>
-        </summary>
-        <div className="market-inputs" style={{ marginTop: '15px' }}>
-          <select className="select-pro" value={mrrMethod} onChange={(e) => setMrrMethod(e.target.value)}>
-            <option value="GET">GET</option>
-            <option value="POST">POST</option>
-            <option value="PUT">PUT</option>
-            <option value="DELETE">DELETE</option>
-          </select>
-          <input className="input-pro" placeholder="Endpoint (e.g. /rig/mine)" value={mrrEndpoint} onChange={(e) => setMrrEndpoint(e.target.value)} />
-          <button className="btn-pro secondary" onClick={callMrrFunction}>Execute</button>
-          <button className="text-button" onClick={() => { setMrrEndpoint('/rig/mine'); setMrrMethod('GET'); setMrrBody(''); }}>Reset</button>
-        </div>
-        <textarea className="input-pro" style={{ marginTop: '10px', minHeight: '80px', width: '100%' }} placeholder='JSON Body (Optional)' value={mrrBody} onChange={(e) => setMrrBody(e.target.value)} />
-      </details> */}
-
       {/* Rented Status Modal */}
       <Modal
         isOpen={isModalOpen}
@@ -237,7 +217,6 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
                 {String(rentalInfo.status || 'RENTED').toUpperCase()}
               </span>
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
               <div className="stat-box" style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px' }}>
                 <div style={{ fontSize: '9px', opacity: 0.5, marginBottom: '4px', textTransform: 'uppercase' }}>Algorithm</div>
@@ -288,13 +267,11 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
                 <span style={{ opacity: 0.6 }}>Duration:</span> {rentalInfo.normalized?.duration || rentalInfo.length || rentalInfo.hours || '0'} Hours
               </div>
             </div>
-
             {rentalInfo.pools && rentalInfo.pools.length > 0 && (
               <div style={{ frontSize: '8px', marginTop: '20px', maxHeight: '100px', overflowY: 'auto', paddingRight: '1px' }}>
                 <MrrPoolsTable data={{ pools: rentalInfo.pools }} />
               </div>
             )}
-
             <div className="modal-actions" style={{ justifyContent: 'center' }}>
               <button className="btn-pro secondary" onClick={() => setIsModalOpen(false)}>Dismiss</button>
             </div>

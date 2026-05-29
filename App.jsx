@@ -211,8 +211,6 @@ export default function App() {
       <section 
         className="pools-section" 
         style={{ 
-          maxHeight: '850px', 
-          overflowY: 'auto', 
           marginBottom: '40px',
           background: 'rgba(255, 255, 255, 0.02)',
           border: '1px solid rgba(255, 255, 255, 0.05)',
@@ -222,7 +220,7 @@ export default function App() {
           scrollbarColor: 'rgba(255, 255, 255, 0.1) transparent'
         }}
       >
-        <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
+        <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhClient} setNhClient={setNhClient} />
       </section>
       <main className="dashboard">
         <section className="quick-actions">

@@ -251,7 +251,7 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
         </label>
 
         <div className="pool-editor-side">
-          {/* <div className="code-block-wrapper">
+          <div className="code-block-wrapper">
             <div className="code-block-header">
               <h3>Save request body</h3>
               <span>POST /api/v2/pool</span>
@@ -265,7 +265,7 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
                 }
               })()}
             </pre>
-          </div> */}
+          </div>
 
           <div className="code-block-wrapper">
             <div className="code-block-header">

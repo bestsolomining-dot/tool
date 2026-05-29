@@ -115,7 +115,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
         <button className="btn-pro" onClick={() => onCall('/api/v2/algorithms')}>Algorithms</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/mining/payouts')}>Payouts</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/mining/history', { query: { algorithm } })}>History</button>
-      
+      </div>
 
       <div className="market-inputs" style={{ marginTop: '15px' }}>
         <select className="select-pro" value={selectedOrderId} onChange={(e) => handleOrderSelect(e.target.value)}>
@@ -135,7 +135,6 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
         </button>
       </div>
       
-
       {selectedOrderId && (
         <div className="order-management-panel" style={{ marginTop: '15px', padding: '15px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px', alignItems: 'flex-end', marginBottom: '15px' }}>
@@ -163,7 +162,6 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
             </div>
             <button className="btn-pro primary" onClick={updateOrder}>Update</button>
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', alignItems: 'flex-end', marginBottom: '15px' }}>
             <div>
               <label className="label" style={{ fontSize: '10px', marginBottom: '4px', display: 'block' }}>REFILL AMOUNT</label>
@@ -178,7 +176,6 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
             </div>
             <button className="btn-pro" style={{ background: '#10b981' }} onClick={refillOrder}>Refill</button>
           </div>
-
           <button className="btn-pro status-error" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.2)', width: '100%' }} onClick={cancelOrder}>
             Cancel Order
           </button>
@@ -187,7 +184,6 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
 
       <div className="market-inputs" style={{ marginTop: '10px' }}>
         <button className="btn-pro" onClick={fetchOrders}>Refresh Orders</button>
-      </div>
       </div>
 
       {loadingLocal && <div style={{ fontSize: '11px', opacity: 0.6, margin: '10px 0' }}>Fetching order data...</div>}
@@ -206,6 +202,12 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>MARKET</span> <strong>{orderDetail.market}</strong></div>
             <div><span style={{ opacity: 0.8, display: 'block', fontSize: '9px' }}>PRICE</span> <strong style={{ color: '#f59e0b' }}>{orderDetail.price}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>LIMIT</span> <strong>{orderDetail.limit}</strong></div>
+            <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>REMAINING</span> <strong style={{ color: '#10b981' }}>{parseFloat(orderDetail.availableAmount || 0).toFixed(8)}</strong></div>
+            <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>BUDGET PROGRESS</span> <strong style={{ color: '#60a5fa' }}>{(() => {
+              const spent = parseFloat(orderDetail.payedAmount || 0);
+              const total = spent + parseFloat(orderDetail.availableAmount || 0);
+              return total > 0 ? ((spent / total) * 100).toFixed(1) : '0.0';
+            })()}%</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>CURR. SPEED</span> <strong>{parseFloat(orderDetail.acceptedCurrentSpeed || 0).toFixed(7)}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>RIGS</span> <strong>{orderDetail.rigsCount}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>ID</span> <code style={{ fontSize: '9px' }}>{orderDetail.id?.slice(0, 10)}</code></div>

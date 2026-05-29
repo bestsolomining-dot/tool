@@ -92,7 +92,7 @@ export default function Accounting({ onCall }) {
 
   return (
     <div className="accounting-form">
-      {/* <div className="field-row">
+      <div className="field-row">
         <div className="field">
           <label className="label">Endpoint</label>
           <select className="select-pro" value={endpointKey} onChange={event => setEndpointKey(event.target.value)}>
@@ -110,7 +110,7 @@ export default function Accounting({ onCall }) {
       <div className="field">
         <label className="label">Transaction ID</label>
         <input className="input-pro" value={transactionId} onChange={event => setTransactionId(event.target.value)} />
-      </div> */}
+      </div>
 
       {endpoint.method === 'POST' && (
         <div className="field">

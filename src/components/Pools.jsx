@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import PoolEditorPopup from './PoolEditorPopup' // Use the new wrapper
 import Modal from './Modal' // Import the new Modal component
-import { poolHelpers as ph, poolApi } from '../core/poolUtils'
+import { poolHelpers as ph, poolApi, apiFetch } from '../core/poolUtils'
 
-export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
+export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient, setNhClient }) {
   const [pools, setPools] = useState([])
   const [selected, setSelected] = useState(null)
   const [selectedId, setSelectedId] = useState('')
@@ -81,9 +81,11 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
     setActiveEditors(prev => [...prev.filter(e => e.key !== 'new'), editor]);
   };
 
+  // Function to load NiceHash pools for the selected client
   async function loadPools() {
+    setLoading(true);
     try {
-      const result = await poolApi.list();
+      const result = await poolApi.list(nhClient); // Pass nhClient to the API call
       const normalized = ph.normalizeList(result.data);
       setPools(normalized);
       return normalized;
@@ -91,13 +93,15 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
       setError(err.message || String(err));
       setPools([]);
       return [];
+    } finally {
+      setLoading(false);
     }
   }
 
   // Initialize pools on mount
   useEffect(() => {
     loadPools();
-  }, []);
+  }, [nhClient]); // Re-fetch pools when nhClient changes
 
   // Update the elapsed time counter every second while automation is running
   useEffect(() => {
@@ -180,7 +184,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
     setDetailsLoading(true)
     try {
-      const result = await poolApi.get(poolId);
+      const result = await poolApi.get(poolId, nhClient);
 
       if (!result.ok) {
         const message = typeof result.data === 'string'
@@ -220,7 +224,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
       const poolId = ph.getId(selected);
       if (poolId) {
         try {
-          const details = (await poolApi.get(poolId)).data;
+          const details = (await poolApi.get(poolId, nhClient)).data;
           const fullPayload = ph.buildVerifyBody(details)
           return await performVerification(fullPayload, details)
         } catch (e) {
@@ -238,7 +242,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
   async function performVerification(payload, poolDetails) {
     try {
-      let result = await poolApi.verify(payload);
+      let result = await poolApi.verify(payload, nhClient);
 
       if (result.status === 429) {
         const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
@@ -246,7 +250,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
         setRateLimitStatus(`Rate limit hit. Retrying in ${seconds}s...`);
         try {
           await new Promise(r => setTimeout(r, seconds * 1000));
-          result = await poolApi.verify(payload);
+          result = await poolApi.verify(payload, nhClient);
         } finally {
           setRateLimitStatus(null);
         }
@@ -278,7 +282,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
     }
 
     try {
-      const result = await poolApi.verify(payload, signal);
+      const result = await poolApi.verify(payload, nhClient, signal);
       return { ...result, poolDetails, requestBody: payload };
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -329,13 +333,13 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
           let details = pool
           if (poolId) {
             // Assuming poolApi.get accepts a signal or you use onCall directly
-            let resDetails = await poolApi.get(poolId, controller.signal);
+            let resDetails = await poolApi.get(poolId, nhClient, controller.signal);
             if (resDetails.status === 429) {
               const seconds = parseInt(resDetails.headers?.get('Retry-After') || resDetails.data?.headers?.['retry-after'], 10) || 30;
               setRateLimitStatus(`Rate limit hit on details. Waiting ${seconds}s...`);
               try {
                 await new Promise(r => setTimeout(r, seconds * 1000));
-                resDetails = await poolApi.get(poolId);
+                resDetails = await poolApi.get(poolId, nhClient);
               } finally {
                 setRateLimitStatus(null);
               }
@@ -571,204 +575,218 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
 
   return (
     <div className="card pools-manager" >
-      <div className="pool-actions-container" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '1.5rem' }}>
-        <button className="btn-pro primary" style={{ width: '100%' }} onClick={verify} disabled={loading || detailsLoading || playing || !selected || running}>
-          {loading ? 'Verifying...' : 'Verify Pool'}
-        </button>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>DELAY (ms)</label>
-            <input
-              type="number"
-              className="input-pro"
-              style={{ width: '100%', padding: '6px' }}
-              value={verificationDelay}
-              onChange={e => setVerificationDelay(Number(e.target.value))}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>AUTO INTERVAL (s)</label>
-            <input
-              type="number"
-              className="input-pro"
-              style={{ width: '100%', padding: '6px' }}
-              value={automationInterval}
-              onChange={e => setAutomationInterval(Number(e.target.value))}
-            />
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-          <button
-            className="btn-pro secondary"
-            style={{ width: '100%' }}
-            onClick={handleExportResults}
-            disabled={completedResults.length === 0}
-          >
-            Export (verified: {completedResults.length})
+      <div className="market-inputs" style={{ marginBottom: '15px' }}>
+        <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
+          <option value="BT">NiceHash Client: BT</option>
+          <option value="PH">NiceHash Client: PH</option>
+        </select>
+        <small style={{ opacity: 0.5, fontSize: '10px', marginLeft: '10px' }}>ACTIVE NICEHASH CLIENT</small>
+        <div className="pool-actions-container" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '1.5rem' }}>
+          <button className="btn-pro primary" style={{ width: '100%' }} onClick={verify} disabled={loading || detailsLoading || playing || !selected || running}>
+            {loading ? 'Verifying...' : 'Verify Pool'}
           </button>
-          <button className="btn-pro" style={{ width: '100%' }} onClick={() => verifyAllOnce()} disabled={playing || running}>
-            Verify All
-          </button>
-        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
-          <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: '10px', padding: '4px 12px' }}>
-            Import XLSX
-          </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="checkbox"
-              id="verifySourceToggle"
-              checked={verifyFromFile}
-              onChange={(e) => setVerifyFromFile(e.target.checked)}
-              style={{ width: '16px', height: '16px' }}
-            />
-            <label htmlFor="verifySourceToggle" style={{ fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
-              VERIFY FROM FILE ({filePools.length})
-            </label>
-          </div>
 
-          <input type="file" ref={fileInputRef} onChange={handleImportXlsx} accept=".xlsx,.xls" style={{ display: 'none' }} />
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn-pro" style={{ flex: 2 }} onClick={startRun} disabled={playing || running}>
-              {running ? 'Automation Active' : 'Start Auto Run'}
-            </button>
-            {(playing || running) && (
-              <button className="btn-pro" onClick={stopAutomation} style={{ flex: 1, background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>Stop</button>
-            )}
-          </div>
-        </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>DELAY (ms)</label>
+                  <input
+                    type="number"
+                    className="input-pro"
+                    style={{ width: '100%', padding: '6px' }}
+                    value={verificationDelay}
+                    onChange={e => setVerificationDelay(Number(e.target.value))}
+                  />
+                </div>
 
-        {running && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-            <div style={{ color: '#f59e0b', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Cycle Status:</span>
-              <span>Running #{runCount}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>AUTO INTERVAL (s)</label>
+                  <input
+                    type="number"
+                    className="input-pro"
+                    style={{ width: '100%', padding: '6px' }}
+                    value={automationInterval}
+                    onChange={e => setAutomationInterval(Number(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              <button className="btn-pro" style={{ width: '100%' }} onClick={() => verifyAllOnce()} disabled={playing || running}>
+                Verify All
+              </button>
+              <button
+                className="btn-pro secondary"
+                style={{ width: '100%' }}
+                onClick={handleExportResults}
+                disabled={completedResults.length === 0}
+              >
+                Export (verified: {completedResults.length})
+              </button>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
-              <span>Total Time Run:</span>
-              <span>{Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s</span>
-              {lastRunTime && !playing && (
-                <div style={{ color: '#059669', fontSize: '11px', textAlign: 'right' }}>
-                  Last cycle finished: {lastRunTime}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: '10px', padding: '4px 12px' }}>
+                Import XLSX
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  id="verifySourceToggle"
+                  checked={verifyFromFile}
+                  onChange={(e) => setVerifyFromFile(e.target.checked)}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                <label htmlFor="verifySourceToggle" style={{ fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  VERIFY FROM FILE ({filePools.length})
+                </label>
+              </div>
+
+              <input type="file" ref={fileInputRef} onChange={handleImportXlsx} accept=".xlsx,.xls" style={{ display: 'none' }} />
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className="btn-pro" style={{ flex: 2 }} onClick={startRun} disabled={playing || running}>
+                  {running ? 'Automation Active' : 'Start Auto Run'}
+                </button>
+                {(playing || running) && (
+                  <button className="btn-pro" onClick={stopAutomation} style={{ flex: 1, background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>Stop</button>
+                )}
+              </div>
+              {running && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                  <div style={{ color: '#f59e0b', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Cycle Status:</span>
+                    <span>Running #{runCount}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
+                    <span>Total Time Run:</span>
+                    <span>{Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s</span>
+                    {lastRunTime && !playing && (
+                      <div style={{ color: '#059669', fontSize: '11px', textAlign: 'right' }}>
+                        Last cycle finished: {lastRunTime}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
+                    <span>Skipped Pools:</span>
+                    <span>{skippedCount}</span>
+                  </div>
+                  {nextRunCountdown !== null && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#3b82f6' }}>
+                      <span>Next run in:</span>
+                      <span>{Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
-              <span>Skipped Pools:</span>
-              <span>{skippedCount}</span>
-            </div>
-            {nextRunCountdown !== null && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#3b82f6' }}>
-                <span>Next run in:</span>
-                <span>{Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s</span>
+          </div>
+
+
+
+
+
+          <div className="pool-main-content" style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '650px', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
+            {progress.total > 0 && (
+              <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div
+                  className="verify-progress-bar-fill"
+                  style={{
+                    width: `${(progress.current / progress.total) * 100}%`,
+                    height: '100%',
+                    background: '#3b82f6',
+                    transition: 'width 0.3s ease'
+                  }}
+                />
+                <small style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', fontSize: '10px', lineHeight: '18px', fontWeight: 'bold', textShadow: '0 0 3px black' }}>
+                  {Math.round((progress.current / progress.total) * 100)}% ({progress.current}/{progress.total})
+                </small>
               </div>
             )}
+            {verifyResults.length > 0 ? (
+              <div className="results-wrapper">
+                <div className="verify-summary">
+                  <div>
+                    <span>Target pools</span>
+                    <strong>{verifyFromFile ? filePools.length : pools.length}</strong>
+                  </div>
+                  <div>
+                    <span>Verified</span>
+                    <strong>{completedResults.length}</strong>
+                  </div>
+                  <div>
+                    <span>Success</span>
+                    <strong>{successCount}</strong>
+                  </div>
+                  <div>
+                    <span>Fail</span>
+                    <strong>{failCount}</strong>
+                  </div>
+                  <div className="wide">
+                    <span>Algorithm</span>
+                    <strong>{algorithmSummary || 'No completed checks'}</strong>
+                  </div>
+                </div>
+                <div className="verify-list" >
+                  {verifyResults.map(item => {
+                    const pending = item.result?.pending
+                    const success = !pending && ph.isVerifySuccess(item.result)
+                    const logs = ph.getVerifyLogs(item.result)
+                    const algorithm = ph.getVerifyAlgo(item.result)
+                    return (
+                      <details className="verify-item" key={item.key}>
+                        <summary>
+                          <span
+                            className={`verify-status ${pending ? 'pending' : success ? 'success' : 'fail'}`}
+                            onClick={event => {
+                              if (pending) return
+                              event.preventDefault()
+                              event.stopPropagation()
+                              openPoolEditor(item)
+                            }}
+                            style={{ cursor: pending ? 'wait' : 'pointer' }}
+                            title={pending ? "Verifying..." : "Click to open Pool Editor"}
+                          >
+                            {pending ? 'Checking' : success ? 'Success' : 'Fail'}
+                          </span>
+                          <button
+                            type="button"
+                            className="pool-editor-link"
+                            onClick={event => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              openPoolEditor(item)
+                            }}
+                            disabled={pending}
+                          >
+                            {item.label} <span style={{ fontSize: '0.9em', opacity: 0.7 }}>✎</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="text-button"
+                            style={{ fontSize: '10px', marginLeft: 'auto', marginRight: '10px' }}
+                            onClick={event => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              setInspectData(item.result)
+                            }}
+                          >
+                            Inspect
+                          </button>
+                          <span className="verify-algorithm">{algorithm}</span>
+                          <small>{pending ? 'Waiting for response' : ph.getVerifyMessage(item.result)}</small>
+                        </summary>
+                      </details>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (
+              <pre className="response-body compact">{response ? JSON.stringify(response, null, 2) : 'No response yet'}</pre>
+            )}
           </div>
-        )}
-
-        <div className="pool-main-content" style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '650px', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
-          {progress.total > 0 && (
-            <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <div
-                className="verify-progress-bar-fill"
-                style={{
-                  width: `${(progress.current / progress.total) * 100}%`,
-                  height: '100%',
-                  background: '#3b82f6',
-                  transition: 'width 0.3s ease'
-                }}
-              />
-              <small style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', fontSize: '10px', lineHeight: '18px', fontWeight: 'bold', textShadow: '0 0 3px black' }}>
-                {Math.round((progress.current / progress.total) * 100)}% ({progress.current}/{progress.total})
-              </small>
-            </div>
-          )}
-          {verifyResults.length > 0 ? (
-            <div className="results-wrapper">
-              <div className="verify-summary">
-                <div>
-                  <span>Target pools</span>
-                  <strong>{verifyFromFile ? filePools.length : pools.length}</strong>
-                </div>
-                <div>
-                  <span>Verified</span>
-                  <strong>{completedResults.length}</strong>
-                </div>
-                <div>
-                  <span>Success</span>
-                  <strong>{successCount}</strong>
-                </div>
-                <div>
-                  <span>Fail</span>
-                  <strong>{failCount}</strong>
-                </div>
-                <div className="wide">
-                  <span>Algorithm</span>
-                  <strong>{algorithmSummary || 'No completed checks'}</strong>
-                </div>
-              </div>
-              <div className="verify-list" >
-                {verifyResults.map(item => {
-                  const pending = item.result?.pending
-                  const success = !pending && ph.isVerifySuccess(item.result)
-                  const logs = ph.getVerifyLogs(item.result)
-                  const algorithm = ph.getVerifyAlgo(item.result)
-                  return (
-                    <details className="verify-item" key={item.key}>
-                      <summary>
-                        <span
-                          className={`verify-status ${pending ? 'pending' : success ? 'success' : 'fail'}`}
-                          onClick={event => {
-                            if (pending) return
-                            event.preventDefault()
-                            event.stopPropagation()
-                            openPoolEditor(item)
-                          }}
-                          style={{ cursor: pending ? 'wait' : 'pointer' }}
-                          title={pending ? "Verifying..." : "Click to open Pool Editor"}
-                        >
-                          {pending ? 'Checking' : success ? 'Success' : 'Fail'}
-                        </span>
-                        <button
-                          type="button"
-                          className="pool-editor-link"
-                          onClick={event => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            openPoolEditor(item)
-                          }}
-                          disabled={pending}
-                        >
-                          {item.label} <span style={{ fontSize: '0.9em', opacity: 0.7 }}>✎</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="text-button"
-                          style={{ fontSize: '10px', marginLeft: 'auto', marginRight: '10px' }}
-                          onClick={event => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            setInspectData(item.result)
-                          }}
-                        >
-                          Inspect
-                        </button>
-                        <span className="verify-algorithm">{algorithm}</span>
-                        <small>{pending ? 'Waiting for response' : ph.getVerifyMessage(item.result)}</small>
-                      </summary>
-                    </details>
-                  )
-                })}
-              </div>
-            </div>
-          ) : (
-            <pre className="response-body compact">{response ? JSON.stringify(response, null, 2) : 'No response yet'}</pre>
-          )}
         </div>
       </div>
+
 
       <div className="pools-dashboard-layout" style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {sidebarVisible && (

@@ -1,12 +1,26 @@
 import * as XLSX from 'xlsx';
 
 const DEFAULT_VERIFICATION_LOCATION = 'ANY'
-const LOCATION_MAP = {
-  EU: 'EUROPE', EUROPE: 'EUROPE',
-  USA: 'USA', US: 'USA',
-  US_EAST: 'USA_EAST', USA_EAST: 'USA_EAST',
-  EUROPE_NORTH: 'EUROPE_NORTH', SOUTH_AMERICA: 'SOUTH_AMERICA',
-  ASIA: 'ASIA', ANY: 'ANY',
+const LOCATION_MAP = { // NiceHash API v2 pool verification service locations
+  'EU': 'EUROPE',
+  'EUROPE': 'EUROPE',
+  'USA': 'USA',
+  'US': 'USA',
+  'US_EAST': 'USA_EAST',
+  'USA_EAST': 'USA_EAST',
+  'EUROPE_NORTH': 'EUROPE_NORTH',
+  'SA': 'SOUTH_AMERICA',
+  'SOUTH_AMERICA': 'SOUTH_AMERICA',
+  'ASIA': 'ASIA',
+  'JP': 'JAPAN',
+  'JAPAN': 'JAPAN',
+  'IN': 'INDIA',
+  'INDIA': 'INDIA',
+  'BR': 'BRAZIL',
+  'BRAZIL': 'BRAZIL',
+  'RU': 'RUSSIA',
+  'RUSSIA': 'RUSSIA',
+  'ANY': 'ANY',
 }
 
 /**

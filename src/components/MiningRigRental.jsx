@@ -303,7 +303,6 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
       } else if (type === 'rental_history') {
         path = '/api/v2/mrr/rental/history';
       }
-
       
       const result = await onCall(path, { query: { client: clientToUse }, silent: true });
       setModalData(result);
@@ -332,12 +331,12 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         <button className="btn-pro primary" onClick={() => openManagementModal('list_all_rigs')}>
           Browse Marketplace
         </button>
-        {/* <button className="btn-pro secondary" onClick={() => openManagementModal('list')}>My Rigs Manager</button> */}
-        {/* <button className="btn-pro secondary" onClick={() => openManagementModal('rental')}>
+        <button className="btn-pro secondary" onClick={() => openManagementModal('list')}>My Rigs Manager</button>
+        <button className="btn-pro secondary" onClick={() => openManagementModal('rental')}>
           Rentals {rentals.length > 0 && `(${rentals.length})`}
-        </button> */}
-        {/* <button className="btn-pro secondary" onClick={() => openManagementModal('list_all_rigs')}>Marketplace Status</button>
-        <button className="btn-pro secondary" onClick={() => openManagementModal('rental_history')}>Rental History</button> */}
+        </button>
+        <button className="btn-pro secondary" onClick={() => openManagementModal('list_all_rigs')}>Marketplace Status</button>
+        <button className="btn-pro secondary" onClick={() => openManagementModal('rental_history')}>Rental History</button>
         <button className="btn-pro secondary" onClick={() => onCall('/api/v2/mrr/balance', { query: { client: mrrClient }, showModal: true })}>Balance</button>
       </div>
 

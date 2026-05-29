@@ -969,7 +969,7 @@ const server = app.listen(PORT, (err) => {
   }
 
   console.log(`--- NiceHash API Toolbox Server Started ---`);
-  console.log(`Environment: ${(process.env.NICEHASH_ENVIRONMENT || 'production').toUpperCase()}`);
+  console.log(`Environment: ${nhConfigs.BT.environment.toUpperCase()}`);
   console.log(`Listening on http://localhost:${PORT}`);
 });
 

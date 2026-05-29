@@ -19,7 +19,6 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
   const [rentalInfo, setRentalInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
   const [mrrMethod, setMrrMethod] = useState('GET');
   const [mrrEndpoint, setMrrEndpoint] = useState('/rig/mine');
   const [mrrBody, setMrrBody] = useState('');
@@ -34,9 +33,41 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
     if (externalRigId) setRigId(String(externalRigId));
   }, [externalRigId]);
 
-  useEffect(() => {
-    if (externalRentalId) setRentalId(String(externalRentalId));
-  }, [externalRentalId]);
+  const fetchRentalInfo = async (id = null) => {
+    const targetId = String(id || rentalId).trim();
+    if (!targetId || targetId === 'undefined') return;
+
+    setLoading(true);
+    setRentalInfo(null);
+    try {
+      const result = await onCall(`/api/v2/mrr/rental/${encodeURIComponent(targetId)}`, { 
+        query: { client: mrrClient }, 
+        silent: true 
+      });
+      if (result && result.success) {
+        // Extract the rental object from the MRR response wrapper
+        const info = result.data || result;
+
+        // Additionally fetch pool info to display in status modal
+        const poolRes = await onCall(`/api/v2/mrr/rental/${encodeURIComponent(targetId)}/pool`, { 
+          query: { client: mrrClient }, 
+          silent: true 
+        });
+        if (poolRes && poolRes.success) {
+          info.pools = Array.isArray(poolRes.data) ? poolRes.data : (poolRes.data?.pools || poolRes.pools || []);
+        }
+
+        setRentalInfo(info);
+        setIsModalOpen(true);
+      } else {
+        // Error will be handled by parent App.jsx's setError
+      }
+    } catch (err) {
+      // Error will be handled by parent App.jsx's setError
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchPools = async (type, id = null) => {
     if (!mrrClient) {
@@ -93,34 +124,17 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
     });
   };
 
-  const fetchRentalInfo = async () => {
-    const targetId = rentalId.trim();
-    if (!targetId) return;
-    setLoading(true);
-    setRentalInfo(null);
-    try {
-      const result = await onCall(`/api/v2/mrr/rental/${encodeURIComponent(targetId)}`, { query: { client: mrrClient }, silent: true });
-      if (result && result.success) {
-        // Extract the rental object from the MRR response wrapper
-        const info = result.data || result;
+  useEffect(() => {
+    if (externalRigId) setRigId(String(externalRigId));
+  }, [externalRigId]);
 
-        // Additionally fetch pool info to display in status modal
-        const poolRes = await onCall(`/api/v2/mrr/rental/${encodeURIComponent(targetId)}/pool`, { query: { client: mrrClient }, silent: true });
-        if (poolRes && poolRes.success) {
-          info.pools = Array.isArray(poolRes.data) ? poolRes.data : (poolRes.data?.pools || poolRes.pools || []);
-        }
-
-        setRentalInfo(info);
-        setIsModalOpen(true);
-      } else {
-        // Error will be handled by parent App.jsx's setError
-      }
-    } catch (err) {
-      // Error will be handled by parent App.jsx's setError
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (externalRentalId) {
+      const id = String(externalRentalId);
+      setRentalId(id);
+      fetchRentalInfo(id);
     }
-  };
+  }, [externalRentalId]);
 
   return (
     <div className="mrr-pools-manager nh-theme" style={{ marginTop: '20px', padding: '20px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -174,7 +188,7 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
       {loading && <div style={{ textAlign: 'center', padding: '20px', opacity: 0.6 }}>Fetching pool configurations...</div>}
 
       {poolData && (
-        <div className="pool-results-container" style={{ marginTop: '20px', maxHeight: '400px', overflowY: 'auto' }}>
+        <div className="pool-results-container" style={{ fontSize: '12px', marginTop: '20px', maxHeight: '600px', maxWidth: '480px', overflowY: 'auto' }}>
           {poolData.success === false ? (
             <div className="error-message">{poolData.message}</div>
           ) : (
@@ -182,25 +196,6 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
           )}
         </div>
       )}
-
-      <details style={{ marginTop: '30px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '20px' }}>
-        <summary style={{ cursor: 'pointer', listStyle: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: 0.7 }}>
-          <h4 style={{ margin: 0, fontSize: '0.9rem' }}>Manual API Executor</h4>
-          <span style={{ fontSize: '11px', color: '#3b82f6', textTransform: 'uppercase', fontWeight: 'bold' }}>Show Developer Tools</span>
-        </summary>
-        <div className="market-inputs" style={{ marginTop: '15px' }}>
-          <select className="select-pro" value={mrrMethod} onChange={(e) => setMrrMethod(e.target.value)}>
-            <option value="GET">GET</option>
-            <option value="POST">POST</option>
-            <option value="PUT">PUT</option>
-            <option value="DELETE">DELETE</option>
-          </select>
-          <input className="input-pro" placeholder="Endpoint (e.g. /rig/mine)" value={mrrEndpoint} onChange={(e) => setMrrEndpoint(e.target.value)} />
-          <button className="btn-pro secondary" onClick={callMrrFunction}>Execute</button>
-          <button className="text-button" onClick={() => { setMrrEndpoint('/rig/mine'); setMrrMethod('GET'); setMrrBody(''); }}>Reset</button>
-        </div>
-        <textarea className="input-pro" style={{ marginTop: '10px', minHeight: '80px', width: '100%' }} placeholder='JSON Body (Optional)' value={mrrBody} onChange={(e) => setMrrBody(e.target.value)} />
-      </details>
 
       {/* Rented Status Modal */}
       <Modal
@@ -222,7 +217,6 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
                 {String(rentalInfo.status || 'RENTED').toUpperCase()}
               </span>
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
               <div className="stat-box" style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px' }}>
                 <div style={{ fontSize: '9px', opacity: 0.5, marginBottom: '4px', textTransform: 'uppercase' }}>Algorithm</div>
@@ -236,9 +230,14 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
                 <div style={{ fontSize: '9px', opacity: 0.5, marginBottom: '4px', textTransform: 'uppercase' }}>Price</div>
                 <div style={{ fontWeight: 'bold', color: '#fbbf24' }}>
                   {(() => {
-                    const p = rentalInfo?.price;
-                    const val = (p && typeof p === 'object') ? (p.paid || p.price || p.advertised || '0.00') : (p || '0.00');
-                    const cur = (p && typeof p === 'object' && p.currency) || rentalInfo.currency || rentalInfo.price_unit || 'BTC';
+                    const p = rentalInfo?.price || rentalInfo?.rig?.price;
+                    const cur = (p && typeof p === 'object' && p.currency) || rentalInfo?.currency || rentalInfo?.price_unit || 'BTC';
+                    
+                    let val = (p && typeof p === 'object') ? (p.paid || p.price || p.advertised) : p;
+                    // Handle rig-style objects where price is nested under currency keys (e.g. p.BTC.price)
+                    if (p && typeof p === 'object' && !val && p[cur]) val = p[cur].price || p[cur].paid;
+                    val = val || '0.00';
+
                     // Prevent repeating the currency if it's already in the value string
                     if (String(val).toUpperCase().includes(String(cur).toUpperCase())) return val;
                     return `${val} ${cur}`;
@@ -268,13 +267,11 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
                 <span style={{ opacity: 0.6 }}>Duration:</span> {rentalInfo.normalized?.duration || rentalInfo.length || rentalInfo.hours || '0'} Hours
               </div>
             </div>
-
             {rentalInfo.pools && rentalInfo.pools.length > 0 && (
               <div style={{ frontSize: '8px', marginTop: '20px', maxHeight: '100px', overflowY: 'auto', paddingRight: '1px' }}>
                 <MrrPoolsTable data={{ pools: rentalInfo.pools }} />
               </div>
             )}
-
             <div className="modal-actions" style={{ justifyContent: 'center' }}>
               <button className="btn-pro secondary" onClick={() => setIsModalOpen(false)}>Dismiss</button>
             </div>

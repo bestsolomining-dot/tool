@@ -15,7 +15,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
   const [playing, setPlaying] = useState(false)
   const [running, setRunning] = useState(false)
   const [verificationDelay, setVerificationDelay] = useState(3000) // Delay between individual pool verifications in bulk run
-  const [automationInterval, setAutomationInterval] = useState(3) // 3 minutes in seconds
+  const [automationInterval, setAutomationInterval] = useState(30) // 30 seconds
   const [lastRunTime, setLastRunTime] = useState(null)
   const [rateLimitStatus, setRateLimitStatus] = useState(null)
   const [nextRunCountdown, setNextRunCountdown] = useState(null)
@@ -577,7 +577,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
         </button>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>DELAY (s)</label>
+            <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>DELAY (ms)</label>
             <input
               type="number"
               className="input-pro"
@@ -650,13 +650,12 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
               <span>Total Time Run:</span>
               <span>{Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s</span>
+              {lastRunTime && !playing && (
+                <div style={{ color: '#059669', fontSize: '11px', textAlign: 'right' }}>
+                  Last cycle finished: {lastRunTime}
+                </div>
+              )}
             </div>
-            {lastRunTime && !playing && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8, color: '#059669' }}>
-                <span>Last Finished:</span>
-                <span>{lastRunTime}</span>
-              </div>
-            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
               <span>Skipped Pools:</span>
               <span>{skippedCount}</span>
@@ -670,7 +669,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
           </div>
         )}
 
-        <div className="pool-main-content" style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="pool-main-content" style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '650px', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
           {progress.total > 0 && (
             <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
               <div
@@ -780,7 +779,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient }) {
                 <span>{poolAlgorithmGroups.length} types / {activePoolSource.length} pools</span>
               </div>
               {poolAlgorithmGroups.length > 0 ? (
-                <div className="algorithm-grid">
+                <div className="algorithm-grid" style={{ maxHeight: '650px', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
                   {poolAlgorithmGroups.map(([algorithm, count]) => (
                     <div className="algorithm-row" key={algorithm}>
                       <span>{algorithm}</span>

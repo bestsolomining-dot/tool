@@ -4,7 +4,8 @@ import Modal from './src/components/Modal';
 import HashpowerBot from './src/components/HashpowerBot';
 import NiceHash from './src/components/NiceHash';
 import MiningRigRental from './src/components/MiningRigRental';
-import MiningRigSection from './src/components/MiningRigSection'; // New import
+import MiningRigSection from './src/components/MiningRigSection';
+import HashrateCalculator from './src/components/HashrateCalculator';
 import MrrPoolsManager from './src/components/MrrPoolsManager';
 import './src/App.css';
 
@@ -16,14 +17,13 @@ export default function App() {
   const [activeSection, setActiveSection] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
-  const [algorithm, setAlgorithm] = useState(''); // Initialize with empty string
-  const [market, setMarket] = useState(''); // Initialize with empty string
+  const [algorithm, setAlgorithm] = useState('');
+  const [market, setMarket] = useState('');
   const [nhClient, setNhClient] = useState('BT');
-  const [mrrClient, setMrrClient] = useState('BT'); // Default to BT to prevent initial errors
+  const [mrrClient, setMrrClient] = useState('BT');
   const [mrrPoolData, setMrrPoolData] = useState(null);
   const [mrrPoolRigId, setMrrPoolRigId] = useState('');
   const [mrrPoolRentalId, setMrrPoolRentalId] = useState('');
-
   const scrollToPools = useCallback(() => {
     const poolsEl = document.querySelector('.pools-section');
     if (poolsEl) poolsEl.scrollIntoView({ behavior: 'smooth' });
@@ -32,12 +32,9 @@ export default function App() {
   const callApi = useCallback(async (path, options = {}) => {
     const startedAt = performance.now();
     const method = options.method || 'GET';
-
     const { query, section, ...fetchOptions } = options;
     let finalPath = path;
-
     const enrichedQuery = { ...query };
-    // NiceHash API v2 requires a 'ts' parameter. MRR does not.
     if (path.startsWith('/api/v2/') && !path.startsWith('/api/v2/mrr/')) {
       if (!enrichedQuery.ts) enrichedQuery.ts = Date.now();
       if (!enrichedQuery.client) {
@@ -59,6 +56,7 @@ export default function App() {
       setLoading(true);
       setError('');
     }
+
     if (!options.silent) {
       setLastCall({ method, path: finalPath, status: 'Pending', durationMs: null });
     }
@@ -179,11 +177,9 @@ export default function App() {
     // Prevent calling invalid endpoints that lead to 401/404 errors
     if (isRented && !rentalId) return;
     if (!isRented && !rigId) return;
-
     const path = (isRented && rentalId)
       ? `/api/v2/mrr/rental/${encodeURIComponent(rentalId)}/pool`
       : `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
-
     const result = await handleMiningCall(path, { query: { client: mrrClient }, silent: true });
     setMrrPoolData(result);
     setMrrPoolRigId(isRented ? '' : String(rigId || ''));
@@ -192,30 +188,42 @@ export default function App() {
 
   return (
     <div className="app-shell" style={{ padding: '0 20px 40px', maxWidth: '1600px', margin: '0 auto' }}>
-      <header className="app-header" style={{ 
-        padding: '40px 0', 
-        borderBottom: '1px solid rgba(255,255,255,0.05)', 
+      <header className="app-header" style={{
+        padding: '40px 0',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
         marginBottom: '30px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'flex-end'
       }}>
         <div className="brand-block" style={{ flex: 1 }}>
-          <h2>Ben Tre Mining Tool</h2>
-          <p className="subtitle" style={{ opacity: 0.5, fontSize: '0.95rem', maxWidth: '600px', marginTop: '8px' }}>
-            A powerful desktop tool for Nicehash miners. Manage rigs, monitor stats, and automate hashpower purchases with ease.
-          </p>
-        </div>
-        <div className="status-card" style={{ marginBottom: '5px' }}>
-          <div className="status-item">
-            <span style={{ opacity: 0.5, marginRight: '8px' }}>SYSTEM:</span>
-            <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`}>
-              {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
-            </span>
+          <h3>Ben Tre Mining Tool</h3>
+          <div className="status-card" style={{ marginBottom: '2px' }}>
+            <div className="status-item">
+              <span style={{ opacity: 0.5, marginRight: '10px' }}>SYSTEM:</span>
+              <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`}>
+                {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
+              </span>
+            </div>
           </div>
         </div>
       </header>
-
+      <section 
+        className="pools-section" 
+        style={{ 
+          maxHeight: '850px', 
+          overflowY: 'auto', 
+          marginBottom: '40px',
+          background: 'rgba(255, 255, 255, 0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          borderRadius: '16px',
+          padding: '24px',
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(255, 255, 255, 0.1) transparent'
+        }}
+      >
+        <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
+      </section>
       <main className="dashboard">
         <section className="quick-actions">
           <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -230,21 +238,18 @@ export default function App() {
                 setNhClient={setNhClient}
               />
             </article>
-
             <article className="panel">
-              
               <div style={{ marginTop: '5px' }}>
-                <HashpowerBot 
-                  algorithm={algorithm} 
-                  market={market} 
-                  onCall={handleHashpowerCall} 
+                <HashpowerBot
+                  algorithm={algorithm}
+                  market={market}
+                  onCall={handleHashpowerCall}
                   nhClient={nhClient}
                   setNhClient={setNhClient}
                 />
               </div>
             </article>
           </div>
-
           <article className="panel">
             <MiningRigSection
               onCall={handleMiningCall}
@@ -253,7 +258,6 @@ export default function App() {
               onOpenMrrPools={handleOpenMrrPools}
             />
           </article>
-
           <article className="panel">
             <MrrPoolsManager
               onCall={handleMiningCall}
@@ -262,14 +266,12 @@ export default function App() {
               externalRigId={mrrPoolRigId}
               externalRentalId={mrrPoolRentalId}
             />
+            <article className="panel">
+              <HashrateCalculator />
+            </article>
           </article>
         </section>
-
-        <section className="pools-section">
-          <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
-        </section>
       </main>
-
       <Modal
         isOpen={responseModalOpen}
         onClose={() => setResponseModalOpen(false)}

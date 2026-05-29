@@ -15,12 +15,14 @@ export default function Pools() {
   const [playing, setPlaying] = useState(false)
   const [running, setRunning] = useState(false)
   const [verificationDelay, setVerificationDelay] = useState(5000)
+  const [autoDelay, setAutoDelay] = useState(900000)
   const [lastRunTime, setLastRunTime] = useState(null)
   const [rateLimitStatus, setRateLimitStatus] = useState(null)
   const [nextRunCountdown, setNextRunCountdown] = useState(null)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [mrrRigs, setMrrRigs] = useState(null)
+  const [importedPools, setImportedPools] = useState([])
   const [inspectData, setInspectData] = useState(null)
   const [runCount, setRunCount] = useState(0)
   const [currentRunStartTime, setCurrentRunStartTime] = useState(null)
@@ -328,7 +330,7 @@ export default function Pools() {
       }
     } finally {
       setPlaying(false)
-      if (!stopRef.current) setLastRunTime(new Date().toLocaleTimeString())
+      if (!stopRef.current) setLastRunTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
       if (!keepRunning && stopRef.current) setRunning(false)
     }
   }
@@ -339,7 +341,7 @@ export default function Pools() {
     setRunCount(0)
     stopRef.current = false
 
-    const intervalMs = 10000
+    const intervalMs = autoDelay
 
     const executeCycle = async () => {
       if (stopRef.current) return
@@ -398,8 +400,9 @@ export default function Pools() {
     reader.onload = async (e) => {
       try {
         const data = e.target.result;
-        const workbook = ph.XLSX.read(data, { type: 'binary' });
-        const sheetName = workbook.SheetNames[0];
+        const workbook = ph.XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames?.[0];
+        if (!sheetName) throw new Error('No worksheet found in XLSX file');
         const sheet = workbook.Sheets[sheetName];
         const json = ph.XLSX.utils.sheet_to_json(sheet);
 
@@ -413,14 +416,17 @@ export default function Pools() {
           key: `imp_${Date.now()}_${i}`
         }));
 
-        if (importedPools.length === 0) throw new Error('No valid pool rows found in XLSX');
-        // Run verification on the imported list immediately
-        await verifyAllOnce({ targetPools: importedPools, resetStop: true });
+        const normalizedImportedPools = ph.normalizeList(importedPools);
+        if (normalizedImportedPools.length === 0) throw new Error('No valid pool rows found in XLSX');
+
+        setImportedPools(normalizedImportedPools);
+        setPools(prev => [...prev, ...normalizedImportedPools]);
+        setError('');
       } catch (err) {
         setError('Import Failed: ' + err.message);
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   }
 
   async function importFromUrl() {
@@ -439,22 +445,30 @@ export default function Pools() {
   }
 
   async function verifyImported() {
-    const input = prompt('Paste pool JSON object or array to verify (one-time run):');
-    if (!input) return;
-    try {
-      if (!ph.XLSX) {
-        throw new Error('XLSX library not loaded. Cannot import files.');
+    setError('');
+    let targetPools = importedPools;
+    if (!Array.isArray(targetPools) || targetPools.length === 0) {
+      const input = prompt('Paste pool JSON object or array to verify (one-time run):');
+      if (!input) return;
+      try {
+        const parsed = JSON.parse(input);
+        const list = Array.isArray(parsed) ? parsed : [parsed];
+        targetPools = list.map((p, i) => ({
+          ...p,
+          key: p.key || `imp_${Date.now()}_${i}`
+        }));
+      } catch (err) {
+        setError('Import Failed: ' + err.message);
+        return;
       }
-      const parsed = JSON.parse(input);
-      const list = Array.isArray(parsed) ? parsed : [parsed];
-      const targetPools = list.map((p, i) => ({
-        ...p,
-        key: p.key || `imp_${Date.now()}_${i}`
-      }));
-      await verifyAllOnce({ targetPools, resetStop: true });
-    } catch (err) {
-      setError('Import Failed: ' + err.message);
     }
+
+    if (!targetPools || targetPools.length === 0) {
+      setError('No imported pools available to verify.');
+      return;
+    }
+
+    await verifyAllOnce({ targetPools, resetStop: true });
   }
 
   function stopAutomation() {
@@ -476,7 +490,9 @@ export default function Pools() {
       activeRequestRef.current.abort()
       activeRequestRef.current = null
     }
-    setLastRunTime(null)
+    if (currentRunStartTime || progress.current > 0) {
+      setLastRunTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+    }
   }
 
   const openPoolEditor = (item) => {
@@ -594,6 +610,9 @@ export default function Pools() {
           <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()} disabled={playing || running || !enableVerifyImportedButton}>
             Import XLSX
           </button>
+          <span style={{ alignSelf: 'center', fontSize: '0.9rem', color: '#94a3b8' }}>
+            {importedPools.length > 0 ? `${importedPools.length} imported` : 'No imported pools'}
+          </span>
           <input
             type="file"
             ref={fileInputRef}
@@ -638,15 +657,28 @@ export default function Pools() {
           {/* Time information block – pushed to the end on flex row, wraps below on small screens */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '0.9rem', marginRight: 'auto', background: 'rgba(92, 92, 92, 0.2)', padding: '4px 8px', borderRadius: '6px' }}>
             {/* Delay input */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <label style={{ fontSize: '10px', fontWeight: 'bold' }}>MRR_KEY_RIG_BT</label>
-              <input
-                type="number"
-                className="input-pro"
-                style={{ width: '70px', padding: '3px' }}
-                value={verificationDelay}
-                onChange={e => setVerificationDelay(Number(e.target.value))}
-              />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '0.8rem', alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <label style={{ fontSize: '10px', fontWeight: 'bold' }}>Verify Delay</label>
+                <input
+                  type="number"
+                  className="input-pro"
+                  style={{ width: '70px', padding: '3px' }}
+                  value={verificationDelay}
+                  onChange={e => setVerificationDelay(Number(e.target.value))}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <label style={{ fontSize: '10px', fontWeight: 'bold' }}>Loop Delay</label>
+                <input
+                  type="number"
+                  min="1000"
+                  className="input-pro"
+                  style={{ width: '80px', padding: '3px' }}
+                  value={autoDelay}
+                  onChange={e => setAutoDelay(Number(e.target.value))}
+                />
+              </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '1rem', marginLeft: 'auto', background: 'rgba(0,0,0,0.2)', padding: '4px 8px', borderRadius: '6px' }}>
@@ -668,9 +700,9 @@ export default function Pools() {
                 </>
               )}
 
-              {lastRunTime && !running && !playing && (
+              {lastRunTime && (
                 <div style={{ color: '#059669' }}>
-                  Finished: {lastRunTime}
+                  Last finished loop #{runCount}: {lastRunTime}
                 </div>
               )}
             </div>
@@ -696,6 +728,9 @@ export default function Pools() {
               )}
               {verifyResults.length > 0 ? (
                 <div className="results-wrapper">
+                  <div style={{ marginBottom: '10px', fontSize: '0.95rem', color: '#e2e8f0' }}>
+                    Verified {successCount} of {completedResults.length} completed results
+                  </div>
                   <div className="verify-summary">
                     <div>
                       <span>Target pools</span>
@@ -813,7 +848,7 @@ export default function Pools() {
                       </strong>
                       <button
                         type="button"
-                        className="btn-pro secondary"
+                        className="btn-pro"
                         onClick={() => verifyAlgorithm(algorithm)}
                         disabled={playing || running}
                       >

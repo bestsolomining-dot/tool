@@ -233,19 +233,18 @@
 .verify-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 400px;
+  gap: 12px;
+  max-height: 200px; /* Better responsive height for modals */
+  min-height: auto;
   overflow-y: auto;
-  min-height: 200px;
-  overflow: hidden;
-  padding-right: 4px;
+  padding-right: 8px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.2) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
 .verify-list::-webkit-scrollbar {
-  width: 10px;
+  width: 6px;
 }
 
 .verify-list::-webkit-scrollbar-track {
@@ -253,17 +252,21 @@
 }
 
 .verify-list::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.18);
-  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
 }
 
 .verify-item {
-  border: 1px solid var(--border-color);
-  min-height: 50px;
-  border-radius: 3px;
-  background: var(--panel-strong);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-left: 4px solid #64748b; /* Default gray */
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
   overflow: hidden;
+  transition: all 0.2s ease;
 }
+
+.verify-item.success { border-left-color: #10b981; }
+.verify-item.fail { border-left-color: #ef4444; }
 
 .verify-item summary {
   padding: 5px 5px;

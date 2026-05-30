@@ -173,25 +173,24 @@ export default function App() {
     const rigObj = typeof rig === 'object' ? rig : { id: rig };
     const statusStr = String(typeof rigObj.status === 'object' ? rigObj.status.status : rigObj.status || '').toLowerCase();
     const isRented = statusStr.includes('rented');
-    const rentalId = String(rigObj.rentalid || rigObj.current_rental_id || rigObj.rental_id || rigObj.id || '').trim();
-    const rigId = String(rigObj.rigid || rigObj.rig_id || rigObj.id || '').trim();
+    
+    // Correctly distinguish between the physical Rig ID and the Rental ID (Rig Card ID)
+    // When rented, the 'id' field is often the rental ID. The physical rig ID is in 'rigid' or 'rig.id'.
+    const rigId = String(rigObj.rigid || rigObj.rig_id || rigObj.rig?.id || (isRented ? '' : rigObj.id)).trim();
+    const rentalId = String(rigObj.rentalid || rigObj.current_rental_id || rigObj.rental_id || (isRented ? rigObj.id : '')).trim();
 
-    // Prevent calling invalid endpoints that lead to 401/404 errors
-    if (isRented && !rentalId) return;
-    if (!isRented && !rigId) return;
+    // Logic: Always fetch pool of the physical rig id, not the rig card (rental) id.
+    if (!rigId) return;
+
+    const path = `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
+    const result = await handleMiningCall(path, { query: { client: mrrClient }, silent: true });
+    
+    setMrrPoolData(result);
+    setMrrPoolRigId(rigId);
 
     if (isRented) {
-      // Redesign: Trigger the Rental Status Modal.
-      // MrrPoolsManager handles the full fetch for rentals.
       setMrrPoolRentalId(rentalId);
-      setMrrPoolRigId('');
-      setMrrPoolData(null);
     } else {
-      // Standard Rig Pool View
-      const path = `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
-      const result = await handleMiningCall(path, { query: { client: mrrClient }, silent: true });
-      setMrrPoolData(result);
-      setMrrPoolRigId(rigId);
       setMrrPoolRentalId('');
     }
   }, [handleMiningCall, mrrClient]);

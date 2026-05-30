@@ -159,20 +159,22 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
   };
 
   const fetchRigDetailInfo = async (rig) => {
-    const rigId = rig.id || rig.rigid || rig.rig_id;
     const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
     const isRented = statusStr.includes('rented') || statusStr.includes('active');
-    const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id || rig.id;
 
-    setLoadingInfoIds(prev => new Set(prev).add(rigId));
+    // Extract physical Rig ID and Rental ID correctly for fetching detailed info
+    const rigId = rig.rigid || rig.rig_id || rig.rig?.id || (isRented ? '' : rig.id);
+    const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id || (isRented ? rig.id : '');
+
+    setLoadingInfoIds(prev => new Set(prev).add(rig.id));
     try {
       const apiBase = window.location.port === '5173'
         ? `${window.location.protocol}//${window.location.hostname}:3000`
         : '';
 
-      const url = (isRented && rentalId && rentalId !== rigId) 
+      const url = (isRented && rentalId) 
         ? `${apiBase}/api/v2/mrr/rental/${encodeURIComponent(rentalId)}?client=${mrrClient}` 
-        : `${apiBase}/api/v2/mrr/rig/${encodeURIComponent(rigId)}/info?client=${mrrClient}`;
+        : `${apiBase}/api/v2/mrr/rig/${encodeURIComponent(rigId || rig.id)}/info?client=${mrrClient}`;
 
       const result = await fetch(url);
       const data = await result.json();
@@ -183,9 +185,9 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
           const pools = rental.pools || [];
           const firstPool = pools[0];
           infoBoxData = {
-            stratumHost: firstPool?.host || firstPool?.stratumHost || rental.rig?.stratumHost || 'N/A',
-            stratumPort: firstPool?.port || firstPool?.stratumPort || rental.rig?.stratumPort || '',
-            username: firstPool?.user || firstPool?.username || rental.rig?.username || 'N/A',
+            stratumHost: firstPool?.host || firstPool?.stratumHost || firstPool?.stratumHostname || rental.rig?.stratumHost || rental.rig?.host || rental.rig?.stratumHostname || 'N/A',
+            stratumPort: firstPool?.port || firstPool?.stratumPort || rental.rig?.stratumPort || rental.rig?.port || '',
+            username: firstPool?.user || firstPool?.username || rental.rig?.username || rental.rig?.user || 'N/A',
             algo: getRentalAlgorithm(rental),
             percent: getRentalEfficiency(rental),
             startTime: getRentalStartTime(rental),
@@ -193,9 +195,9 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
             advertised: getRentalAdvertisedHashrate(rental),
             average: getRentalAverageHashrate(rental),
             pools: pools.map(p => ({
-              host: p.host || p.stratumHost || rental.rig?.stratumHost || 'N/A',
-              port: p.port || p.stratumPort || rental.rig?.stratumPort || 'N/A',
-              username: p.user || p.username || rental.rig?.username || 'N/A',
+              host: p.host || p.stratumHost || p.stratumHostname || rental.rig?.stratumHost || rental.rig?.host || 'N/A',
+              port: p.port || p.stratumPort || rental.rig?.stratumPort || rental.rig?.port || 'N/A',
+              username: p.user || p.username || rental.rig?.username || rental.rig?.user || 'N/A',
             })),
             isRental: true,
           };
@@ -203,14 +205,14 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
           // For rig info, the data is already structured correctly by the backend's extractRigInfo
           infoBoxData = data;
         }
-        setEnrichedInfo(prev => ({ ...prev, [rigId]: infoBoxData }));
+        setEnrichedInfo(prev => ({ ...prev, [rig.id]: infoBoxData }));
       }
     } catch (err) {
       console.error("Failed to fetch rig info:", err);
     } finally {
       setLoadingInfoIds(prev => {
         const next = new Set(prev);
-        next.delete(rigId);
+        next.delete(rig.id);
         return next;
       });
     }
@@ -429,7 +431,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
               {(info || rig.host) && (
                 <div className="rig-pool-summary" style={{ background: 'rgba(0,0,0,0.25)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.02)', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.2)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.stratumHost || rig.host}><span style={{ opacity: 0.5 }}>P0:</span> {info?.stratumHost || rig.host || 'N/A'}</div>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.stratumHost || rig.host}><span style={{ opacity: 0.5 }}>Host:</span> {info?.stratumHost || rig.host || 'N/A'}</div>
                     <div><span style={{ opacity: 0.5 }}>Port:</span> {info?.stratumPort || rig.port || 'N/A'}</div>
                     <div style={{ gridColumn: 'span 2', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.username || rig.user}><span style={{ opacity: 0.5 }}>User:</span> {info?.username || rig.user || 'N/A'}</div>
                   </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Modal from './Modal';
 import { MrrPoolsTable, CountdownTimer } from './MiningRigRental'; // Import CountdownTimer
 import { poolHelpers as ph } from '../core/poolUtils'; // Import poolHelpers
@@ -34,7 +34,7 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
     if (externalRigId) setRigId(String(externalRigId));
   }, [externalRigId]);
 
-  const fetchRentalInfo = async (id = null) => {
+  const fetchRentalInfo = useCallback(async (id = null) => {
     const targetId = String(id || rentalId).trim();
     if (!targetId || targetId === 'undefined') return;
 
@@ -57,9 +57,9 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
     } finally {
       setLoading(false);
     }
-  };
+  }, [rentalId, mrrClient, onCall]);
 
-  const fetchPools = async (type, id = null) => {
+  const fetchPools = useCallback(async (type, id = null) => {
     if (!mrrClient) {
       setPoolData({ success: false, message: "Please select a specific client for this action." });
       return;
@@ -86,7 +86,7 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
     } finally {
       setLoading(false);
     }
-  };
+  }, [mrrClient, rigId, rentalId, onCall]);
 
   const callMrrFunction = () => {
     const endpoint = mrrEndpoint.trim();
@@ -124,16 +124,13 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
   };
 
   useEffect(() => {
-    if (externalRigId) setRigId(String(externalRigId));
-  }, [externalRigId]);
-
-  useEffect(() => {
     if (externalRentalId) {
       const id = String(externalRentalId);
       setRentalId(id);
       fetchRentalInfo(id);
+      fetchPools('rental', id); // Automatically fetch pools for the quick-view as well
     }
-  }, [externalRentalId]);
+  }, [externalRentalId, fetchRentalInfo, fetchPools]);
 
   return (
     <div className="mrr-pools-manager nh-theme" style={{ marginTop: '0px', padding: '20px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>

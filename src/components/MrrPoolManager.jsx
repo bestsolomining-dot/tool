@@ -21,7 +21,7 @@ export default function MrrPoolManager({ rentalIds, onCall, onClose }) {
     try {
       // IDs can be semi-colon separated string per user notes: /rental/[ID1];[ID2]/pool
       const ids = Array.isArray(rentalIds) ? rentalIds.join(';') : rentalIds;
-      const response = await onCall(`/api/v1/rental/${ids}/pool`, {
+      const response = await onCall(`/api/v2/mrr/rental/${ids}/pool`, {
         method: 'GET',
         silent: true
       });

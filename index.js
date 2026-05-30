@@ -14,6 +14,45 @@ const mrrLastNonceByClient = new Map();
 const mrrQueueByClient = new Map();
 const mrrInstances = new Map();
 
+// --- MRR CLOCK SYNC ---
+let mrrClockOffset = 0n;
+let mrrClockSynced = false;
+let mrrSyncPromise = null;
+
+/**
+ * Synchronizes local system time with the NiceHash server time to detect and 
+ * mitigate clock drift that causes "Bad Nonce" errors in MRR.
+ */
+async function syncMrrClock() {
+  if (mrrClockSynced) return;
+  if (mrrSyncPromise) return mrrSyncPromise;
+  console.log('[mrr:clock] Synchronizing with NiceHash server time...');
+
+  mrrSyncPromise = (async () => {
+  try {
+    const { client } = resolveNhClient('BT');
+    if (!client) return;
+
+    const serverTimeMs = await client.getServerTime();
+    const localTimeMs = Date.now();
+    mrrClockOffset = BigInt(serverTimeMs) - BigInt(localTimeMs);
+    mrrClockSynced = true;
+
+    if (Math.abs(Number(mrrClockOffset)) > 1000) {
+      console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (Server: ${serverTimeMs}, Local: ${localTimeMs})`);
+    } else {
+      console.info(`[mrr:clock] Synced. Offset: ${mrrClockOffset}ms.`);
+    }
+  } catch (err) {
+    console.warn(`[mrr:clock] Synchronization failed: ${err.message}. Using raw system clock.`);
+    mrrClockSynced = true; // Mark as attempted to avoid blocking every request
+  } finally {
+    mrrSyncPromise = null;
+  }
+  })();
+  return mrrSyncPromise;
+}
+
 // --- CORS MIDDLEWARE (Must be first) ---
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -221,7 +260,7 @@ const getNiceHashApp = (client) => ({
 
   // --- POOL MANAGEMENT ---
   pools: {
-    getPools: (query) => client.call({ method: 'GET', path: '/main/api/v2/pools', query }),
+    getPools: () => client.call({ method: 'GET', path: '/main/api/v2/pools' }),
     getPoolDetails: (poolId) => client.call({ method: 'GET', path: `/main/api/v2/pool/${poolId}` }),
     createPool: (body) => client.call({ method: 'POST', path: '/main/api/v2/pool', body }),
     deletePool: (poolId) => client.call({ method: 'DELETE', path: `/main/api/v2/pool/${poolId}` }),
@@ -374,7 +413,7 @@ app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res
 app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.updatePriceLimit(req.params.orderId, req.body))));
 
 // Pools
-app.get('/api/v2/pools', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.getPools(req.query))));
+app.get('/api/v2/pools', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.getPools())));
 app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.getPoolDetails(req.params.poolId))));
 app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.createPool(req.body))));
 app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.verifyPool(req.body))));
@@ -383,8 +422,14 @@ app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await
 function nextMrrNonce(clientName) {
   // Use BigInt to support huge nonces without precision loss
   const lastNonce = BigInt(mrrLastNonceByClient.get(clientName) || 0n);
-  const now = BigInt(Date.now());
-  const nonce = now > lastNonce ? now : lastNonce + 1n;
+  
+  // Align with PHP example: seconds + 4 digits of micro-precision (14 digits total)
+  const nowMs = Date.now() + Number(mrrClockOffset);
+  const seconds = Math.floor(nowMs / 1000);
+  const microDigits = (nowMs % 1000).toString().padStart(3, '0') + '0'; 
+  const now14 = BigInt(`${seconds}${microDigits}`);
+
+  const nonce = now14 > lastNonce ? now14 : lastNonce + 1n;
   
   mrrLastNonceByClient.set(clientName, nonce);
   return nonce.toString();
@@ -396,12 +441,20 @@ function resolveMrrClient(clientNameRaw) {
   if (!mrrInstances.has(clientName)) {
     let config = mrrConfigs[clientName];
     
-    const envKey = process.env[`MRR_KEY_RIG_${clientName}`] || 
-                   process.env[`MRR_API_KEY_${clientName}`];
-    const envSecret = process.env[`MRR_SECRET_RIG_${clientName}`] || 
-                     process.env[`MRR_API_SECRET_${clientName}`];
+    // Map 'ALL' to 'VN' for consistent environment variable lookup
+    const lookupSuffix = clientName === 'ALL' ? 'VN' : clientName;
 
-    const envNonce = process.env[`RIG_${clientName}_NOUNCE`]; // Read nonce from environment
+    const envKey = process.env[`MRR_KEY_RIG_${lookupSuffix}`] || 
+                   process.env[`MRR_API_KEY_${lookupSuffix}`];
+    const envSecret = process.env[`MRR_SECRET_RIG_${lookupSuffix}`] || 
+                     process.env[`MRR_API_SECRET_${lookupSuffix}`];
+
+    // Look for nonce baseline in .env using multiple naming conventions
+    const envNonce = normalizeCredential(
+      process.env[`RIG_NOUNCE_${lookupSuffix}`] || 
+      process.env[`RIG_${lookupSuffix}_NOUNCE`] || 
+      process.env[`MRR_NOUNCE_${lookupSuffix}`]
+    );
 
     if (envKey && envSecret) {
       config = {
@@ -416,10 +469,8 @@ function resolveMrrClient(clientNameRaw) {
       if (envNonce) {
         try {
           const bigEnv = BigInt(envNonce);
-          const now = BigInt(Date.now());
-          const initialNonce = bigEnv > now ? bigEnv : now;
-          mrrLastNonceByClient.set(clientName, initialNonce.toString());
-          console.log(`[mrr:${clientName}] Initializing nonce from environment: ${initialNonce.toString()}`);
+          mrrLastNonceByClient.set(clientName, bigEnv);
+          console.log(`[mrr:${clientName}] Initialized with baseline nonce from .env: ${bigEnv}`);
         } catch (e) {
           console.warn(`[mrr:${clientName}] Invalid nonce in environment: ${envNonce}`);
         }
@@ -518,6 +569,10 @@ async function runMrrCallInOrder(clientName, task) {
 }
 
 async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw }) {
+  if (!mrrClockSynced) {
+    await syncMrrClock();
+  }
+
   const { clientName, clientConfig } = resolveMrrClient(clientNameRaw);
   return runMrrCallInOrder(clientName, async () => {
     const normalizedEndpoint = sanitizeMrrEndpoint(endpoint);
@@ -525,15 +580,16 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
 
     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedEndpoint}`);
+    
+    // Endpoint for signature: path after /api/v2, must include leading slash and match path exactly
+    const sigEndpoint = normalizedEndpoint;
+
     if (query && typeof query === 'object') {
       for (const [key, value] of Object.entries(query)) {
         if (value === undefined || value === null || value === '') continue;
         baseUrl.searchParams.set(key, String(value));
       }
     }
-
-    // Endpoint for signature: relative to /api/v2, no query string
-    const sigEndpoint = baseUrl.pathname.replace(/^\/api\/v2/, '');
     
     const send = async (nStr, sig, authHeaders = {}) => request(baseUrl.toString(), {
       method: requestMethod,
@@ -550,12 +606,12 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
     // --- TRY MODERN V2 (HMAC-SHA1) ---
     let currentNonce = nextMrrNonce(clientName);
     let signString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
-    let signature = createHmac('sha1', clientConfig.apiSecret).update(signString).digest('hex');
+    const signatureV2 = createHmac('sha1', clientConfig.apiSecret).update(signString).digest('hex');
 
-    let response = await send(currentNonce, signature, {
+    let response = await send(currentNonce, signatureV2, {
       'x-api-key': clientConfig.apiKey,
       'x-api-nonce': currentNonce,
-      'x-api-sign': signature
+      'x-api-sign': signatureV2
     });
 
     let text = await response.body.text();
@@ -568,11 +624,11 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
 
     // --- FALLBACK TO LEGACY (SHA1 CONCAT) ---
     let authMessage = String(data?.data?.message || data?.message || '');
-    let isAuthFailureMessage = /signature|unauthorized|authenticated|invalid/i.test(authMessage);
-    const shouldRetry = !data.success && isAuthFailureMessage;
+    let isAuthFailureMessage = /signature|unauthorized|authenticated|invalid|missing api key/i.test(authMessage);
+    const shouldRetry = (!data.success && isAuthFailureMessage) || response.statusCode === 401;
 
     if (shouldRetry) {
-      console.warn(`[mrr:${clientName}] HMAC failed, retrying with Legacy SHA1 Concatenation...`);
+      console.warn(`[mrr:${clientName}] HMAC failed (${authMessage || 'Unauthorized'}), retrying with Legacy SHA1 Concatenation...`);
       currentNonce = nextMrrNonce(clientName);
       const legacyStr = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}${clientConfig.apiSecret}`;
       const legacySig = createHash('sha1').update(legacyStr).digest('hex');
@@ -1097,7 +1153,10 @@ if (process.env.RUN_MAIN === 'true') {
     // Connectivity check on startup
     const { client } = resolveNhClient('BT');
     if (client) {
-      getNiceHashApp(client).public.getTime().then(t => console.log('✅ Connection verified. Server Time:', new Date(t).toLocaleString()));
+      getNiceHashApp(client).public.getTime().then(t => {
+        console.log('✅ Connection verified. Server Time:', new Date(t).toLocaleString());
+        syncMrrClock(); // Pre-sync clock on startup
+      });
     }
   } catch (error) {
     console.error('❌ Connectivity Error:', error.message);

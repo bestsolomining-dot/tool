@@ -16,6 +16,7 @@ export default function App() {
   const [lastCall, setLastCall] = useState(null);
   const [activeSection, setActiveSection] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
+  const [calculatorModalOpen, setCalculatorModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
   const [algorithm, setAlgorithm] = useState('');
   const [market, setMarket] = useState('');
@@ -209,16 +210,17 @@ export default function App() {
           </div>
         </div>
       </header>
-      <section 
-        className="pools-section" 
-        style={{ 
-          marginBottom: '40px',
+      <section
+        className="pools-section"
+        style={{
+          marginBottom: '15px',
+          marginTop: '0px',
           background: 'rgba(255, 255, 255, 0.02)',
           border: '1px solid rgba(255, 255, 255, 0.05)',
           borderRadius: '16px',
           padding: '24px',
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(255, 255, 255, 0.1) transparent'
+          height: '700px',
+          minHeight: '200px'
         }}
       >
         <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhClient} setNhClient={setNhClient} />
@@ -237,6 +239,15 @@ export default function App() {
                 setNhClient={setNhClient}
               />
             </article>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
+                <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>Open the hashrate calculator in a popup modal.</p>
+              </div>
+              <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
+                Open Calculator
+              </button>
+            </div>
             <article className="panel">
               <div style={{ marginTop: '5px' }}>
                 <HashpowerBot
@@ -265,12 +276,17 @@ export default function App() {
               externalRigId={mrrPoolRigId}
               externalRentalId={mrrPoolRentalId}
             />
-            <article className="panel">
-              <HashrateCalculator />
-            </article>
           </article>
         </section>
       </main>
+      <Modal
+        isOpen={calculatorModalOpen}
+        onClose={() => setCalculatorModalOpen(false)}
+        title="Hashrate Calculator"
+        maxWidth="700px"
+      >
+        <HashrateCalculator />
+      </Modal>
       <Modal
         isOpen={responseModalOpen}
         onClose={() => setResponseModalOpen(false)}

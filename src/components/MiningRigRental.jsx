@@ -255,6 +255,15 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           const fresh = newList.find(r => !knownRentalIds.current.has(String(r.id)));
           if (fresh) {
             setNewRentalFound(fresh);
+            
+            // Trigger Zalo Notification
+            const zaloMsg = `🚀 [Mining Tool] New Rig Rented!\n\nName: ${fresh.name || fresh.id}\nAlgo: ${fresh.algo || 'N/A'}\nDuration: ${fresh.hours}h\nClient: ${mrrClient}`;
+            onCall('/api/v2/notify/zalo', {
+              method: 'POST',
+              body: { message: zaloMsg },
+              silent: true
+            }).catch(err => console.error('[zalo] Notification failed:', err));
+
             // Optionally trigger a system notification
             if (Notification.permission === 'granted') {
               new Notification(`Rig Rented: ${fresh.name || fresh.id}`, { body: `New rental active for ${fresh.hours}h` });
@@ -278,6 +287,10 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
       Notification.requestPermission();
     }
     fetchActiveRentals();
+
+    // Refresh every 60 seconds to detect new rentals automatically
+    const interval = setInterval(fetchActiveRentals, 60000);
+    return () => clearInterval(interval);
   }, [fetchActiveRentals]);
 
   const openManagementModal = async (type, id = null) => { // id is for specific rig actions
@@ -338,6 +351,14 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         <button className="btn-pro secondary" onClick={() => openManagementModal('list_all_rigs')}>Marketplace Status</button>
         <button className="btn-pro secondary" onClick={() => openManagementModal('rental_history')}>Rental History</button>
         <button className="btn-pro secondary" onClick={() => onCall('/api/v2/mrr/balance', { query: { client: mrrClient }, showModal: true })}>Balance</button>
+        <button 
+          className="btn-pro secondary" 
+          style={{ border: '1px solid #0068ff', color: '#0068ff' }} 
+          onClick={() => onCall('/api/v2/notify/zalo', { method: 'POST', body: { message: `🔔 [Test] Zalo Notification System is online!\nTime: ${new Date().toLocaleTimeString()}\nClient: ${mrrClient}` }, showModal: true })}
+          title="Verify Zalo OA configuration and connectivity"
+        >
+          Test Zalo
+        </button>
       </div>
 
       {/* New Rental Notification Modal */}
@@ -377,6 +398,17 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
               setNewRentalFound(null);
               openManagementModal('rental');
             }}>View All Rentals</button>
+            {import.meta.env.ZALO_USER_UID && (
+              <a 
+                href={`https://zalo.me/${import.meta.env.ZALO_ACCESS_TOKEN}`} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="btn-pro secondary"
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', border: '1px solid #0068ff', color: '#0068ff' }}
+              >
+                Open Zalo
+              </a>
+            )}
             <button className="btn-pro secondary" onClick={() => setNewRentalFound(null)}>Dismiss</button>
           </div>
         </div>

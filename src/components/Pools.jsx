@@ -30,7 +30,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   const [verifyFromFile, setVerifyFromFile] = useState(false)
 
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
-  const [selectorOpen, setSelectorOpen] = useState(false) // State for Pool Selection Modal
+  const [selectorOpen, setSelectorOpen] = useState(false)
   const runTimerRef = useRef(null)
   const countdownTimerRef = useRef(null)
   const stopRef = useRef(false)
@@ -578,211 +578,284 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   return (
     <div className="card pools-manager" >
       <div className="market-inputs" style={{ marginBottom: '15px' }}>
+        <small style={{ opacity: 0.8, fontSize: '13px', marginLeft: '10px' }}>ACTIVE NICEHASH CLIENT</small>
         <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
           <option value="BT">NiceHash Client: BT</option>
           <option value="PH">NiceHash Client: PH</option>
         </select>
-        <small style={{ opacity: 0.5, fontSize: '10px', marginLeft: '10px' }}>ACTIVE NICEHASH CLIENT</small>
-        <div className="pool-actions-container" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '1.5rem' }}>
-          <button className="btn-pro primary" style={{ width: '100%' }} onClick={verify} disabled={loading || detailsLoading || playing || !selected || running}>
-            {loading ? 'Verifying...' : 'Verify Pool'}
-          </button>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                  <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>DELAY (ms)</label>
-                  <input
-                    type="number"
-                    className="input-pro"
-                    style={{ width: '100%', padding: '6px' }}
-                    value={verificationDelay}
-                    onChange={e => setVerificationDelay(Number(e.target.value))}
-                  />
-                </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                  <label style={{ fontSize: '10px', fontWeight: 'bold', opacity: 0.7 }}>AUTO INTERVAL (s)</label>
-                  <input
-                    type="number"
-                    className="input-pro"
-                    style={{ width: '100%', padding: '6px' }}
-                    value={automationInterval}
-                    onChange={e => setAutomationInterval(Number(e.target.value))}
-                  />
+        {/* <div className="pool-actions-toolbar" style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem', flexWrap: 'wrap', marginLeft: 'auto' }}>
+          <button
+            className="btn-pro"
+            style={{ flex: 1, minWidth: '160px' }}
+            onClick={() => setSelectorOpen(true)}
+            disabled={loading || detailsLoading || playing || running}
+          >
+            Select Single Pool
+          </button>
+          <button
+            className="btn-pro"
+            style={{ flex: 1, minWidth: '160px' }}
+            onClick={verify}
+            disabled={loading || detailsLoading || playing || !selected || running}
+          >
+            {loading ? 'Verifying...' : `Verify ${selected ? ph.getLabel(selected) : 'Selected Pool'}`}
+          </button>
+        </div> */}
+        <div className="pool-automation-main" style={{ flex: 1, minWidth: '600px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Integrated Pool Automation & Bulk Verification Section */}
+          <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* <h3 style={{ margin: 0 }}>Automation & Bulk Verify</h3> */}
+            {rateLimitStatus && (
+              <div style={{ color: '#fbbf24', fontSize: '12px', fontWeight: 'bold' }}>
+                ⚠️ {rateLimitStatus}
+              </div>
+            )}
+          </div>
+
+          {/* Controls Section */}
+          {progress.total > 0 && (
+              <div className="verify-progress-bar-container" style={{ width: '100%', height: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', overflow: 'hidden', position: 'relative', marginBottom: '15px' }}>
+                <div className="verify-progress-bar-fill" style={{ width: `${(progress.current / progress.total) * 100}%`, height: '100%', background: '#3b82f6', transition: 'width 0.3s ease' }} />
+              </div>
+            )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '15px', background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div className="field">
+                  <label className="label" style={{ fontSize: '10px' }}>DELAY (ms)</label>
+                  <input type="number" className="input-pro" value={verificationDelay} onChange={e => setVerificationDelay(Number(e.target.value))} />
+                </div>
+                <div className="field">
+                  <label className="label" style={{ fontSize: '10px' }}>INTERVAL (s)</label>
+                  <input type="number" className="input-pro" value={automationInterval} onChange={e => setAutomationInterval(Number(e.target.value))} />
                 </div>
               </div>
-
-              <button className="btn-pro" style={{ width: '100%' }} onClick={() => verifyAllOnce()} disabled={playing || running}>
-                Verify All
-              </button>
-              <button
-                className="btn-pro secondary"
-                style={{ width: '100%' }}
-                onClick={handleExportResults}
-                disabled={completedResults.length === 0}
-              >
-                Export (verified: {completedResults.length})
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn-pro primary" style={{ flex: 2 }} onClick={startRun} disabled={playing || running}>
+                  {running ? 'Running...' : 'Start Auto Run'}
+                </button>
+                {(playing || running) && (
+                  <button className="btn-pro" onClick={stopAutomation} style={{ flex: 1, background: '#ef4444' }}>Stop</button>
+                )}
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()} style={{ fontSize: '10px', padding: '4px 12px' }}>
-                Import XLSX
-              </button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input
-                  type="checkbox"
-                  id="verifySourceToggle"
-                  checked={verifyFromFile}
-                  onChange={(e) => setVerifyFromFile(e.target.checked)}
-                  style={{ width: '16px', height: '16px' }}
-                />
-                <label htmlFor="verifySourceToggle" style={{ fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '32px' }}>
+                <input type="checkbox" id="mainVerifySourceToggle" checked={verifyFromFile} onChange={(e) => setVerifyFromFile(e.target.checked)} />
+                <label htmlFor="mainVerifySourceToggle" style={{ fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
                   VERIFY FROM FILE ({filePools.length})
                 </label>
               </div>
-
-              <input type="file" ref={fileInputRef} onChange={handleImportXlsx} accept=".xlsx,.xls" style={{ display: 'none' }} />
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button className="btn-pro" style={{ flex: 2 }} onClick={startRun} disabled={playing || running}>
-                  {running ? 'Automation Active' : 'Start Auto Run'}
-                </button>
-                {(playing || running) && (
-                  <button className="btn-pro" onClick={stopAutomation} style={{ flex: 1, background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }}>Stop</button>
-                )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()}>Import XLSX</button>
+                <button className="btn-pro secondary" onClick={() => verifyAllOnce()} disabled={playing || running}>Verify All</button>
               </div>
-              {running && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-                  <div style={{ color: '#f59e0b', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Cycle Status:</span>
-                    <span>Running #{runCount}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
-                    <span>Total Time Run:</span>
-                    <span>{Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s</span>
-                    {lastRunTime && !playing && (
-                      <div style={{ color: '#059669', fontSize: '11px', textAlign: 'right' }}>
-                        Last cycle finished: {lastRunTime}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
-                    <span>Skipped Pools:</span>
-                    <span>{skippedCount}</span>
-                  </div>
-                  {nextRunCountdown !== null && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#3b82f6' }}>
-                      <span>Next run in:</span>
-                      <span>{Math.floor(nextRunCountdown / 60)}m {Math.floor(nextRunCountdown % 60)}s</span>
-                    </div>
-                  )}
+              <button className="btn-pro secondary" onClick={handleExportResults} disabled={completedResults.length === 0}>
+                Export Results ({completedResults.length})
+              </button>
+            </div>
+
+            <div style={{ fontSize: '12px', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(59, 130, 246, 0.3)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ color: running ? '#3b82f6' : '#94a3b8', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Cycle Status:</span>
+                <span>{running ? `Active (Cycle #${runCount})` : 'Idle'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
+                <span>Total Time Run:</span>
+                <span>{Math.floor(currentRunElapsed / 60)}m {currentRunElapsed % 60}s</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8, color: '#10b981' }}>
+                <span>Last Cycle End:</span>
+                <span>{lastRunTime || 'N/A'}</span>
+              </div>
+              {nextRunCountdown !== null && running && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fbbf24', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px', marginTop: '2px' }}>
+                  <span>Next cycle in:</span>
+                  <span>{nextRunCountdown}s</span>
                 </div>
               )}
             </div>
           </div>
-          <div className="pool-main-content" style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '650px', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
-            {progress.total > 0 && (
-              <div className="verify-progress-bar-container" style={{ width: '100%', height: '18px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <div
-                  className="verify-progress-bar-fill"
-                  style={{
-                    width: `${(progress.current / progress.total) * 100}%`,
-                    height: '100%',
-                    background: '#3b82f6',
-                    transition: 'width 0.3s ease'
-                  }}
-                />
-                <small style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', fontSize: '10px', lineHeight: '18px', fontWeight: 'bold', textShadow: '0 0 3px black' }}>
-                  {Math.round((progress.current / progress.total) * 100)}% ({progress.current}/{progress.total})
-                </small>
-              </div>
-            )}
+
+          {/* Results Section */}
+          {/* <div className="pool-results-main" style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '15px', flex: 1, minHeight: '300px' }}>
+            
+
             {verifyResults.length > 0 ? (
-              <div className="results-wrapper">
-                <div className="verify-summary">
-                  <div>
-                    <span>Target pools</span>
-                    <strong>{verifyFromFile ? filePools.length : pools.length}</strong>
-                  </div>
-                  <div>
-                    <span>Verified</span>
-                    <strong>{completedResults.length}</strong>
-                  </div>
-                  <div>
-                    <span>Success</span>
-                    <strong>{successCount}</strong>
-                  </div>
-                  <div>
-                    <span>Fail</span>
-                    <strong>{failCount}</strong>
-                  </div>
-                  <div className="wide">
-                    <span>Algorithm</span>
-                    <strong>{algorithmSummary || 'No completed checks'}</strong>
-                  </div>
+              <div className="results-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <div className="verify-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px' }}>
+                  <div><span style={{ fontSize: '10px', opacity: 0.6 }}>Total:</span> <strong>{verifyFromFile ? filePools.length : pools.length}</strong></div>
+                  <div><span style={{ fontSize: '10px', opacity: 0.6 }}>Verified:</span> <strong>{completedResults.length}</strong></div>
+                  <div><span style={{ fontSize: '10px', color: '#34d399' }}>Success:</span> <strong>{successCount}</strong></div>
+                  <div><span style={{ fontSize: '10px', color: '#f87171' }}>Fail:</span> <strong>{failCount}</strong></div>
                 </div>
-                <div className="verify-list" >
+
+                <div className="verify-list" style={{ maxHeight: '400px', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
                   {verifyResults.map(item => {
                     const pending = item.result?.pending
                     const success = !pending && ph.isVerifySuccess(item.result)
-                    const logs = ph.getVerifyLogs(item.result)
                     const algorithm = ph.getVerifyAlgo(item.result)
                     return (
-                      <details className="verify-item" key={item.key}>
-                        <summary>
-                          <span
-                            className={`verify-status ${pending ? 'pending' : success ? 'success' : 'fail'}`}
-                            onClick={event => {
-                              if (pending) return
-                              event.preventDefault()
-                              event.stopPropagation()
-                              openPoolEditor(item)
-                            }}
-                            style={{ cursor: pending ? 'wait' : 'pointer' }}
-                            title={pending ? "Verifying..." : "Click to open Pool Editor"}
-                          >
-                            {pending ? 'Checking' : success ? 'Success' : 'Fail'}
-                          </span>
-                          <button
-                            type="button"
-                            className="pool-editor-link"
-                            onClick={event => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              openPoolEditor(item)
-                            }}
-                            disabled={pending}
-                          >
-                            {item.label} <span style={{ fontSize: '0.9em', opacity: 0.7 }}>✎</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="text-button"
-                            style={{ fontSize: '10px', marginLeft: 'auto', marginRight: '10px' }}
-                            onClick={event => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              setInspectData(item.result)
-                            }}
-                          >
-                            Inspect
-                          </button>
-                          <span className="verify-algorithm">{algorithm}</span>
-                          <small>{pending ? 'Waiting for response' : ph.getVerifyMessage(item.result)}</small>
-                        </summary>
-                      </details>
+                      <div key={item.key} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        background: 'rgba(255,255,255,0.02)',
+                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                        fontSize: '12px',
+                        gap: '12px'
+                      }}>
+                        <div style={{ width: '80px', textAlign: 'center', padding: '2px 0', borderRadius: '4px', fontWeight: 'bold', fontSize: '10px', background: pending ? 'rgba(59, 130, 246, 0.1)' : success ? 'rgba(52, 211, 153, 0.1)' : 'rgba(248, 113, 113, 0.1)', color: pending ? '#3b82f6' : success ? '#34d399' : '#f87171', border: `1px solid ${pending ? '#3b82f644' : success ? '#34d39944' : '#f8717144'}` }}>{pending ? 'PENDING' : success ? 'SUCCESS' : 'FAILED'}</div>
+                        <div style={{ flex: 1, fontWeight: 'bold' }}>{item.label}</div>
+                        <div style={{ width: '120px', opacity: 0.6, fontFamily: 'monospace' }}>{algorithm}</div>
+                        <div style={{ flex: 2, opacity: 0.8, fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pending ? 'Waiting...' : ph.getVerifyMessage(item.result)}</div>
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          <button className="text-button" style={{ fontSize: '11px' }} onClick={() => setInspectData(item.result)}>Inspect</button>
+                          <button className="text-button" style={{ fontSize: '11px' }} onClick={() => openPoolEditor(item)}>Edit</button>
+                        </div>
+                      </div>
                     )
                   })}
                 </div>
               </div>
             ) : (
-              <pre className="response-body compact">{response ? JSON.stringify(response, null, 2) : 'No response yet'}</pre>
+              <div style={{ textAlign: 'center', padding: '40px', opacity: 0.5 }}>
+                No verification results yet. Start a manual "Verify All" or "Auto Run" to begin monitoring.
+              </div>
             )}
-          </div>
+          </div> */}
+          {verifyResults.length > 0 ? (
+            <div
+              className="results-wrapper"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '15px',
+                minHeight: 0,        // ✅ cho phép co lại khi cha là flex column
+                overflow: 'hidden'   // ✅ ngăn tràn ra ngoài
+              }}
+            >
+              <div
+                className="verify-summary"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+                  gap: '10px'
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: '10px', opacity: 0.6 }}>Total:</span> <strong>{verifyFromFile ? filePools.length : pools.length}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '10px', opacity: 0.6 }}>Verified:</span> <strong>{completedResults.length}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '10px', color: '#34d399' }}>Success:</span> <strong>{successCount}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '10px', color: '#f87171' }}>Fail:</span> <strong>{failCount}</strong>
+                </div>
+              </div>
+
+              <div
+                className="verify-list"
+                style={{
+                  maxHeight: '400px',
+                  overflowY: 'auto',
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: 'rgba(255,255,255,0.1) transparent'
+                }}
+              >
+                {verifyResults.map(item => {
+                  const pending = item.result?.pending;
+                  const success = !pending && ph.isVerifySuccess(item.result);
+                  const algorithm = ph.getVerifyAlgo(item.result);
+                  return (
+                    <div
+                      key={item.key}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        background: 'rgba(255,255,255,0.02)',
+                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                        fontSize: '12px',
+                        gap: '12px'
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '80px',
+                          textAlign: 'center',
+                          padding: '2px 0',
+                          borderRadius: '4px',
+                          fontWeight: 'bold',
+                          fontSize: '10px',
+                          background: pending
+                            ? 'rgba(59, 130, 246, 0.1)'
+                            : success
+                              ? 'rgba(52, 211, 153, 0.1)'
+                              : 'rgba(248, 113, 113, 0.1)',
+                          color: pending ? '#3b82f6' : success ? '#34d399' : '#f87171',
+                          border: `1px solid ${pending ? '#3b82f644' : success ? '#34d39944' : '#f8717144'
+                            }`
+                        }}
+                      >
+                        {pending ? 'PENDING' : success ? 'SUCCESS' : 'FAILED'}
+                      </div>
+                      <div style={{ flex: 1, fontWeight: 'bold' }}>{item.label}</div>
+                      <div
+                        style={{
+                          width: '120px',
+                          opacity: 0.6,
+                          fontFamily: 'monospace'
+                        }}
+                      >
+                        {algorithm}
+                      </div>
+                      <div
+                        style={{
+                          flex: 2,
+                          opacity: 0.8,
+                          fontSize: '11px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}
+                      >
+                        {pending ? 'Waiting...' : ph.getVerifyMessage(item.result)}
+                      </div>
+                      <div style={{ display: 'flex', gap: '5px' }}>
+                        <button
+                          className="text-button"
+                          style={{ fontSize: '11px' }}
+                          onClick={() => setInspectData(item.result)}
+                        >
+                          Inspect
+                        </button>
+                        <button
+                          className="text-button"
+                          style={{ fontSize: '11px' }}
+                          onClick={() => openPoolEditor(item)}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '40px', opacity: 0.5 }}>
+              No verification results yet. Start a manual "Verify All" or "Auto Run" to begin monitoring.
+            </div>
+          )}
         </div>
       </div>
-
-
       <div className="pools-dashboard-layout" style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {sidebarVisible && (
           <div className="pool-sidebar" style={{ width: '100%', maxWidth: '380px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -814,6 +887,9 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
             </div>
           </div>
         )}
+
+
+
       </div>
 
       {error && <pre className="error-message">{error}</pre>}
@@ -825,6 +901,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
           onClose={() => closePoolEditor(editor.key)}
           onSaveSuccess={handleEditorSaveSuccess}
           onVerifySuccess={handleEditorVerifySuccess}
+          nhClient={nhClient}
         />
       ))}
 
@@ -859,6 +936,19 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
           })}
         </div>
       </Modal>
+
+      {/* Inspection Modal */}
+      <Modal
+        isOpen={!!inspectData}
+        onClose={() => setInspectData(null)}
+        title="Verification Details"
+        maxWidth="900px"
+      >
+        <pre className="response-body" style={{ maxHeight: '70vh', overflow: 'auto' }}>
+          {JSON.stringify(inspectData, null, 2)}
+        </pre>
+      </Modal>
+      <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".xlsx" onChange={handleImportXlsx} />
     </div>
   )
 }

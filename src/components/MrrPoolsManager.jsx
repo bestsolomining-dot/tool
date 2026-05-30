@@ -147,9 +147,9 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
   }, [externalRentalId]);
 
   return (
-    <div className="mrr-pools-manager nh-theme" style={{ marginTop: '20px', padding: '20px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+    <div className="mrr-pools-manager nh-theme" style={{ marginTop: '0px', padding: '20px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
       <div className="panel-header" style={{ marginBottom: '15px' }}>
-        <h3 style={{ margin: 0 }}>MRR Pool Manager</h3>
+        <h3 style={{ margin: 0 }}>Pool Manager</h3>
         <button className="btn-pro primary" onClick={() => fetchPools('all_rigs')} disabled={loading}>
           {loading ? 'Fetching...' : 'Get All Rig Pools'}
         </button>

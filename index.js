@@ -955,6 +955,33 @@ app.post('/api/v2/mrr/call', asyncHandler(async (req, res) => {
   res.status(statusCode).json(data);
 }));
 
+// --- NOTIFICATIONS --- 
+app.post('/api/v2/notify/zalo', asyncHandler(async (req, res) => {
+  const { message } = req.body;
+  const accessToken = process.env.ZALO_ACCESS_TOKEN;
+  const userUID = process.env.ZALO_USER_UID;
+
+  if (!accessToken || !userUID) {
+    console.warn('[zalo] Configuration missing. Please set ZALO_ACCESS_TOKEN and ZALO_USER_UID in .env');
+    return res.status(400).json({ success: false, message: 'Zalo configuration missing in server .env' });
+  }
+
+  const response = await request('https://openapi.zalo.me/v2.0/oa/message', {
+    method: 'POST',
+    headers: {
+      'access_token': accessToken,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      recipient: { user_id: userUID },
+      message: { text: message }
+    })
+  });
+
+  const data = await response.body.json();
+  res.json(data);
+}));
+
 // --- SERVE FRONTEND ---
 // Serve static files from the 'dist' directory (created by npm run build)
 const distPath = path.join(process.cwd(), 'dist');

@@ -53,7 +53,7 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
       if (!currentPoolId || isNew) return
 
       setEditorDetailsLoading(true)
-      const result = await callEditorApi(poolApi.get(currentPoolId), 'Pool details');
+      const result = await callEditorApi(poolApi.get(currentPoolId, nhClient), 'Pool details');
 
       if (cancelled) return
 
@@ -79,7 +79,7 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
     return () => {
       cancelled = true
     }
-  }, [currentPoolId, isNew, initialPoolData])
+  }, [currentPoolId, isNew, initialPoolData, nhClient])
 
   const callEditorApi = async (apiPromise, responseLabel) => {
     const startedAt = performance.now()
@@ -189,7 +189,7 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
 
       const savedId = saveResult.data?.id || saveResult.data?.poolId || savePayload.id
       if (savedId) {
-        const detailResult = await callEditorApi(poolApi.get(savedId), 'Reload pool details');
+        const detailResult = await callEditorApi(poolApi.get(savedId, nhClient), 'Reload pool details');
 
         if (detailResult.ok) {
           setEditorBody(JSON.stringify(detailResult.data, null, 2))

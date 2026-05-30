@@ -54,6 +54,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
   const [enrichedInfo, setEnrichedInfo] = useState({}); // rigId -> details object
   const [infoLoadingId, setInfoLoadingId] = useState(null);
 
+  const [expandedAlgos, setExpandedAlgos] = useState({}); // algoKey -> boolean
   // More granular status filtering: 'available', 'rented', or 'all'
   const [statusFilter, setStatusFilter] = useState(endpoint === '/rig' ? initialStatus : 'rented');
 
@@ -67,6 +68,24 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
       return String(statusValue || '').toLowerCase().includes(statusFilter);
     });
   }, [rigs, statusFilter]);
+
+  const groupedRigs = useMemo(() => {
+    const groups = {};
+    filteredRigs.forEach(rig => {
+      const info = enrichedInfo[rig.id];
+      const algoKey = (info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A').toUpperCase();
+      if (!groups[algoKey]) groups[algoKey] = [];
+      groups[algoKey].push(rig);
+    });
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredRigs, enrichedInfo]);
+
+  const toggleAlgoGroup = (algo) => {
+    setExpandedAlgos(prev => ({
+      ...prev,
+      [algo]: !prev[algo]
+    }));
+  };
 
   const fetchRigs = async () => {
     setLoading(true);
@@ -215,7 +234,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
 
       {error && <div className="error-message" style={{ margin: '15px 0', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '6px', color: '#f87171' }}><strong>Error:</strong> {error}</div>}
 
-      <div className="rig-list" style={{ marginTop: '15px', position: 'relative', flexGrow: 1, display: 'flex', flexDirection: 'column', maxHeight: 'auto', overflowY: 'auto', paddingRight: '2px', scrollbarWidth: 'thin', scrollbarColor: 'rgba(143, 64, 64, 0.59) transparent', overscrollBehavior: 'contain' }}>
+      <div className="rig-list" style={{ marginTop: '15px', position: 'relative', flexGrow: 1, display: 'flex', flexDirection: 'column', maxHeight: '800px', overflowY: 'auto', paddingRight: '2px', scrollbarWidth: 'thin', scrollbarColor: 'rgba(143, 64, 64, 0.59) transparent', overscrollBehavior: 'contain' }}>
         {filteredRigs.length === 0 && !loading && !error && (
           <div style={{ opacity: 0.5, textAlign: 'center', padding: '20px' }}>No rigs found for this account.</div>
         )}
@@ -225,16 +244,42 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
           maxHeight: 'auto',
           overflowY: 'auto', 
           paddingRight: '8px',
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(143, 64, 64, 0.59) transparent',
           overscrollBehavior: 'contain'
         }}>
-        <div className="rig-grid" style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
-          gap: '15px' 
-        }}>
-          {filteredRigs.map((rig) => {
+          {groupedRigs.map(([algoName, rigsInGroup]) => {
+            const isExpanded = expandedAlgos[algoName];
+            return (
+              <div key={algoName} className="algo-group-container" style={{ marginBottom: '10px' }}>
+                <div 
+                  className="algo-group-header" 
+                  onClick={() => toggleAlgoGroup(algoName)}
+                  style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    padding: '10px 15px', 
+                    background: isExpanded ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.03)', 
+                    borderRadius: '6px', 
+                    cursor: 'pointer',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '14px', color: isExpanded ? '#60a5fa' : '#94a3b8', fontWeight: 'bold' }}>{algoName}</span>
+                    <span style={{ fontSize: '10px', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: '10px', opacity: 0.7 }}>{rigsInGroup.length} Rigs</span>
+                  </div>
+                  <span style={{ fontSize: '12px', opacity: 0.5 }}>{isExpanded ? '▲' : '▼'}</span>
+                </div>
+
+                {isExpanded && (
+                  <div className="rig-grid" style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
+                    gap: '15px',
+                    padding: '15px 5px'
+                  }}>
+                    {rigsInGroup.map((rig) => {
             const rigId = rig.id || rig.rigid || rig.rig_id;
             const isMine = rigId && userRigIds.has(String(rigId));
             const info = enrichedInfo[rig.id];
@@ -245,10 +290,10 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
             const idLabel = (isRented && rentalId) ? 'Rental' : 'Rig';
 
             return (
-              <div key={rig.id} style={{padding: '1px 2px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div key={rig.id} style={{padding: '0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {isMine ? (
-                  <div style={{ padding: '2px 2px' }}>
-                    <span style={{ background: '#5c005f', color: 'white', fontSize: '9px', padding: '2px 8px', borderRadius: '5px', fontWeight: 'bold', textTransform: 'uppercase', display: 'inline-block' }}>
+                  <div style={{ padding: '0 2px' }}>
+                    <span style={{ background: '#5c005f', color: 'white', fontSize: '8px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', display: 'inline-block' }}>
                       {idLabel}: #{displayId} 
                       {rig.mrrClient && (
                         <span style={{ padding: '3px 3px 3px 3px', marginTop: '-10px', fontSize: '13px', opacity: 1.5, marginTop: '3px', marginLeft: '3px', color: rig.mrrClient === 'SL' ? '#3b82f6' : rig.mrrClient === 'BT' ? '#fbbf24' : rig.mrrClient === 'ALL' ? '#ef4444' : 'inherit' }}>
@@ -257,30 +302,25 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                       )}
                     </span>
                   </div>
-                ) : (
-                  <div style={{ height: '-30px' }} />
-                )}
+                ) : null}
                 <div className="rig-card" style={{ 
                   background: isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)', 
                   border: isMine ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)', 
                   borderRadius: '8px', 
-                  padding: '15px',
-                  position: 'relative',
-                  minHeight: '300px'
+                  padding: '10px',
+                  position: 'relative'
                 }}>
                 
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <strong style={{ fontSize: '13px', minHeight: '60px' }}>{rig.name}</strong>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', gap: '8px' }}>
+                <strong style={{ fontSize: '12px', lineHeight: '1.2', flex: 1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{rig.name}</strong>
                 <span 
                   style={{ 
-                    fontSize: '10px', 
+                    fontSize: '9px', 
                     fontWeight: 'bold', 
-                    height: 'fit-content', 
-                    padding: '4px 10px', 
+                    padding: '2px 6px', 
                     borderRadius: '4px', 
                     letterSpacing: '0.5px',
+                    whiteSpace: 'nowrap',
                     ...getStatusClass(rig.status)
                   }}>
                   {(() => {
@@ -290,14 +330,14 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                 </span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12px', marginBottom: '15px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '10px', marginBottom: '8px' }}>
                 <div>
-                  <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>Algorithm</div>
+                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Algo</div>
                   <div style={{ color: '#60a5fa' }}>{info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>
-                    Average Hashrate
+                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>
+                    Avg Hashrate
                   </div>
                   <div>
                     {(() => {
@@ -318,7 +358,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                       return hr;
                     })()}
                     {info?.isRental && (
-                      <div style={{ fontSize: '10px', opacity: 0.7, marginTop: '2px' }}>
+                      <div style={{ fontSize: '8px', opacity: 0.7 }}>
                         Advertised: <span style={{ color: '#34d399' }}>{info.advertised}</span>
                       </div>
                     )}
@@ -326,7 +366,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                   </div>
                 </div>
                 <div>
-                  <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>Price</div>
+                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Price</div>
                   <div style={{ color: '#fbbf24' }}>
                     {(() => {
                       let p = rig.price;
@@ -339,20 +379,20 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                       }
                       return p || '0.00';
                     })()}
-                    <small style={{ opacity: 0.5, marginLeft: '4px' }}>{rig.price_unit || 'BTC'}</small>
+                    <small style={{ opacity: 0.5, marginLeft: '2px' }}>{rig.price_unit || 'BTC'}</small>
                   </div>
                 </div>
                 <div>
-                  <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>Type</div>
+                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Type</div>
                   <div style={{ textTransform: 'capitalize' }}>{rig.price_type || 'Day'}</div>
                 </div>
               </div>
 
               {info && (
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '4px', marginBottom: '15px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '4px', marginBottom: '8px', fontSize: '9px', border: '1px solid rgba(255,255,255,0.05)' }}>
                   {info.isRental && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px', alignItems: 'center' }}>
-                      <div><span style={{ opacity: 0.6 }}>Algo:</span> <span style={{ color: '#60a5fa' }}>{info.algo}</span></div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '6px', alignItems: 'center' }}>
+                      <div><span style={{ opacity: 0.6 }}>Algo:</span> {info.algo}</div>
                       <div><span style={{ opacity: 0.6 }}>Efficiency:</span> <span style={{ color: info.percent < 90 ? '#f87171' : '#34d399' }}>{info.percent}%</span></div>
                       <div style={{ gridColumn: 'span 2' }}>
                         <span style={{ opacity: 0.6 }}>Ends In:</span>{' '}
@@ -368,11 +408,11 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: '10px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
+              <div style={{ display: 'flex', gap: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px' }}>
                 {isMine && (
                   <button 
                     className="btn-pro secondary" 
-                    style={{ flex: 1, fontSize: '11px', padding: '6px' }} 
+                    style={{ flex: 1, fontSize: '10px', padding: '4px' }} 
                     onClick={() => onOpenPool?.(rig, info)}
                   >
                     Pools
@@ -382,7 +422,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                 {isRented && info && (
                   <button 
                     className="btn-pro secondary" 
-                    style={{ width: '36px', fontSize: '14px', padding: '6px 0', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+                    style={{ width: '28px', fontSize: '12px', padding: '4px 0', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
                     onClick={() => fetchRigDetailInfo(rig)}
                     disabled={infoLoadingId === rig.id}
                     title="Refresh Stats"
@@ -393,7 +433,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
 
                 <button 
                   className="btn-pro" 
-                  style={{ flex: 1, fontSize: '11px', padding: '6px' }} 
+                  style={{ flex: 1, fontSize: '10px', padding: '4px' }} 
                   onClick={() => info ? setEnrichedInfo(prev => { const n = {...prev}; delete n[rig.id]; return n; }) : fetchRigDetailInfo(rig)}
                   disabled={infoLoadingId === rig.id}
                 >
@@ -402,9 +442,12 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
               </div>
             </div>
             </div>
+                    )})}
+                  </div>
+                )}
+              </div>
             );
           })}
-          </div>
         </div>
       </div>
     </div>

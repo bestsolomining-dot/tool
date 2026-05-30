@@ -56,7 +56,7 @@ export default function MrrPoolManager({ rentalIds, onCall, onClose }) {
   };
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="MRR Pool Manager" maxWidth="1000px">
+    <Modal isOpen={true} onClose={onClose} title="Pool Manager" maxWidth="1000px">
       <div className="panel-body" style={{ padding: '1rem' }}>
         {loading && <div style={{ textAlign: 'center', opacity: 0.6, padding: '2rem' }}>Loading rig pool data...</div>}
         {error && <div style={{ color: '#f87171', padding: '1rem', textAlign: 'center' }}>{error}</div>}

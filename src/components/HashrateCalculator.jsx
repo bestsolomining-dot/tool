@@ -5,9 +5,7 @@ const units = [
   { name: 'PH/s', factor: 1e15 },
   { name: 'TH/s', factor: 1e12 },
   { name: 'GH/s', factor: 1e9 },
-  { name: 'MH/s', factor: 1e6 },
-  { name: 'KH/s', factor: 1e3 },
-  { name: 'H/s', factor: 1 },
+  { name: 'MH/s', factor: 1e6 }
 ];
 
 const formatValue = (num) => {
@@ -33,7 +31,7 @@ export default function HashrateCalculator() {
 
   return (
     <div className="hashrate-calculator nh-theme">
-      <h2 className="section-title" style={{ paddingBottom: '15px' }}>Hashrate Calculator</h2>
+      <h2 className="section-title" style={{ paddingBottom: '15px', padding: '15px 15px 15px 0'}}>Hashrate Calculator</h2>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {units.map((unit) => (
           <div key={unit.name} style={{ display: 'grid', gridTemplateColumns: '80px 1fr', alignItems: 'center' }}>

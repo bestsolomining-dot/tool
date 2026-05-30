@@ -192,10 +192,7 @@ export default function App() {
                 algorithm={algorithm}
                 market={market}
               />
-
             </article>
-
-
           </div>
 
           <article className="panel">

@@ -26,6 +26,32 @@ function formatHashrateValue(rate) {
   return `${displayHash} ${String(rate.type || '').toUpperCase()}`.trim();
 }
 
+function getRentalStartTime(rental) {
+  return rental?.start || rental?.normalized?.startTime || null;
+}
+
+function formatRentalStartTime(startTime) {
+  if (!startTime) return 'N/A';
+  const normalized = /\bUTC\b/i.test(String(startTime)) ? String(startTime) : `${startTime} UTC`;
+  const date = new Date(normalized);
+  if (isNaN(date.getTime())) return startTime;
+
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) return `Starts at ${date.toLocaleTimeString()}`;
+
+  const diffSec = Math.floor(diffMs / 1000);
+  const d = Math.floor(diffSec / 86400);
+  const h = Math.floor((diffSec % 86400) / 3600);
+  const m = Math.floor((diffSec % 3600) / 60);
+
+  let elapsed = '';
+  if (d > 0) elapsed += `${d}d `;
+  if (h > 0 || d > 0) elapsed += `${h}h `;
+  elapsed += `${m}m`;
+
+  return `Started ${elapsed} ago`;
+}
+
 function getRentalEndTime(rental) {
   return rental?.end || rental?.normalized?.endTime || null;
 }
@@ -52,7 +78,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [enrichedInfo, setEnrichedInfo] = useState({}); // rigId -> details object
-  const [infoLoadingId, setInfoLoadingId] = useState(null);
+  const [loadingInfoIds, setLoadingInfoIds] = useState(new Set());
 
   const [expandedAlgos, setExpandedAlgos] = useState({}); // algoKey -> boolean
   // More granular status filtering: 'available', 'rented', or 'all'
@@ -122,14 +148,6 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
         }
 
         setRigs(rigList);
-
-        // Auto-fetch detail info for rented rigs so "More Info" isn't required manually
-        rigList.forEach(rig => {
-          const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
-          if (statusStr.includes('rented')) {
-            fetchRigDetailInfo(rig);
-          }
-        });
       } else {
         setError(result.data?.message || 'Failed to fetch MRR rigs');
       }
@@ -143,16 +161,16 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
   const fetchRigDetailInfo = async (rig) => {
     const rigId = rig.id || rig.rigid || rig.rig_id;
     const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
-    const isRented = statusStr.includes('rented');
+    const isRented = statusStr.includes('rented') || statusStr.includes('active');
     const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id || rig.id;
 
-    setInfoLoadingId(rigId);
+    setLoadingInfoIds(prev => new Set(prev).add(rigId));
     try {
       const apiBase = window.location.port === '5173'
         ? `${window.location.protocol}//${window.location.hostname}:3000`
         : '';
 
-      const url = (isRented && rentalId)
+      const url = (isRented && rentalId && rentalId !== rigId) 
         ? `${apiBase}/api/v2/mrr/rental/${encodeURIComponent(rentalId)}?client=${mrrClient}` 
         : `${apiBase}/api/v2/mrr/rig/${encodeURIComponent(rigId)}/info?client=${mrrClient}`;
 
@@ -170,6 +188,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
             username: firstPool?.user || firstPool?.username || rental.rig?.username || 'N/A',
             algo: getRentalAlgorithm(rental),
             percent: getRentalEfficiency(rental),
+            startTime: getRentalStartTime(rental),
             endTime: getRentalEndTime(rental),
             advertised: getRentalAdvertisedHashrate(rental),
             average: getRentalAverageHashrate(rental),
@@ -189,13 +208,30 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
     } catch (err) {
       console.error("Failed to fetch rig info:", err);
     } finally {
-      setInfoLoadingId(null);
+      setLoadingInfoIds(prev => {
+        const next = new Set(prev);
+        next.delete(rigId);
+        return next;
+      });
     }
   };
 
   useEffect(() => {
     if (mrrClient && endpoint) fetchRigs(); // Re-fetch if endpoint changes
   }, [mrrClient, endpoint]);
+
+  // Auto-fetch details for rented rigs so "Started X ago" and "Eff" show up automatically
+  useEffect(() => {
+    if (loading) return;
+    const rentedWithoutInfo = filteredRigs.filter(r => {
+      const s = String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase();
+      return (s.includes('rented') || s.includes('active')) && !enrichedInfo[r.id] && !loadingInfoIds.has(r.id);
+    });
+
+    if (rentedWithoutInfo.length > 0) {
+      rentedWithoutInfo.forEach(r => fetchRigDetailInfo(r));
+    }
+  }, [filteredRigs, enrichedInfo, loading, loadingInfoIds]);
 
   const getStatusClass = (status) => {
     const statusValue = typeof status === 'object' ? status.status : status;
@@ -371,7 +407,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                     {(() => {
                       let p = rig.price;
                       if (typeof p === 'object' && p !== null) {
-                        const unit = rig.price_unit || 'BTC';
+                        const unit = rig.price_converted || 'BTC';
                         p = p[unit]?.price ?? p[unit] ?? '0.00';
                       }
                       if (endpoint === '/rig' && !p) { // Marketplace fallback
@@ -383,39 +419,52 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                   </div>
                 </div>
                 <div>
-                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Type</div>
-                  <div style={{ textTransform: 'capitalize' }}>{rig.price_type || 'Day'}</div>
+                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Start Time</div>
+                  <div style={{ fontSize: (info?.startTime || rig.start) ? '8px' : '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.startTime || rig.start || ''}>
+                    {formatRentalStartTime(info?.startTime || rig.start)}
+                  </div>
                 </div>
               </div>
 
-              {info && (
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '4px', marginBottom: '8px', fontSize: '9px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  {info.isRental && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '6px', alignItems: 'center' }}>
-                      <div><span style={{ opacity: 0.6 }}>Algo:</span> {info.algo}</div>
-                      <div><span style={{ opacity: 0.6 }}>Efficiency:</span> <span style={{ color: info.percent < 90 ? '#f87171' : '#34d399' }}>{info.percent}%</span></div>
-                      <div style={{ gridColumn: 'span 2' }}>
-                        <span style={{ opacity: 0.6 }}>Ends In:</span>{' '}
-                        <CountdownTimer endTime={info.endTime} />
+              {(info || rig.host) && (
+                <div className="rig-pool-summary" style={{ background: 'rgba(0,0,0,0.25)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.02)', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.2)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.stratumHost || rig.host}><span style={{ opacity: 0.5 }}>P0:</span> {info?.stratumHost || rig.host || 'N/A'}</div>
+                    <div><span style={{ opacity: 0.5 }}>Port:</span> {info?.stratumPort || rig.port || 'N/A'}</div>
+                    <div style={{ gridColumn: 'span 2', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.username || rig.user}><span style={{ opacity: 0.5 }}>User:</span> {info?.username || rig.user || 'N/A'}</div>
+                  </div>
+                  {isRented && (
+                    <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      {/* Fix: use rig.hashrate for list-view rentals to show efficiency immediately */}
+                      {(() => {
+                        const eff = info?.percent || rig.hashrate?.average?.percent || rig.percent || '0.00';
+                        return <div><span style={{ opacity: 0.6 }}>Eff:</span> <span style={{ color: (parseFloat(eff) || 0) < 90 ? '#f87171' : '#34d399' }}>{eff}%</span></div>;
+                      })()}
+                      <div style={{ fontSize: '9px', textAlign: 'right' }}>
+                        <div style={{ marginBottom: '2px' }}>{formatRentalStartTime(info?.startTime || rig.start)}</div>
+                        <div><span style={{ opacity: 0.6 }}>Ends:</span> <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /></div>
                       </div>
                     </div>
                   )}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
-                    <div><span style={{ opacity: 0.6 }}>Host:</span> {info.stratumHost}</div>
-                    <div><span style={{ opacity: 0.6 }}>Port:</span> {info.stratumPort}</div>
-                    <div style={{ gridColumn: 'span 2' }}><span style={{ opacity: 0.6 }}>User:</span> {info.username}</div>
-                  </div>
                 </div>
               )}
 
               <div style={{ display: 'flex', gap: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px' }}>
-                {isMine && (
+                {(isMine || isRented) && (
                   <button 
                     className="btn-pro secondary" 
-                    style={{ flex: 1, fontSize: '10px', padding: '4px' }} 
+                    style={{ 
+                      flex: 1, 
+                      fontSize: '10px', 
+                      padding: '4px',
+                      background: isRented ? 'rgba(167, 139, 250, 0.15)' : undefined,
+                      borderColor: isRented ? '#a78bfa' : undefined,
+                      color: isRented ? '#a78bfa' : undefined,
+                      fontWeight: isRented ? 'bold' : 'normal'
+                    }} 
                     onClick={() => onOpenPool?.(rig, info)}
                   >
-                    Pools
+                    {isRented ? 'Details & Pools' : 'Pools'}
                   </button>
                 )}
 
@@ -424,10 +473,10 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                     className="btn-pro secondary" 
                     style={{ width: '28px', fontSize: '12px', padding: '4px 0', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
                     onClick={() => fetchRigDetailInfo(rig)}
-                    disabled={infoLoadingId === rig.id}
+                    disabled={loadingInfoIds.has(rig.id)}
                     title="Refresh Stats"
                   >
-                    {infoLoadingId === rig.id ? '...' : '↻'}
+                    {loadingInfoIds.has(rig.id) ? '...' : '↻'}
                   </button>
                 )}
 
@@ -435,9 +484,9 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                   className="btn-pro" 
                   style={{ flex: 1, fontSize: '10px', padding: '4px' }} 
                   onClick={() => info ? setEnrichedInfo(prev => { const n = {...prev}; delete n[rig.id]; return n; }) : fetchRigDetailInfo(rig)}
-                  disabled={infoLoadingId === rig.id}
+                  disabled={loadingInfoIds.has(rig.id)}
                 >
-                  {infoLoadingId === rig.id ? '...' : info ? 'Hide Info' : 'More Info'}
+                  {loadingInfoIds.has(rig.id) ? '...' : info ? 'Hide Info' : 'More Info'}
                 </button>
               </div>
             </div>

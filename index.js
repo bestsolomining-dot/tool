@@ -744,13 +744,32 @@ app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
 
     for (const clientName of allClientNames) {
       try {
-        const { data, statusCode } = await mrrApiCall({
-          endpoint: targetEndpoint,
-          clientNameRaw: clientName,
-        });
-        
-        // Extract rigs from MRR's standard .data envelope
-        const rigs = Array.isArray(data?.data) ? data.data : (Array.isArray(data?.data?.rigs) ? data.data.rigs : []);
+        const { data, statusCode } = await mrrApiCall({ endpoint: targetEndpoint, clientNameRaw: clientName });
+        let rigs = Array.isArray(data?.data) ? data.data : (Array.isArray(data?.data?.rigs) ? data.data.rigs : []);
+
+        // Merge pool info for personal rigs in bulk
+        if (targetEndpoint === '/rig/mine' && statusCode === 200 && data.success && rigs.length > 0) {
+          const rigIds = rigs.map(r => r.id).join(';');
+          const { data: poolsData } = await mrrApiCall({ endpoint: `/rig/${rigIds}/pool`, clientNameRaw: clientName });
+          if (poolsData && poolsData.success) {
+            const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (poolsData.data?.result || []);
+            const poolMap = new Map(poolItems.map(item => {
+              const id = String(item.rigId || item.rigid || item.id || item.rentalid || '');
+              return [id, item.pools];
+            }).filter(i => i[0]));
+            
+            rigs.forEach(rig => {
+              const pools = poolMap.get(String(rig.id));
+              if (pools && pools.length > 0) {
+                const p0 = pools.find(p => p.priority === 0 || p.priority === '0') || pools[0];
+                rig.host = p0.host || p0.stratumHost;
+                rig.port = p0.port || p0.stratumPort;
+                rig.user = p0.user || p0.username;
+              }
+            });
+          }
+        }
+
         if (statusCode === 200 && data?.success && rigs.length > 0) {
           allRigs.push(...rigs.map(rig => ({ ...rig, mrrClient: clientName }))); // Add client identifier
         } else {
@@ -762,7 +781,33 @@ app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
     }
     res.json({ success: true, rigs: allRigs, errors: errors.length > 0 ? errors : undefined });
   } else {
-    // Dynamic endpoint selection (Marketplace vs My Rigs)
+    // Merge pool info automatically for personal rigs (single client)
+    if (targetEndpoint === '/rig/mine') {
+      const { data, statusCode, clientName } = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: clientParam });
+      if (statusCode === 200 && data.success) {
+        const rigs = Array.isArray(data.data) ? data.data : (data.data?.rigs || []);
+        if (rigs.length > 0) {
+          // Identify rigs needing pool info
+          const rigIds = rigs.map(r => r.id).join(';');
+          const { data: poolsData } = await mrrApiCall({ endpoint: `/rig/${rigIds}/pool`, clientNameRaw: clientParam });
+          if (poolsData && poolsData.success) {
+            const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (poolsData.data?.result || []);
+            const poolMap = new Map(poolItems.map(item => [String(item.rigId || item.rigid || item.id), item.pools]));
+            rigs.forEach(rig => {
+              const pools = poolMap.get(String(rig.id));
+              if (pools && pools.length > 0) {
+                const p0 = pools.find(p => p.priority === 0 || p.priority === '0') || pools[0];
+                rig.host = p0.host || p0.stratumHost;
+                rig.port = p0.port || p0.stratumPort;
+                rig.user = p0.user || p0.username;
+              }
+            });
+          }
+        }
+      }
+      res.set('X-MRR-Client', clientName);
+      return res.status(statusCode).json(data);
+    }
     await mrrRequest(targetEndpoint, req, res);
   }
 }));
@@ -801,7 +846,34 @@ app.get('/api/v2/mrr/balance', asyncHandler(async (req, res) => mrrRequest('/acc
 app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => mrrRequest('/info/algos', req, res)));
 app.get('/api/v2/mrr/profiles', asyncHandler(async (req, res) => mrrRequest('/profile', req, res)));
 
-app.get('/api/v2/mrr/rentals', asyncHandler(async (req, res) => mrrRequest('/rental', req, res)));
+app.get('/api/v2/mrr/rentals', asyncHandler(async (req, res) => {
+  const { client: clientQuery, ...forwardQuery } = req.query || {};
+  const targetClient = String(clientQuery || '').toUpperCase() === 'ALL' ? defaultMrrClient : clientQuery;
+  const { statusCode, data, clientName } = await mrrApiCall({ endpoint: '/rental', method: 'GET', clientNameRaw: targetClient, query: forwardQuery });
+
+  if (statusCode === 200 && data.success) {
+    const rentals = Array.isArray(data.data) ? data.data : (data.data?.rentals || []);
+    if (rentals.length > 0) {
+      const rentalIds = rentals.map(r => r.id).join(';');
+      const { data: poolsData } = await mrrApiCall({ endpoint: `/rental/${rentalIds}/pool`, clientNameRaw: targetClient });
+      if (poolsData && poolsData.success) {
+        const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (poolsData.data?.result || poolsData.data?.rentals || []);
+        const poolMap = new Map(poolItems.map(item => [String(item.id || item.rentalid || item.rental_id), item.pools]));
+        rentals.forEach(r => {
+          const pools = poolMap.get(String(r.id));
+          if (pools && pools.length > 0) {
+            const p0 = pools.find(p => p.priority === 0 || p.priority === '0') || pools[0];
+            r.host = p0.host || p0.stratumHost;
+            r.port = p0.port || p0.stratumPort;
+            r.user = p0.user || p0.username;
+          }
+        });
+      }
+    }
+  }
+  res.set('X-MRR-Client', clientName);
+  res.status(statusCode).json(data);
+}));
 
 app.get('/api/v2/mrr/rental/history', asyncHandler(async (req, res) => {
   // MRR retrieves history via the main rental endpoint with a query flag

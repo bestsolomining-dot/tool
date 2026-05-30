@@ -88,7 +88,7 @@ export function CountdownTimer({ endTime }) {
 }
 
 /** Structured view for active rentals */
-function MrrRentalsTable({ data }) {
+function MrrRentalsTable({ data, onOpenPools }) {
   // MRR API v2 GET /rental returns { "success": true, "data": { "rentals": [...] } }
   // OR sometimes the array is directly at data.data: { "success": true, "data": [...] }
   
@@ -125,9 +125,11 @@ function MrrRentalsTable({ data }) {
             <th>Algo</th>
             <th>Hashrate</th>
             <th>Price</th>
+            <th>Active P0 Pool</th>
             <th>Duration</th>
             <th>Remaining</th>
             <th>Status</th>
+            <th style={{ textAlign: 'right' }}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -148,6 +150,12 @@ function MrrRentalsTable({ data }) {
               <td style={{ color: '#fbbf24' }}>
                 {typeof r.price === 'object' ? (r.price?.paid || r.price?.advertised || r.price?.price || '0.00') : (r.price || '0.00')} {r.price?.currency || r.currency || r.price_unit || r.price_currency || 'BTC'}
               </td>
+              <td style={{ fontSize: '10px' }}>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px', whiteSpace: 'nowrap' }} title={r.host}>
+                  {r.host ? `${r.host}:${r.port}` : <span style={{ opacity: 0.4 }}>No Data</span>}
+                </div>
+                <div style={{ opacity: 0.5, fontSize: '9px' }}>{r.user}</div>
+              </td>
               <td style={{ opacity: 0.8 }}>
                 {r.hours || r.length || '0'}h
               </td>
@@ -158,6 +166,11 @@ function MrrRentalsTable({ data }) {
                 <span className={String(r.status?.status || r.status || '').toLowerCase().includes('active') || String(r.status?.status || r.status || '').toLowerCase().includes('rented') ? 'status-success' : 'status-ready'}>
                   {String(r.status?.status || r.status || '').toUpperCase().includes('ACTIVE') ? 'RENTED' : (r.status?.status || r.status || (r.end ? 'FINISHED' : 'READY'))}
                 </span>
+              </td>
+              <td style={{ textAlign: 'right' }}>
+                <button className="text-button" onClick={() => onOpenPools?.(r)} style={{ fontSize: '11px' }}>
+                  Pools
+                </button>
               </td>
             </tr>
           ))}
@@ -207,15 +220,20 @@ export function MrrPoolsTable({ data }) {
           </h4>
           <table className="pro-table">
             <thead>
-              <tr><th>Priority</th><th>Host</th><th>Worker</th><th>Algo</th></tr>
+              <tr><th>Priority</th><th>Host</th><th>Port</th><th>User</th><th>Algo</th></tr>
             </thead>
             <tbody>
               {(Array.isArray(res.pools) ? res.pools : (Array.isArray(res) ? res : [])).map((p, pIdx) => (
-                <tr key={pIdx}>
-                  <td>{p.priority}</td>
+                <tr key={pIdx} style={{ color: '#d7ceff', margin: '25px 5px 10px 0', fontSize: '10px' }}>
+                  <td >{p.priority}</td>
                   <td>{p.host || p.stratumHost}</td>
-                  <td style={{ fontWeight: 'bold' }}>{p.user || p.username}</td>
-                  {/* <td>{p.algo || p.algorithm}</td> */}
+                  <td>{p.port || p.stratumPort || 'N/A'}</td>
+                  <td style={{ fontWeight: 'bold' }}>{p.user || p.username || 'N/A'}</td>
+                  <td>
+                    {p.algo || p.algorithm || p.type || 
+                     res.algo || res.algorithm || res.type || 
+                     res.rentals?.algo || res.rentals?.type || 'N/A'}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -464,7 +482,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
               scrollbarWidth: 'thin',
               scrollbarColor: 'rgba(255,255,255,0.2) transparent'
             }}>
-              <MrrRentalsTable data={modalData} />
+              <MrrRentalsTable data={modalData} onOpenPools={onOpenMrrPools} />
             </div>
           )}
 

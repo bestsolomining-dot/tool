@@ -46,19 +46,8 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
         silent: true 
       });
       if (result && result.success) {
-        // Extract the rental object from the MRR response wrapper
-        const info = result.data || result;
-
-        // Additionally fetch pool info to display in status modal
-        const poolRes = await onCall(`/api/v2/mrr/rental/${encodeURIComponent(targetId)}/pool`, { 
-          query: { client: mrrClient }, 
-          silent: true 
-        });
-        if (poolRes && poolRes.success) {
-          info.pools = Array.isArray(poolRes.data) ? poolRes.data : (poolRes.data?.pools || poolRes.pools || []);
-        }
-
-        setRentalInfo(info);
+        // The backend /rental/:id endpoint already includes .pools via the aggressive fetcher.
+        setRentalInfo(result.data || result);
         setIsModalOpen(true);
       } else {
         // Error will be handled by parent App.jsx's setError
@@ -150,8 +139,8 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
     <div className="mrr-pools-manager nh-theme" style={{ marginTop: '0px', padding: '20px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
       <div className="panel-header" style={{ marginBottom: '15px' }}>
         <h3 style={{ margin: 0 }}>Pool Manager</h3>
-        <button className="btn-pro primary" onClick={() => fetchPools('all_rigs')} disabled={loading}>
-          {loading ? 'Fetching...' : 'Get All Rig Pools'}
+        <button className="btn-pro primary" onClick={() => fetchPools('all_rigs')} disabled={loading} title="Fetch pool info for all your personal rigs">
+          {loading ? 'Fetching...' : 'Bulk Rig Pools'}
         </button>
         <button className="btn-pro secondary" onClick={handleExportMrrPools} disabled={!poolData || poolData.success === false || loading}>
           Export Pools
@@ -186,7 +175,7 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
           disabled={!rentalId.trim() || loading}
           onClick={() => fetchPools('rental')}
         >
-          Fetch Rental Pools
+          Quick Pools
         </button>
         <button
           className="btn-pro"
@@ -194,7 +183,7 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
           disabled={!rentalId.trim() || loading}
           onClick={fetchRentalInfo}
         >
-          Fetch Status
+          Rental Status Modal
         </button>
       </div>
 
@@ -275,13 +264,19 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
 
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '6px', fontSize: '11px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
               <div style={{ marginBottom: '8px' }}><span style={{ opacity: 0.8 }}>Rental</span> {rentalInfo.id || rentalInfo.rental_id}</div>
-              <div style={{ marginBottom: '14px' }}><span style={{ opacity: 0.8 }}>Rig ID:</span> {rentalInfo.normalized?.rigId || rentalInfo.rig?.id || rentalInfo.rigid || 'N/A'}</div>
+              <div style={{ marginBottom: '14px' }}>
+                <span style={{ opacity: 0.8 }}>Rig ID:</span> 
+                <button className="text-button" onClick={() => fetchPools('rig', rentalInfo.rig?.id || rentalInfo.rigid)} style={{ fontSize: '11px', marginLeft: '5px' }}>
+                  #{rentalInfo.normalized?.rigId || rentalInfo.rig?.id || rentalInfo.rigid || 'N/A'}
+                </button>
+              </div>
               <div>
                 <span style={{ opacity: 0.6 }}>Duration:</span> {rentalInfo.normalized?.duration || rentalInfo.length || rentalInfo.hours || '0'} Hours
               </div>
             </div>
             {rentalInfo.pools && rentalInfo.pools.length > 0 && (
-              <div style={{ frontSize: '8px', marginTop: '20px', maxHeight: '100px', overflowY: 'auto', paddingRight: '1px' }}>
+              <div style={{ fontSize: '11px', marginTop: '20px', maxHeight: '300px', overflowY: 'auto', paddingRight: '1px' }}>
+                <h4 style={{ color: '#60a5fa', marginBottom: '10px', fontSize: '12px' }}>Assigned Pools</h4>
                 <MrrPoolsTable data={{ pools: rentalInfo.pools }} />
               </div>
             )}

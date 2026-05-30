@@ -766,6 +766,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                   maxHeight: '400px',
                   overflowY: 'hiden',
                   overflowX: 'auto',
+                  
                   scrollbarWidth: 'thin',
                   scrollbarColor: 'rgba(255,255,255,0.1) transparent'
                 }}

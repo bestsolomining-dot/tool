@@ -90,7 +90,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
   useEffect(() => {
     setLocalOrders([]);
     setOrderDetail(null);
-    
+
     // We check if we are currently mounted and have a client before fetching
     if (nhClient && typeof onCall === 'function') {
       fetchOrders();
@@ -99,7 +99,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
 
   return (
     <div className="rig-section nh-theme" style={{ marginLeft: '5px', marginRight: '5px', marginTop: '5px', paddingTop: '5px', paddingBottom: '5px' }}>
-      <h2 className="section-title" style={{paddingBottom: '10px' }}>NiceHash</h2>
+      <h2 className="section-title" style={{ paddingBottom: '10px' }}>NiceHash</h2>
 
       <div className="market-inputs" style={{ marginBottom: '15px' }}>
         <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
@@ -117,45 +117,52 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
         <button className="btn-pro" onClick={() => onCall('/api/v2/mining/history', { query: { algorithm } })}>History</button>
       </div>
 
-      <div className="market-inputs" style={{ marginTop: '15px' }}>
+      <div className="market-inputs" style={{ marginTop: '15px', display: 'flex', alignItems: 'center' }}>
         <select className="select-pro" value={selectedOrderId} onChange={(e) => handleOrderSelect(e.target.value)}>
-          <option value="">Select Hashpower Order...</option>
+          <option value="">Select Order</option>
           {orders.map((order, index) => {
             const id = String(order?.id ?? order?.orderId ?? order?.hashpowerOrderId ?? '');
-            const label = order?.title || order?.name || (typeof order?.algorithm === 'object' ? order.algorithm.algorithm || order.algorithm.displayName : order?.algorithm) || `Order ${index + 1}`;
+            const algo = typeof order?.algorithm === 'object' ? order.algorithm.algorithm || order.algorithm.displayName : order?.algorithm;
+            const poolName = order?.pool?.name || order?.pool?.stratumHostname;
+            const label = poolName ? `${poolName} (${algo || 'N/A'})` : (algo || order?.title || order?.name || `Order ${index + 1}`);
+            const statusCode = order?.status?.code || order?.status || '';
             return (
               <option key={id || `${label}-${index}`} value={id}>
-                {label}{id ? ` (${id})` : ''}
+                {label}{statusCode ? ` [${statusCode}]` : ''}
               </option>
             );
           })}
         </select>
-        <button className="btn-pro" onClick={() => fetchOrderDetail(selectedOrderId)} disabled={!selectedOrderId}>
-          Get Order Detail
-        </button>
+        {orderDetail?.status?.code && (
+          <div style={{ padding: '0 10px', display: 'flex', alignItems: 'center' }}>
+            <span className={orderDetail.status.code === 'ACTIVE' ? 'status-success' : 'status-ready'} style={{ fontSize: '10px', fontWeight: 'bold' }}>
+              {orderDetail.status.code}
+            </span>
+          </div>
+        )}
       </div>
-      
+
       {selectedOrderId && (
         <div className="order-management-panel" style={{ marginTop: '15px', padding: '15px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px', alignItems: 'flex-end', marginBottom: '15px' }}>
             <div>
               <label className="label" style={{ fontSize: '10px', marginBottom: '4px', display: 'block' }}>NEW PRICE</label>
-              <input 
-                type="number" 
-                className="input-pro" 
-                value={priceInput} 
-                onChange={e => setPriceInput(e.target.value)} 
+              <input
+                type="number"
+                className="input-pro"
+                value={priceInput}
+                onChange={e => setPriceInput(e.target.value)}
                 placeholder="0.0000"
                 step="0.0001"
               />
             </div>
             <div>
               <label className="label" style={{ fontSize: '10px', marginBottom: '4px', display: 'block' }}>NEW LIMIT</label>
-              <input 
-                type="number" 
-                className="input-pro" 
-                value={limitInput} 
-                onChange={e => setLimitInput(e.target.value)} 
+              <input
+                type="number"
+                className="input-pro"
+                value={limitInput}
+                onChange={e => setLimitInput(e.target.value)}
                 placeholder="0.00"
                 step="0.01"
               />
@@ -165,11 +172,11 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', alignItems: 'flex-end', marginBottom: '15px' }}>
             <div>
               <label className="label" style={{ fontSize: '10px', marginBottom: '4px', display: 'block' }}>REFILL AMOUNT</label>
-              <input 
-                type="number" 
-                className="input-pro" 
-                value={refillInput} 
-                onChange={e => setRefillInput(e.target.value)} 
+              <input
+                type="number"
+                className="input-pro"
+                value={refillInput}
+                onChange={e => setRefillInput(e.target.value)}
                 placeholder="0.0000"
                 step="0.0001"
               />

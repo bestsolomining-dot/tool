@@ -179,13 +179,21 @@ export default function App() {
     // Prevent calling invalid endpoints that lead to 401/404 errors
     if (isRented && !rentalId) return;
     if (!isRented && !rigId) return;
-    const path = (isRented && rentalId)
-      ? `/api/v2/mrr/rental/${encodeURIComponent(rentalId)}/pool`
-      : `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
-    const result = await handleMiningCall(path, { query: { client: mrrClient }, silent: true });
-    setMrrPoolData(result);
-    setMrrPoolRigId(isRented ? '' : String(rigId || ''));
-    setMrrPoolRentalId(isRented ? String(rentalId || '') : '');
+
+    if (isRented) {
+      // Redesign: Trigger the Rental Status Modal.
+      // MrrPoolsManager handles the full fetch for rentals.
+      setMrrPoolRentalId(rentalId);
+      setMrrPoolRigId('');
+      setMrrPoolData(null);
+    } else {
+      // Standard Rig Pool View
+      const path = `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
+      const result = await handleMiningCall(path, { query: { client: mrrClient }, silent: true });
+      setMrrPoolData(result);
+      setMrrPoolRigId(rigId);
+      setMrrPoolRentalId('');
+    }
   }, [handleMiningCall, mrrClient]);
 
   return (
@@ -248,7 +256,7 @@ export default function App() {
                 Open Calculator
               </button>
             </div>
-            <article className="panel">
+            {/* <article className="panel">
               <div style={{ marginTop: '5px' }}>
                 <HashpowerBot
                   algorithm={algorithm}
@@ -258,7 +266,7 @@ export default function App() {
                   setNhClient={setNhClient}
                 />
               </div>
-            </article>
+            </article> */}
           </div>
           <article className="panel">
             <MiningRigSection

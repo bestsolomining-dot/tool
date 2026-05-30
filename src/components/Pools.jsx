@@ -764,7 +764,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                 className="verify-list"
                 style={{
                   maxHeight: '400px',
-                  overflowY: 'auto',
+                  overflowY: 'hiden',
+                  overflowX: 'auto',
                   scrollbarWidth: 'thin',
                   scrollbarColor: 'rgba(255,255,255,0.1) transparent'
                 }}

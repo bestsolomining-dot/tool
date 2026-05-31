@@ -255,6 +255,8 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
   // Notification State
   const [newRentalFound, setNewRentalFound] = useState(null);
   const knownRentalIds = useRef(new Set());
+  const notifiedAlerts = useRef(new Set()); // Track stateful alerts (Rule 2, 3) to prevent spam
+  const lastHeartbeatTimes = useRef(new Map()); // Track 10m heartbeats for active rentals
 
   const fetchActiveRentals = useCallback(async () => {
     if (!mrrClient || mrrClient === 'ALL' || loadingRentals) {
@@ -267,6 +269,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
       const result = await onCall('/api/v2/mrr/rentals', { query: { client: mrrClient }, silent: true });
       if (result?.success) {
         const newList = extractArray(result);
+        const now = Date.now();
         
         // Detect new rentals
         if (knownRentalIds.current.size > 0) {
@@ -289,8 +292,82 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           }
         }
         
+        // Monitoring Logic for Telegram Alerts
+        newList.forEach(r => {
+          const rentalId = String(r.id);
+          // Normalize start/end times for cross-browser parsing
+          const startTime = new Date(r.start + (String(r.start).endsWith('UTC') ? '' : ' UTC')).getTime();
+          const endTime = new Date(r.end + (String(r.end).endsWith('UTC') ? '' : ' UTC')).getTime();
+          
+          const elapsedMs = now - startTime;
+          const remainingMs = endTime - now;
+          
+          const currentHash = parseFloat(r.hashrate?.hashrate || r.hashrate?.current || r.hash || 0);
+          // Use 15m avg if available in the rig status sub-object, otherwise fallback to the global average
+          const avg15m = parseFloat(r.rig?.status?.last_15min || r.hashrate?.average?.hash || r.hashrate?.average || 0);
+          const efficiency = parseFloat(r.hashrate?.average?.percent || r.percent || 100);
+
+          // RULE 1: Started 00:00 - 00:02 (elapsed <= 2m), current hashrate is 0
+          // We send this alert every iteration (30s) as requested by not using suppression.
+          if (elapsedMs >= 0 && elapsedMs <= 120000 && currentHash === 0) {
+            const msg = `⚠️ <b>[Critical] New Rental Zero Hashrate!</b>\n\n<b>Name:</b> ${r.name || r.id}\n<b>Started:</b> ${Math.round(elapsedMs/1000)}s ago\n<b>Current Hash:</b> 0\n<b>Client:</b> ${mrrClient}`;
+            onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: msg }, silent: true }).catch(() => {});
+          }
+
+          // RULE 2: 15m AVG hashrate is 0
+          // Note: We only check this after 15m elapsed to ensure the data has had time to populate.
+          const rule2Key = `${rentalId}_zero_15m`;
+          if (avg15m === 0 && elapsedMs > 900000) { 
+            if (!notifiedAlerts.current.has(rule2Key)) {
+              const msg = `🛑 <b>[Alert] 15m Avg Hashrate is 0!</b>\n\n<b>Name:</b> ${r.name || r.id}\n<b>Avg (15m):</b> 0\n<b>Client:</b> ${mrrClient}`;
+              onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: msg }, silent: true }).then(() => {
+                notifiedAlerts.current.add(rule2Key);
+              }).catch(() => {});
+            }
+          } else if (avg15m > 0) {
+            notifiedAlerts.current.delete(rule2Key); // Reset when hashrate returns
+          }
+
+          // RULE 3: Remaining time < 1h, Efficiency < 80%
+          const rule3Key = `${rentalId}_low_eff`;
+          if (remainingMs > 0 && remainingMs < 3600000 && efficiency < 80) {
+            if (!notifiedAlerts.current.has(rule3Key)) {
+              const msg = `📉 <b>[Alert] Low Efficiency near Expiry!</b>\n\n<b>Name:</b> ${r.name || r.id}\n<b>Remaining:</b> ${Math.round(remainingMs/60000)}m\n<b>Efficiency:</b> ${efficiency}%\n<b>Client:</b> ${mrrClient}`;
+              onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: msg }, silent: true }).then(() => {
+                notifiedAlerts.current.add(rule3Key);
+              }).catch(() => {});
+            }
+          } else if (efficiency >= 80) {
+            notifiedAlerts.current.delete(rule3Key); // Reset when efficiency recovers
+          }
+
+          // HEARTBEAT: Send status update every 10 minutes (600,000 ms)
+          const lastHeartbeat = lastHeartbeatTimes.current.get(rentalId) || 0;
+          if (now - lastHeartbeat >= 600000) {
+            const remainingStr = calculateRemainingTime(r.end);
+            const hashDisplay = r.hashrate?.nice || (currentHash > 0 ? `${currentHash.toFixed(2)}` : '0');
+            const hbMsg = `💓 <b>[Heartbeat] Rig Status</b>\n\n` +
+                          `<b>Name:</b> ${r.name || r.id}\n` +
+                          `<b>Hashrate:</b> ${hashDisplay}\n` +
+                          `<b>Efficiency:</b> ${efficiency}%\n` +
+                          `<b>Remaining:</b> ${remainingStr}\n` +
+                          `<b>Client:</b> ${mrrClient}`;
+            
+            onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: hbMsg }, silent: true }).then(() => {
+              lastHeartbeatTimes.current.set(rentalId, now);
+            }).catch(() => {});
+          }
+        });
+
         // Update known IDs
         newList.forEach(r => knownRentalIds.current.add(String(r.id)));
+
+        // Cleanup heartbeat map for finished rentals to prevent memory leaks
+        const currentIds = new Set(newList.map(r => String(r.id)));
+        for (const id of lastHeartbeatTimes.current.keys()) {
+          if (!currentIds.has(id)) lastHeartbeatTimes.current.delete(id);
+        }
+
         setRentals(newList);
       }
     } catch (err) {
@@ -306,8 +383,8 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
     }
     fetchActiveRentals();
 
-    // Refresh every 60 seconds to detect new rentals automatically
-    const interval = setInterval(fetchActiveRentals, 60000);
+    // Refresh every 30 seconds to support the 30s notification requirement
+    const interval = setInterval(fetchActiveRentals, 30000);
     return () => clearInterval(interval);
   }, [fetchActiveRentals]);
 

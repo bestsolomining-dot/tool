@@ -431,20 +431,21 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
               {(info || rig.host) && (
                 <div className="rig-pool-summary" style={{ background: 'rgba(0,0,0,0.25)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.02)', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.2)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.host || info?.stratumHost}><span style={{ opacity: 0.5 }}>Host:</span> {rig.host || info?.stratumHost || 'N/A'}</div>
-                    <div><span style={{ opacity: 0.5 }}>Port:</span> {rig.port || info?.stratumPort || 'N/A'}</div>
-                    <div style={{ gridColumn: 'span 2', overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.user || info?.username}><span style={{ opacity: 0.5 }}>User:</span> {rig.user || info?.username || 'N/A'}</div>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.host || info?.stratumHost}><span style={{ opacity: 0.7 }}>Host:</span> {rig.host || info?.stratumHost || 'N/A'}</div>
+                    <div><span style={{ opacity: 0.7 }}>Port:</span> {rig.port || info?.stratumPort || 'N/A'}</div>
+                    <div style={{ gridColumn: 'span 2', overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.user || info?.username}><span style={{ opacity: 0.7 }}>User:</span> {rig.user || info?.username || 'N/A'}</div>
                   </div>
                   {isRented && (
                     <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       {/* Fix: use rig.hashrate for list-view rentals to show efficiency immediately */}
                       {(() => {
                         const eff = info?.percent || rig.hashrate?.average?.percent || rig.percent || '0.00';
-                        return <div><span style={{ opacity: 0.6 }}>Eff:</span> <span style={{ color: (parseFloat(eff) || 0) < 90 ? '#f87171' : '#34d399' }}>{eff}%</span></div>;
+                        return <div><span style={{ opacity: 0.8 }}>Effect:</span> 
+                        <span style={{ color: (parseFloat(eff) || 0) < 90 ? '#f87171' : '#34d399' }}>{eff}%</span></div>;
                       })()}
                       <div style={{ fontSize: '9px', textAlign: 'right' }}>
                         {/* <div style={{ marginBottom: '2px' }}>{formatRentalStartTime(info?.startTime || rig.start)}</div> */}
-                        <div><span style={{ opacity: 0.6 }}>End in:</span> <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /></div>
+                        <div><span style={{ opacity: 0.8 }}>End in:</span> <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /></div>
                       </div>
                     </div>
                   )}
@@ -466,7 +467,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                     }} 
                     onClick={() => onOpenPool?.(rig, info)}
                   >
-                    {isRented ? 'Details & Pools' : 'Pools'}
+                    {isRented ? 'Pools' : 'Pools'}
                   </button>
                 )}
 

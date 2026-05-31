@@ -167,7 +167,11 @@ export default function App() {
   }, [callApi]);
 
   const handleOpenMrrPools = useCallback(async (rig) => {
-    if (!rig || !mrrClient || mrrClient === 'ALL') return;
+    if (!rig || !mrrClient) return;
+
+    // Resolve the specific client (BT or SL) from the rig metadata if the global filter is 'ALL'
+    const targetClient = (mrrClient === 'ALL' && rig.mrrClient) ? rig.mrrClient : mrrClient;
+    if (targetClient === 'ALL') return;
 
     // Support both rig object and raw ID (fallback)
     const rigObj = typeof rig === 'object' ? rig : { id: rig };
@@ -183,7 +187,7 @@ export default function App() {
     if (!rigId) return;
 
     const path = `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
-    const result = await handleMiningCall(path, { query: { client: mrrClient }, silent: true });
+    const result = await handleMiningCall(path, { query: { client: targetClient }, silent: true });
     
     setMrrPoolData(result);
     setMrrPoolRigId(rigId);

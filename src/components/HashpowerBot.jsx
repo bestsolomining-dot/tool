@@ -121,7 +121,7 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
           body: { 
             price: nextPrice.toFixed(8), 
             limit: targetLimit,
-            displayMarketFactor: myOrder.displayMarketFactor || myOrder.algorithm?.displayMarketFactor 
+            displayMarketFactor: myOrder.displayMarketFactor || myOrder.algorithm?.displayMarketFactor || book[0]?.displayMarketFactor
           },
           silent: true
         });

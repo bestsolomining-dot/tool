@@ -147,6 +147,8 @@ export default function App() {
           durationMs: Math.round(performance.now() - startedAt),
         }));
       }
+      // Return a structured object even on network failure to prevent downstream crashes
+      if (options.silent) return { success: false, error: err.message };
       throw err;
     } finally {
       if (!options.silent) setLoading(false);

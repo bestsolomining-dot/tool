@@ -1040,14 +1040,15 @@ async function runRentalMonitor(forceNotify = false) {
 
         if (shouldNotify) {
           const remHours = Math.max(0, remainingMs / 3600000).toFixed(2);
-          const hbType = forceNotify ? 'Forced Heartbeat' : 'Heartbeat';
-          const msg = `💓 <b>[${hbType}] Rig Status</b>\n\n` +
-                      `<b>Name:</b> ${r.name || r.id}\n` +
-                      `<b>Hashrate:</b> ${info.niceAverageHashrate}\n` +
+          const hbType = forceNotify ? 'Forced Monitor' : 'Heartbeat';
+          const msg = `💓 <b>[${hbType}]</b>\n\n` +
+                      `<b>Rig:</b> ${r.name || r.id}\n` +
+                      `<b>Algo:</b> ${info.algo}\n` +
+                      `<b>Current Avg:</b> ${info.niceAverageHashrate}\n` +
                       `<b>Efficiency:</b> ${info.percent}%\n` +
                       `<b>Remaining:</b> ${remHours}h\n` +
                       `<b>Target to 100%:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}\n` +
-                      `<b>Client:</b> ${acct}`;
+                      `<b>Account:</b> ${acct}`;
 
           try {
             const tgRes = await sendTelegramInternal(msg);
@@ -1609,7 +1610,7 @@ app.get(/.*/, (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, (err) => {
   if (err) {
     console.error(`[api] Failed to bind port ${PORT}:`, err.message);

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import MrrRigs from './MrrRigs';
 import Modal from './Modal';
-import TelegramManager from './TelegramManager';
+import TelegramManager, { useTelegram, calculateRemainingTime } from './TelegramManager';
 
 /** Safely extracts an array from various MRR API response shapes */
 function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'items', 'data']) {
@@ -23,31 +23,6 @@ function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'ite
   }
 
   return [];
-}
-
-function calculateRemainingTime(endTime) {
-  if (!endTime) return null;
-  const normalizedEndTime = /\bUTC\b/i.test(String(endTime)) ? String(endTime) : `${endTime} UTC`;
-  const end = new Date(normalizedEndTime);
-  if (Number.isNaN(end.getTime())) return 'Expired';
-  const now = new Date();
-  const diffMs = end.getTime() - now.getTime();
-
-  if (diffMs <= 0) return 'Expired';
-
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const days = Math.floor(diffSeconds / (3600 * 24));
-  const hours = Math.floor((diffSeconds % (3600 * 24)) / 3600);
-  const minutes = Math.floor((diffSeconds % 3600) / 60);
-  const seconds = diffSeconds % 60;
-
-  let parts = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0) parts.push(`${minutes}m`);
-  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`); // Always show seconds if no other unit or if it's the only unit
-
-  return parts.join(' ');
 }
 
 export function CountdownTimer({ endTime }) {
@@ -89,7 +64,7 @@ export function CountdownTimer({ endTime }) {
 }
 
 /** Structured view for active rentals */
-function MrrRentalsTable({ data, onOpenPools, onCall, mrrClient }) {
+function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
   // MRR API v2 GET /rental returns { "success": true, "data": { "rentals": [...] } }
   // OR sometimes the array is directly at data.data: { "success": true, "data": [...] }
   
@@ -115,20 +90,6 @@ function MrrRentalsTable({ data, onOpenPools, onCall, mrrClient }) {
   const rentals = extractArray(data);
 
   if (!Array.isArray(rentals) || !rentals.length) return <div style={{ padding: '30px', textAlign: 'center', opacity: 0.5 }}>No active rentals found.</div>;
-
-  const sendStatusToTelegram = (r, target) => {
-    const remainingStr = calculateRemainingTime(r.end);
-    const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0);
-    const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
-    const msg = `📢 <b>[Notice] Hash Completion</b>\n\n` +
-                `<b>Rig:</b> ${r.name || r.id}\n` +
-                `<b>Current Avg:</b> ${avg.toFixed(2)} ${suffix}\n` +
-                `<b>Target to 100%:</b> ${target.toFixed(2)} ${suffix}\n` +
-                `<b>Remaining:</b> ${remainingStr}\n` +
-                `<b>Client:</b> ${mrrClient}`;
-
-    onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: msg }, showModal: true });
-  };
 
   const getRaw = (rate) => {
     if (!rate) return 0;
@@ -210,7 +171,7 @@ function MrrRentalsTable({ data, onOpenPools, onCall, mrrClient }) {
                   <button className="text-button" onClick={() => onOpenPools?.(r)} style={{ fontSize: '11px' }}>
                     Pools
                   </button>
-                  <button className="text-button" onClick={() => sendStatusToTelegram(r, target)} style={{ fontSize: '11px', color: '#24A1DE' }}>
+                  <button className="text-button" onClick={() => onNotice?.(r, target)} style={{ fontSize: '11px', color: '#24A1DE' }}>
                     Notice
                   </button>
                 </div>
@@ -292,6 +253,8 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
   const [modalData, setModalData] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
 
+  const tg = useTelegram(onCall, mrrClient);
+
   const [rentals, setRentals] = useState([]);
   const [loadingRentals, setLoadingRentals] = useState(false);
   
@@ -320,13 +283,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           if (fresh) {
             setNewRentalFound(fresh);
             
-            // Trigger Telegram Notification
-            const tgMsg = `🚀 <b>[Mining Tool] New Rig Rented!</b>\n\n<b>Name:</b> ${fresh.name || fresh.id}\n<b>Algo:</b> ${fresh.algo || 'N/A'}\n<b>Duration:</b> ${fresh.hours}h\n<b>Client:</b> ${mrrClient}`;
-            onCall('/api/v2/notify/telegram', {
-              method: 'POST',
-              body: { message: tgMsg },
-              silent: true
-            }).catch(err => console.error('[telegram] Notification failed:', err));
+            tg.notifyNewRental(fresh).catch(err => console.error('[telegram] Notification failed:', err));
 
             // Optionally trigger a system notification
             if (Notification.permission === 'granted') {
@@ -353,8 +310,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           // RULE 1: Started 00:00 - 00:02 (elapsed <= 2m), current hashrate is 0
           // We send this alert every iteration (30s) as requested by not using suppression.
           if (elapsedMs >= 0 && elapsedMs <= 120000 && currentHash === 0) {
-            const msg = `⚠️ <b>[Critical] New Rental Zero Hashrate!</b>\n\n<b>Name:</b> ${r.name || r.id}\n<b>Started:</b> ${Math.round(elapsedMs/1000)}s ago\n<b>Current Hash:</b> 0\n<b>Client:</b> ${mrrClient}`;
-            onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: msg }, silent: true }).catch(() => {});
+            tg.notifyZeroHashrate(r, elapsedMs).catch(() => {});
           }
 
           // RULE 2: 15m AVG hashrate is 0
@@ -362,8 +318,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           const rule2Key = `${rentalId}_zero_15m`;
           if (avg15m === 0 && elapsedMs > 900000) { 
             if (!notifiedAlerts.current.has(rule2Key)) {
-              const msg = `🛑 <b>[Alert] 15m Avg Hashrate is 0!</b>\n\n<b>Name:</b> ${r.name || r.id}\n<b>Avg (15m):</b> 0\n<b>Client:</b> ${mrrClient}`;
-              onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: msg }, silent: true }).then(() => {
+              tg.notifyHashrateDrop(r).then(() => {
                 notifiedAlerts.current.add(rule2Key);
               }).catch(() => {});
             }
@@ -375,8 +330,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           const rule3Key = `${rentalId}_low_eff`;
           if (remainingMs > 0 && remainingMs < 3600000 && efficiency < 80) {
             if (!notifiedAlerts.current.has(rule3Key)) {
-              const msg = `📉 <b>[Alert] Low Efficiency near Expiry!</b>\n\n<b>Name:</b> ${r.name || r.id}\n<b>Remaining:</b> ${Math.round(remainingMs/60000)}m\n<b>Efficiency:</b> ${efficiency}%\n<b>Client:</b> ${mrrClient}`;
-              onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: msg }, silent: true }).then(() => {
+              tg.notifyLowEfficiency(r, remainingMs, efficiency).then(() => {
                 notifiedAlerts.current.add(rule3Key);
               }).catch(() => {});
             }
@@ -401,7 +355,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
     } finally {
       setLoadingRentals(false);
     }
-  }, [mrrClient, onCall]);
+  }, [mrrClient, onCall, tg]);
 
   useEffect(() => {
     if (Notification.permission === 'default') {
@@ -566,7 +520,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
               scrollbarWidth: 'thin',
               scrollbarColor: 'rgba(255,255,255,0.2) transparent'
             }}>
-              <MrrRentalsTable data={modalData} onOpenPools={onOpenMrrPools} onCall={onCall} mrrClient={mrrClient} />
+              <MrrRentalsTable data={modalData} onOpenPools={onOpenMrrPools} onNotice={tg.sendManualNotice} mrrClient={mrrClient} />
             </div>
           )}
 

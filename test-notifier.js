@@ -15,11 +15,12 @@ async function runTests() {
       body: JSON.stringify({ 
         message: ` <b>[Test] Notice Data Structure</b>\n\n` +
                  `<b>Rig:</b> Test-Rig-01\n` +
+                 `<b>Algo:</b> SHA256\n` +
                  `<b>Current Avg:</b> 500.00 MH/s\n` +
-                 `<b>Target to 100%:</b> 512.45 MH/s\n` +
-                 `<b>Remaining:</b> 2h 15m\n` +
                  `<b>Efficiency:</b> 98.5%\n` +
-                 `<b>Client:</b> BT\n\n` +
+                 `<b>Remaining:</b> 2h 15m\n` +
+                 `<b>Target to 100%:</b> 512.45 MH/s\n` +
+                 `<b>Account:</b> BT\n\n` +
                  `<i>Sent via Integration Script at ${new Date().toLocaleTimeString()}</i>`
       })
     });

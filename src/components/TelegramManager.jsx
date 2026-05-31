@@ -1,9 +1,111 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
+
+/**
+ * Safely calculates remaining time for display or notifications.
+ */
+export function calculateRemainingTime(endTime) {
+  if (!endTime) return null;
+  const normalizedEndTime = /\bUTC\b/i.test(String(endTime)) ? String(endTime) : `${endTime} UTC`;
+  const end = new Date(normalizedEndTime);
+  if (Number.isNaN(end.getTime())) return 'Expired';
+  const now = new Date();
+  const diffMs = end.getTime() - now.getTime();
+
+  if (diffMs <= 0) return 'Expired';
+
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const days = Math.floor(diffSeconds / (3600 * 24));
+  const hours = Math.floor((diffSeconds % (3600 * 24)) / 3600);
+  const minutes = Math.floor((diffSeconds % 3600) / 60);
+  const seconds = diffSeconds % 60;
+
+  let parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+
+  return parts.join(' ');
+}
+
+/**
+ * Hook to construct and send Telegram messages from the frontend.
+ */
+export function useTelegram(onCall, mrrClient) {
+  const sendTelegram = useCallback((message, options = {}) => {
+    return onCall('/api/v2/notify/telegram', {
+      method: 'POST',
+      body: { message },
+      ...options
+    });
+  }, [onCall]);
+
+  const notifyNewRental = useCallback((fresh) => {
+    const msg = `🚀 <b>[New Rental]</b>\n\n` +
+                `<b>Rig:</b> ${fresh.name || fresh.id}\n` +
+                `<b>Algo:</b> ${fresh.algo || 'N/A'}\n` +
+                `<b>Duration:</b> ${fresh.hours}h\n` +
+                `<b>Account:</b> ${mrrClient}`;
+    return sendTelegram(msg, { silent: true });
+  }, [sendTelegram, mrrClient]);
+
+  const notifyZeroHashrate = useCallback((r, elapsedMs) => {
+    const msg = `⚠️ <b>[Critical] Zero Hashrate!</b>\n\n` +
+                `<b>Rig:</b> ${r.name || r.id}\n` +
+                `<b>Started:</b> ${Math.round(elapsedMs/1000)}s ago\n` +
+                `<b>Current Hash:</b> 0\n` +
+                `<b>Account:</b> ${mrrClient}`;
+    return sendTelegram(msg, { silent: true });
+  }, [sendTelegram, mrrClient]);
+
+  const notifyHashrateDrop = useCallback((r) => {
+    const msg = `🛑 <b>[Alert] Hashrate Drop (15m)</b>\n\n` +
+                `<b>Rig:</b> ${r.name || r.id}\n` +
+                `<b>Avg (15m):</b> 0\n` +
+                `<b>Account:</b> ${mrrClient}`;
+    return sendTelegram(msg, { silent: true });
+  }, [sendTelegram, mrrClient]);
+
+  const notifyLowEfficiency = useCallback((r, remainingMs, efficiency) => {
+    const msg = `📉 <b>[Alert] Low Efficiency</b>\n\n` +
+                `<b>Rig:</b> ${r.name || r.id}\n` +
+                `<b>Remaining:</b> ${Math.round(remainingMs/60000)}m\n` +
+                `<b>Efficiency:</b> ${efficiency}%\n` +
+                `<b>Account:</b> ${mrrClient}`;
+    return sendTelegram(msg, { silent: true });
+  }, [sendTelegram, mrrClient]);
+
+  const sendManualNotice = useCallback((r, target) => {
+    const remainingStr = calculateRemainingTime(r.end);
+    const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0);
+    const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
+    const msg = `📢 <b>[Notice] Hash Completion</b>\n\n` +
+                `<b>Rig:</b> ${r.name || r.id}\n` +
+                `<b>Algo:</b> ${r.rig?.type || r.algo || 'N/A'}\n` +
+                `<b>Current Avg:</b> ${avg.toFixed(2)} ${suffix}\n` +
+                `<b>Efficiency:</b> ${r.hashrate?.average?.percent || r.percent || '0'}%\n` +
+                `<b>Remaining:</b> ${remainingStr}\n` +
+                `<b>Target to 100%:</b> ${target.toFixed(2)} ${suffix}\n` +
+                `<b>Account:</b> ${mrrClient}`;
+    return sendTelegram(msg, { showModal: true });
+  }, [sendTelegram, mrrClient]);
+
+  return useMemo(() => ({ 
+    sendTelegram, 
+    notifyNewRental, 
+    notifyZeroHashrate, 
+    notifyHashrateDrop, 
+    notifyLowEfficiency, 
+    sendManualNotice 
+  }), [sendTelegram, notifyNewRental, notifyZeroHashrate, notifyHashrateDrop, notifyLowEfficiency, sendManualNotice]);
+}
 
 /**
  * Component to manage Telegram notifications, monitor status, and connection tests.
  */
 export default function TelegramManager({ onCall, mrrClient }) {
+  const { sendTelegram } = useTelegram(onCall, mrrClient);
+
   return (
     <div style={{ display: 'contents' }}>
       <button 
@@ -24,11 +126,7 @@ export default function TelegramManager({ onCall, mrrClient }) {
       </button>
       <button 
         className="btn-pro secondary" 
-        onClick={() => onCall('/api/v2/notify/telegram', { 
-          method: 'POST', 
-          body: { message: `🔔 <b>Test Connection</b>\nTime: ${new Date().toLocaleTimeString()}\nClient: ${mrrClient}` }, 
-          showModal: true 
-        })}
+        onClick={() => sendTelegram(`🔔 <b>Test Connection</b>\nTime: ${new Date().toLocaleTimeString()}\nClient: ${mrrClient}`, { showModal: true })}
       >
         Test Bot
       </button>

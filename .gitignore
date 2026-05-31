@@ -3,3 +3,7 @@ node_modules/
 .DS_Store
 dist/
 orders.xlsx
+orders.csv
+*.csv
+dist/nh_tool/index.js
+dist/client/index.html

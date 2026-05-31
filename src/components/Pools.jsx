@@ -613,10 +613,16 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
           {/* Controls Section */}
           {progress.total > 0 && (
-              <div className="verify-progress-bar-container" style={{ width: '100%', height: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', overflow: 'hidden', position: 'relative', marginBottom: '15px' }}>
-                <div className="verify-progress-bar-fill" style={{ width: `${(progress.current / progress.total) * 100}%`, height: '100%', background: '#3b82f6', transition: 'width 0.3s ease' }} />
+            <div className="verify-progress-wrapper" style={{ marginBottom: '15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '5px', opacity: 0.8, fontWeight: 'bold' }}>
+                <span>VERIFYING POOLS...</span>
+                <span>{progress.current} / {progress.total} ({Math.round((progress.current / progress.total) * 100)}%)</span>
               </div>
-            )}
+              <div className="verify-progress-bar-container" style={{ width: '100%', height: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', overflow: 'hidden', position: 'relative' }}>
+                <div className="verify-progress-bar-fill" style={{ width: `${(progress.current / progress.total) * 100}%`, height: '100%', background: '#073681', transition: 'width 0.3s ease' }} />
+              </div>
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '15px', background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

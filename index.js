@@ -260,7 +260,24 @@ const getNiceHashApp = (client) => ({
 
   // --- POOL MANAGEMENT ---
   pools: {
-    getPools: () => client.call({ method: 'GET', path: '/main/api/v2/pools' }),
+    getPools: async () => {
+      const allPools = [];
+      let page = 0;
+      const size = 100;
+      while (true) {
+        const res = await client.call({
+          method: 'GET',
+          path: '/main/api/v2/pools',
+          query: { page: page.toString(), size: size.toString() }
+        });
+        const list = res?.list;
+        if (!Array.isArray(list) || list.length === 0) break;
+        allPools.push(...list);
+        if (list.length < size) break;
+        page++;
+      }
+      return { list: allPools, totalCount: allPools.length };
+    },
     getPoolDetails: (poolId) => client.call({ method: 'GET', path: `/main/api/v2/pool/${poolId}` }),
     createPool: (body) => client.call({ method: 'POST', path: '/main/api/v2/pool', body }),
     deletePool: (poolId) => client.call({ method: 'DELETE', path: `/main/api/v2/pool/${poolId}` }),

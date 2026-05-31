@@ -1,6 +1,6 @@
 import { request } from 'undici';
 
-const BASE_URL = 'http://localhost:3000/api/v2';
+const BASE_URL = process.env.TEST_API_URL || 'http://localhost:3000/api/v2';
 
 async function runTests() {
   console.log('--- Starting Notification Integration Tests ---');
@@ -13,7 +13,14 @@ async function runTests() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        message: `🚀 <b>[Test] Integration Script</b>\nSuccessfully reached the local API.\n<i>Time: ${new Date().toLocaleTimeString()}</i>` 
+        message: ` <b>[Test] Notice Data Structure</b>\n\n` +
+                 `<b>Rig:</b> Test-Rig-01\n` +
+                 `<b>Current Avg:</b> 500.00 MH/s\n` +
+                 `<b>Target to 100%:</b> 512.45 MH/s\n` +
+                 `<b>Remaining:</b> 2h 15m\n` +
+                 `<b>Efficiency:</b> 98.5%\n` +
+                 `<b>Client:</b> BT\n\n` +
+                 `<i>Sent via Integration Script at ${new Date().toLocaleTimeString()}</i>`
       })
     });
 

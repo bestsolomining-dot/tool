@@ -1,26 +1,42 @@
 import { request } from 'undici';
 import { createHmac, createHash } from 'node:crypto';
 
-export class MiningRigRentalsClient {
-  constructor({ apiKey, apiSecret }) {
-    this.apiKey = apiKey;
-    this.apiSecret = apiSecret;
-    this.baseUrl = 'https://www.miningrigrentals.com/api/v2';
-    this.lastNonce = 0;
+// Shared state to track nonces across client instances and prevent "Bad Nonce"
+// errors when multiple calls happen in the same millisecond or clients are re-instantiated.
+const mrrLastNonces = new Map();
+
+/**
+ * Shared Nonce Provider Logic
+ * Generates a 19-digit high-precision nonce (ms * 1,000,000) to satisfy MRR requirements.
+ */
+function getNextSharedNonce(apiKey, clientHint = '') {
+  const cleanHint = String(clientHint || '').trim().toUpperCase();
+  const lastNonce = BigInt(mrrLastNonces.get(apiKey) || 0n);
+  const nowMs = BigInt(Date.now());
+
+  let nonce;
+  if (['BT', 'ALL', 'VN'].includes(cleanHint) || lastNonce > 100000000000000n) {
+    const now19 = nowMs * 1000000n;
+    nonce = now19 > lastNonce ? now19 : lastNonce + 1n;
+  } else {
+    const now14 = nowMs * 10n;
+    nonce = now14 > lastNonce ? now14 : lastNonce + 1n;
   }
 
-  /**
-   * Generates a strictly increasing millisecond nonce.
-   */
-  getNextNonce() {
-    const now = Date.now();
-    const nonce = now > this.lastNonce ? now : this.lastNonce + 1;
-    this.lastNonce = nonce;
-    return String(nonce);
+  mrrLastNonces.set(apiKey, nonce);
+  return nonce.toString();
+}
+
+export class MiningRigRentalsClient {
+  constructor({ apiKey, apiSecret, name = '' }) {
+    this.apiKey = apiKey;
+    this.apiSecret = apiSecret;
+    this.clientName = name;
+    this.baseUrl = 'https://www.miningrigrentals.com/api/v2';
   }
 
   async call({ method = 'GET', endpoint, query = {}, body = null }) {
-    const nonce = this.getNextNonce();
+    const nonce = getNextSharedNonce(this.apiKey, this.clientName);
     const requestMethod = method.toUpperCase();
 
     // Ensure endpoint starts with / and remove trailing slashes for signature
@@ -70,7 +86,7 @@ export class MiningRigRentalsClient {
     );
 
     if (isAuthError) {
-      const nextNonce = this.getNextNonce();
+      const nextNonce = getNextSharedNonce(this.apiKey, this.clientName);
       const legacySignStr = `${this.apiKey}${nextNonce}${cleanPath}${this.apiSecret}`;
       const legacySig = createHash('sha1').update(legacySignStr).digest('hex');
 

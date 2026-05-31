@@ -24,6 +24,10 @@ db.serialize(() => {
     last_notified INTEGER DEFAULT 0,
     last_updated INTEGER
   )`);
+  db.run(`CREATE TABLE IF NOT EXISTS mrr_nonces (
+    client TEXT PRIMARY KEY,
+    last_nonce TEXT
+  )`);
 });
 
 const app = express();
@@ -36,6 +40,19 @@ const mrrInstances = new Map();
 // --- MRR CLOCK SYNC ---
 let mrrClockOffset = 0n;
 let mrrClockSynced = false;
+
+// Initialize nonces from DB on startup
+db.all("SELECT client, last_nonce FROM mrr_nonces", [], (err, rows) => {
+  if (!err && rows) {
+    rows.forEach(row => {
+      try {
+        mrrLastNonceByClient.set(row.client, BigInt(row.last_nonce));
+        console.log(`[mrr:init] Loaded last nonce baseline for ${row.client}: ${row.last_nonce}`);
+      } catch (e) {}
+    });
+  }
+});
+
 let mrrSyncPromise = null;
 
 /**
@@ -682,39 +699,45 @@ app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await req.nhA
 app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.verifyPool(req.body))));
 
 // --- MINING RIG RENTALS V2 ---
-function nextMrrNonce(clientName) {
+async function nextMrrNonce(clientName) {
+  const cleanName = String(clientName || '').trim().toUpperCase();
   // Use BigInt to support huge nonces without precision loss
-  const lastNonce = BigInt(mrrLastNonceByClient.get(clientName) || 0n);
+  const lastNonce = BigInt(mrrLastNonceByClient.get(cleanName) || 0n);
 
   // Sanity check: If the last nonce is already nonsensical (e.g. from a bad .env value), 
   // reset it to 0 before calculating the next one.
-  if (lastNonce > 9999999999999999999n) {
-    console.warn(`[mrr:${clientName}] Resetting nonsensical high-watermark nonce (${lastNonce}) to 0.`);
-    mrrLastNonceByClient.set(clientName, 0n);
-    return nextMrrNonce(clientName);
+  if (lastNonce > 99999999999999999999n) {
+    console.warn(`[mrr:${cleanName}] Resetting nonsensical high-watermark nonce (${lastNonce}) to 0.`);
+    mrrLastNonceByClient.set(cleanName, 0n);
+    return await nextMrrNonce(cleanName);
   }
 
-  // Align with PHP example: seconds + 4 digits of micro-precision (14 digits total)
-  let nowMs = Date.now() + Number(mrrClockOffset);
+  const nowMs = BigInt(Date.now()) + mrrClockOffset;
 
-  // If for some reason nowMs is in microseconds (16 digits), truncate it to milliseconds
-  if (nowMs > 9999999999999n) {
-    console.warn(`[mrr:${clientName}] nowMs is too large (${nowMs}), truncating to 13-digit milliseconds.`);
-    nowMs = Number(String(nowMs).slice(0, 13));
+  let nonce;
+  // Use 19 digits for high-precision accounts or if the baseline is already high (> 100 trillion)
+  if (['BT', 'ALL', 'VN'].includes(cleanName) || lastNonce > 100000000000000n) {
+    const now19 = nowMs * 1000000n; // 19 digits (approx nanoseconds)
+    nonce = now19 > lastNonce ? now19 : lastNonce + 1n;
+  } else {
+    const now14 = nowMs * 10n; // 14 digits (ms + 1 decimal)
+    nonce = now14 > lastNonce ? now14 : lastNonce + 1n;
   }
-
-  const seconds = Math.floor(nowMs / 1000);
-  const microDigits = (nowMs % 1000).toString().padStart(3, '0') + '0'; 
-  const now14 = BigInt(`${seconds}${microDigits}`);
-
-  const nonce = now14 > lastNonce ? now14 : lastNonce + 1n;
   
-  mrrLastNonceByClient.set(clientName, nonce);
+  mrrLastNonceByClient.set(cleanName, nonce);
+  await new Promise((resolve) => {
+    db.run(
+      `INSERT INTO mrr_nonces (client, last_nonce) VALUES (?, ?) 
+       ON CONFLICT(client) DO UPDATE SET last_nonce=excluded.last_nonce`,
+      [cleanName, nonce.toString()],
+      () => resolve()
+    );
+  });
   return nonce.toString();
 }
 
 function resolveMrrClient(clientNameRaw) {
-  const clientName = String(clientNameRaw || defaultMrrClient).toUpperCase(); // Use default if not provided
+  const clientName = String(clientNameRaw || defaultMrrClient).trim().toUpperCase(); // Use default if not provided
 
   if (!mrrInstances.has(clientName)) {
     let config = mrrConfigs[clientName];
@@ -867,9 +890,8 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedEndpoint}`);
     
-    // Endpoint for signature: path after /api/v2, must include leading slash and match path exactly
+    // Endpoint for signature: MRR expects the full path after /api/v2, including the leading slash.
     const sigEndpoint = normalizedEndpoint;
-
     if (query && typeof query === 'object') {
       for (const [key, value] of Object.entries(query)) {
         if (value === undefined || value === null || value === '') continue;
@@ -890,7 +912,7 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
     });
 
     // --- TRY MODERN V2 (HMAC-SHA1) ---
-    let currentNonce = nextMrrNonce(clientName);
+    let currentNonce = await nextMrrNonce(clientName);
     let signString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
     const signatureV2 = createHmac('sha1', clientConfig.apiSecret).update(signString).digest('hex');
 
@@ -915,7 +937,7 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
 
     if (shouldRetry) {
       console.warn(`[mrr:${clientName}] HMAC failed (${authMessage || 'Unauthorized'}), retrying with Legacy SHA1 Concatenation...`);
-      currentNonce = nextMrrNonce(clientName);
+      currentNonce = await nextMrrNonce(clientName);
       const legacyStr = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}${clientConfig.apiSecret}`;
       const legacySig = createHash('sha1').update(legacyStr).digest('hex');
 
@@ -1587,7 +1609,7 @@ app.get(/.*/, (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, (err) => {
   if (err) {
     console.error(`[api] Failed to bind port ${PORT}:`, err.message);

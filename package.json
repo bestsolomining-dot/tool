@@ -6,17 +6,18 @@
 	"scripts": {
 		"dev": "vite",
 		"backend": "node index.js",
-		"build:exe": "npm run build && pkg . --output release/nh-tool.exe",
+		"build:exe": "npm run build && npx pkg . --output release/nh-tool.exe",
 		"all": "concurrently \"npm run backend\" \"npm run dev\"",
 		"build": "vite build",
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
 		"deploy": "npm run build && wrangler deploy"
 	},
+	"main": "index.js",
 	"bin": "index.js",
 	"pkg": {
 		"assets": [
-			"dist/**/*"
+			"dist/client/**/*"
 		],
 		"targets": [
 			"node18-win-x64"

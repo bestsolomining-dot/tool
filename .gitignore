@@ -7,3 +7,4 @@ orders.csv
 *.csv
 dist/nh_tool/index.js
 dist/client/index.html
+*.asar

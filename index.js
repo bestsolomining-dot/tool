@@ -1259,11 +1259,12 @@ app.post('/api/v2/notify/zalo', asyncHandler(async (req, res) => {
 
 // --- SERVE FRONTEND ---
 // Serve static files from the 'dist' directory (created by npm run build)
-const distPath = path.join(__dirname, 'dist');
+const distPath = path.join(__dirname, 'dist', 'client');
 app.use(express.static(distPath));
 
 // Catch-all route to serve the React app for any non-API request
-app.get(/^(?!\/api).+/, (req, res) => {
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not Found' });
   res.sendFile(path.join(distPath, 'index.html'));
 });
 

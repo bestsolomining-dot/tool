@@ -36,7 +36,8 @@ export default function App() {
     const { query, section, ...fetchOptions } = options;
     let finalPath = path;
     const enrichedQuery = { ...query };
-    if (path.startsWith('/api/v2/') && !path.startsWith('/api/v2/mrr/')) {
+    // NiceHash API v2 requires 'ts'. For MRR, we add it to prevent browser-side caching of GET requests.
+    if (path.startsWith('/api/v2/')) {
       if (!enrichedQuery.ts) enrichedQuery.ts = Date.now();
       if (!enrichedQuery.client) {
         enrichedQuery.client = nhClient;

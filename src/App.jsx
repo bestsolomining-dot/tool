@@ -33,8 +33,8 @@ export default function App() {
     let finalPath = path;
 
     const enrichedQuery = { ...query };
-    // NiceHash API v2 requires a 'ts' parameter. MRR does not.
-    if (path.startsWith('/api/v2/') && !path.startsWith('/api/v2/mrr/') && !enrichedQuery.ts) {
+    // NiceHash API v2 requires a 'ts' parameter. We also add it to MRR calls to prevent browser caching.
+    if (path.startsWith('/api/v2/')) {
       enrichedQuery.ts = Date.now();
     }
 

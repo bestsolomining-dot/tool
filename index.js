@@ -43,9 +43,9 @@ async function syncMrrClock() {
     mrrClockSynced = true;
 
     if (Math.abs(Number(mrrClockOffset)) > 1000) {
-      console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (Server: ${serverTimeMs}, Local: ${localTimeMs})`);
+      console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (NH Server: ${serverTimeMs}, Local: ${localTimeMs})`);
     } else {
-      console.info(`[mrr:clock] Synced. Offset: ${mrrClockOffset}ms.`);
+      console.info(`[mrr:clock] Synced with NiceHash. Offset: ${mrrClockOffset}ms.`);
     }
   } catch (err) {
     console.warn(`[mrr:clock] Synchronization failed: ${err.message}. Using raw system clock.`);
@@ -290,6 +290,109 @@ const getNiceHashApp = (client) => ({
 });
 
 /**
+ * Database Simulation & Synchronization Logic
+ */
+const DB_FILE = path.join(process.cwd(), 'database.json');
+
+async function saveToDb(data) {
+  try {
+    await fs.writeFile(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    console.info(`[db] Pool database updated at: ${DB_FILE}`);
+  } catch (err) {
+    console.error(`[db] Failed to save database: ${err.message}`);
+  }
+}
+
+async function syncAllPools() {
+  // Ensure clock is synced for MRR signatures
+  if (!mrrClockSynced) await syncMrrClock();
+
+  console.info('[sync] Initializing pool and rig synchronization...');
+  const db = {
+    nhPools: [],
+    mrrPools: [], // Store raw MRR pool configs too
+    mrrRigs: [],
+    matches: [],
+    lastSync: new Date().toISOString()
+  };
+
+  // 1. Fetch NiceHash Pools (All accounts)
+  const nhAccounts = ['BT', 'PH'];
+  const processedClients = new Set();
+  for (const acct of nhAccounts) {
+    try {
+      const { client, clientName } = resolveNhClient(acct);
+      if (!client || (acct === 'PH' && clientName === 'BT')) continue; // Skip if PH is not configured
+      if (!client || processedClients.has(clientName)) continue;
+      processedClients.add(clientName);
+      
+      const result = await getNiceHashApp(client).pools.getPools();
+      if (result?.list) {
+        db.nhPools.push(...result.list.map(p => ({
+          id: p.id || p.poolId,
+          name: p.name,
+          username: p.username,
+          algorithm: p.algorithm,
+          client: clientName
+        })));
+      }
+    } catch (e) {
+      console.warn(`[sync:nh] Could not fetch pools for ${acct}: ${e.message}`);
+    }
+  }
+
+  // 2. Fetch MRR Rigs and their associated pools
+  const mrrAccts = Object.keys(mrrConfigs).filter(k => mrrConfigs[k].apiKey && mrrConfigs[k].apiSecret);
+  for (const acct of mrrAccts) {
+    try {
+      const { data: rigsData } = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: acct });
+      const rigs = Array.isArray(rigsData?.data) ? rigsData.data : (rigsData?.data?.rigs || []);
+      
+      if (rigs.length > 0) {
+        const rigIds = rigs.map(r => r.id).join(';');
+        const { data: poolsData } = await mrrApiCall({ endpoint: `/rig/${rigIds}/pool`, clientNameRaw: acct });
+        
+        if (poolsData?.success) {
+          const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (poolsData.data?.result || []);
+          db.mrrPools.push(...poolItems);
+          
+          const poolMap = new Map(poolItems.map(item => [String(item.rigId || item.rigid || item.id), item.pools]));
+          
+          rigs.forEach(rig => {
+            const pools = poolMap.get(String(rig.id)) || [];
+            db.mrrRigs.push({ id: rig.id, name: rig.name, client: acct, pools });
+
+            // 3. Scan for username matches between MRR and NiceHash
+            pools.forEach(p => {
+              const mrrUser = String(p.user || p.username || '').trim();
+              if (!mrrUser) return;
+
+              // Match MRR rig username to NiceHash pool username
+              const nhMatch = db.nhPools.find(nhp => String(nhp.username || '').trim() === mrrUser);
+              if (nhMatch) {
+                db.matches.push({ 
+                  mrrRigId: rig.id, 
+                  mrrRigName: rig.name, 
+                  mrrClient: acct, 
+                  nhPoolName: nhMatch.name, 
+                  username: mrrUser, 
+                  nhClient: nhMatch.client 
+                });
+              }
+            });
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`[sync:mrr] Could not fetch rigs for ${acct}: ${e.message}`);
+    }
+  }
+
+  await saveToDb(db);
+  console.info(`[sync] Finished. Found ${db.nhPools.length} NH pools, ${db.mrrRigs.length} MRR rigs, and ${db.matches.length} matches.`);
+}
+
+/**
  * Express API Endpoints
  */
 
@@ -417,9 +520,9 @@ app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
       ).join('\n');
 
       const csvContent = `${headers}\n${rows}`;
-      const filePath = path.join(process.cwd(), 'orders.xlsx');
+      const filePath = path.join(process.cwd(), 'orders.csv');
       await fs.writeFile(filePath, csvContent, 'utf-8');
-      console.log(`[excel] Overwritten orders list to: ${filePath}`);
+      console.log(`[export] Overwritten orders list to: ${filePath}`);
     } catch (csvErr) {
       console.error('[excel] Failed to save orders:', csvErr.message);
     }
@@ -443,9 +546,25 @@ app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await
 function nextMrrNonce(clientName) {
   // Use BigInt to support huge nonces without precision loss
   const lastNonce = BigInt(mrrLastNonceByClient.get(clientName) || 0n);
-  
+
+  // Sanity check: If the last nonce is already nonsensical (e.g. from a bad .env value), 
+  // reset it to 0 before calculating the next one.
+  if (lastNonce > 9999999999999999999n) {
+    console.warn(`[mrr:${clientName}] Resetting nonsensical high-watermark nonce (${lastNonce}) to 0.`);
+    mrrLastNonceByClient.set(clientName, 0n);
+    return nextMrrNonce(clientName);
+  }
+
   // Align with PHP example: seconds + 4 digits of micro-precision (14 digits total)
-  const nowMs = Date.now() + Number(mrrClockOffset);
+  let nowMs = Date.now() + Number(mrrClockOffset);
+
+  // If for some reason nowMs is in microseconds (16 digits), truncate it to milliseconds
+  if (nowMs > 9999999999999n) {
+    console.warn(`[mrr:${clientName}] nowMs is too large (${nowMs}), truncating to 13-digit milliseconds.`);
+    mrrLastNonceByClient.set(clientName, 0n);
+    return nextMrrNonce(clientName);
+  }
+
   const seconds = Math.floor(nowMs / 1000);
   const microDigits = (nowMs % 1000).toString().padStart(3, '0') + '0'; 
   const now14 = BigInt(`${seconds}${microDigits}`);
@@ -473,8 +592,11 @@ function resolveMrrClient(clientNameRaw) {
     // Look for nonce baseline in .env using multiple naming conventions
     const envNonce = normalizeCredential(
       process.env[`RIG_NOUNCE_${lookupSuffix}`] || 
+      process.env[`RIG_NONCE_${lookupSuffix}`] || 
       process.env[`RIG_${lookupSuffix}_NOUNCE`] || 
-      process.env[`MRR_NOUNCE_${lookupSuffix}`]
+      process.env[`RIG_${lookupSuffix}_NONCE`] || 
+      process.env[`MRR_NOUNCE_${lookupSuffix}`] ||
+      process.env[`MRR_NONCE_${lookupSuffix}`]
     );
 
     if (envKey && envSecret) {
@@ -490,8 +612,13 @@ function resolveMrrClient(clientNameRaw) {
       if (envNonce) {
         try {
           const bigEnv = BigInt(envNonce);
-          mrrLastNonceByClient.set(clientName, bigEnv);
-          console.log(`[mrr:${clientName}] Initialized with baseline nonce from .env: ${bigEnv}`);
+          // Relaxed limit to support 19-digit nanosecond nonces
+          if (bigEnv > 9999999999999999999n) {
+            console.warn(`[mrr:${clientName}] Baseline nonce from .env is too large (${bigEnv}). Ignoring to prevent Bad Nonce errors.`);
+          } else {
+            mrrLastNonceByClient.set(clientName, bigEnv);
+            console.log(`[mrr:${clientName}] Initialized with baseline nonce from .env: ${bigEnv}`);
+          }
         } catch (e) {
           console.warn(`[mrr:${clientName}] Invalid nonce in environment: ${envNonce}`);
         }
@@ -500,7 +627,7 @@ function resolveMrrClient(clientNameRaw) {
   }
 
   const clientConfig = mrrInstances.get(clientName);
-  if (!clientConfig) {
+  if (!clientConfig || !clientConfig.apiKey || !clientConfig.apiSecret) {
     const err = new Error(`MRR credentials missing for client "${clientName}". Ensure MRR_KEY_RIG_${clientName} and MRR_SECRET_RIG_${clientName} are set in .env.`);
     err.statusCode = 400;
     throw err;
@@ -655,9 +782,9 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
       const legacySig = createHash('sha1').update(legacyStr).digest('hex');
 
       const retryRes = await send(currentNonce, legacySig, {
-        'x-mrr-key': clientConfig.apiKey,
-        'x-mrr-nonce': currentNonce,
-        'x-mrr-signature': legacySig
+        'X-Api-Key': clientConfig.apiKey,
+        'X-Api-Nonce': currentNonce,
+        'X-Api-Sign': legacySig
       });
       const retryText = await retryRes.body.text();
       try {
@@ -793,10 +920,10 @@ function extractRigInfo(payload) {
         const poolHost = pool.stratumHost || pool.host || '';
         const poolUser = pool.username || pool.user || '';
         const poolPass = pool.password || pool.pass || '';
-        const poolPortMatch = (poolHost.match(/:(\d+)$/) || [])[1];
-        const poolPort = poolPortMatch ? Number(poolPortMatch) : null;
+    const poolPortFromHost = (poolHost.match(/:(\d+)$/) || [])[1];
+    const poolPort = Number(pool.port || pool.stratumPort || poolPortFromHost || null);
 
-        if (poolAlgo && poolHost && poolUser && poolPass) {
+    if (poolAlgo && poolHost && poolUser && poolPass && Number.isFinite(poolPort)) {
           return { miningAlgorithm: poolAlgo, stratumHost: poolHost, stratumPort: poolPort, username: poolUser, password: poolPass };
         }
       }
@@ -1174,9 +1301,10 @@ if (process.env.RUN_MAIN === 'true') {
     // Connectivity check on startup
     const { client } = resolveNhClient('BT');
     if (client) {
-      getNiceHashApp(client).public.getTime().then(t => {
+      getNiceHashApp(client).public.getTime().then(async (t) => {
         console.log('✅ Connection verified. Server Time:', new Date(t).toLocaleString());
-        syncMrrClock(); // Pre-sync clock on startup
+        await syncMrrClock(); // Pre-sync clock on startup
+        await syncAllPools(); // Synchronize pool data and perform username scan
       });
     }
   } catch (error) {

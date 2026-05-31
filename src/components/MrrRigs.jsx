@@ -116,6 +116,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
   const fetchRigs = async () => {
     setLoading(true);
     setError('');
+    setEnrichedInfo({}); // Optional: clear cached details on full refresh to avoid UI state mismatch
     try {
       // 1. Prepare parameters for Marketplace
       const params = { endpoint };
@@ -168,13 +169,12 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
 
     setLoadingInfoIds(prev => new Set(prev).add(rig.id));
     try {
-      const apiBase = window.location.port === '5173'
-        ? `${window.location.protocol}//${window.location.hostname}:3000`
-        : '';
+      const apiBase = ''; // Rely on Vite dev proxy for /api routes
 
       const url = (isRented && rentalId) 
-        ? `${apiBase}/api/v2/mrr/rental/${encodeURIComponent(rentalId)}?client=${mrrClient}` 
-        : `${apiBase}/api/v2/mrr/rig/${encodeURIComponent(rigId || rig.id)}/info?client=${mrrClient}`;
+        ? `${apiBase}/api/v2/mrr/rental/${encodeURIComponent(rentalId)}?client=${mrrClient}&ts=${Date.now()}` 
+        : `${apiBase}/api/v2/mrr/rig/${encodeURIComponent(rigId || rig.id)}/info?client=${mrrClient}&ts=${Date.now()}`;
+      // Adding ts parameter prevents the browser from serving cached results when refreshing stats
 
       const result = await fetch(url);
       const data = await result.json();
@@ -421,8 +421,8 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                   </div>
                 </div>
                 <div>
-                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Start Time</div>
-                  <div style={{ fontSize: (info?.startTime || rig.start) ? '8px' : '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.startTime || rig.start || ''}>
+                  <div style={{ opacity: 0.5, fontSize: '13px', textTransform: 'uppercase' }}>Start Time</div>
+                  <div style={{ fontSize: (info?.startTime || rig.start) ? '11px' : '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.startTime || rig.start || ''}>
                     {formatRentalStartTime(info?.startTime || rig.start)}
                   </div>
                 </div>
@@ -431,9 +431,9 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
               {(info || rig.host) && (
                 <div className="rig-pool-summary" style={{ background: 'rgba(0,0,0,0.25)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.02)', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.2)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.stratumHost || rig.host}><span style={{ opacity: 0.5 }}>Host:</span> {info?.stratumHost || rig.host || 'N/A'}</div>
-                    <div><span style={{ opacity: 0.5 }}>Port:</span> {info?.stratumPort || rig.port || 'N/A'}</div>
-                    <div style={{ gridColumn: 'span 2', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.username || rig.user}><span style={{ opacity: 0.5 }}>User:</span> {info?.username || rig.user || 'N/A'}</div>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.host || info?.stratumHost}><span style={{ opacity: 0.5 }}>Host:</span> {rig.host || info?.stratumHost || 'N/A'}</div>
+                    <div><span style={{ opacity: 0.5 }}>Port:</span> {rig.port || info?.stratumPort || 'N/A'}</div>
+                    <div style={{ gridColumn: 'span 2', overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.user || info?.username}><span style={{ opacity: 0.5 }}>User:</span> {rig.user || info?.username || 'N/A'}</div>
                   </div>
                   {isRented && (
                     <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -443,8 +443,8 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                         return <div><span style={{ opacity: 0.6 }}>Eff:</span> <span style={{ color: (parseFloat(eff) || 0) < 90 ? '#f87171' : '#34d399' }}>{eff}%</span></div>;
                       })()}
                       <div style={{ fontSize: '9px', textAlign: 'right' }}>
-                        <div style={{ marginBottom: '2px' }}>{formatRentalStartTime(info?.startTime || rig.start)}</div>
-                        <div><span style={{ opacity: 0.6 }}>Ends:</span> <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /></div>
+                        {/* <div style={{ marginBottom: '2px' }}>{formatRentalStartTime(info?.startTime || rig.start)}</div> */}
+                        <div><span style={{ opacity: 0.6 }}>End in:</span> <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /></div>
                       </div>
                     </div>
                   )}

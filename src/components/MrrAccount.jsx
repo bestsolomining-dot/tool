@@ -6,20 +6,20 @@ import React, { useState, useEffect, useCallback } from 'react';
  */
 export default function MrrAccount({ onCall }) {
         const [mrrClient, setMrrClient] = useState('BT');
-        const [balance, setBalance] = useState(null);
+        const [mrrBalance, setMrrBalance] = useState(null);
         const [loading, setLoading] = useState(false);
         const availableClients = ['BT', 'SL', 'ALL'];
 
         const fetchBalance = useCallback(async (isSilent = true) => {
             if (!mrrClient || mrrClient === 'ALL') {
-                setBalance(null);
+                setMrrBalance(null);
                 return;
             }
             setLoading(true);
             try {
                 const result = await onCall('/api/v2/mrr/balance', { query: { client: mrrClient }, silent: isSilent });
                 if (result?.success) {
-                    setBalance(result.data?.btc || '0');
+                    setMrrBalance(result.data);
                 }
             } finally {
                 setLoading(false);
@@ -58,13 +58,33 @@ export default function MrrAccount({ onCall }) {
                             onClick={async () => {
                                 const result = await onCall('/api/v2/mrr/balance', { query: { client: mrrClient }, showModal: true });
                                 if (result?.success) {
-                                    setBalance(result.data?.btc.toFixed(8) || '0');
+                                    setMrrBalance(result.data);
                                 }
                             }}
                         >
-                        {loading && !balance ? '...' : 'Balance'} {balance !== null && <span style={{ color: '#fbbf24', marginLeft: '6px' }}>({balance} BTC)</span>}
+                        {loading && !mrrBalance ? '...' : 'Refresh Balance'}
                         </button>
                     </div>
+
+                    {mrrBalance && (
+                        <div className="balance-summary-pro" style={{ marginTop: '15px', padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px' }}>
+                                <div>
+                                    <small style={{ opacity: 0.6, display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Available</small>
+                                    <strong style={{ fontSize: '16px', color: '#10b981' }}>{mrrBalance.confirmed} BTC</strong>
+                                </div>
+                                <div>
+                                    <small style={{ opacity: 0.6, display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Pending</small>
+                                    <strong style={{ fontSize: '16px', color: '#f59e0b' }}>{mrrBalance.pending} BTC</strong>
+                                </div>
+                                <div>
+                                    <small style={{ opacity: 0.6, display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Total Balance</small>
+                                    <strong style={{ fontSize: '16px' }}>{mrrBalance.btc} BTC</strong>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <p className="help-text" style={{ marginTop: '0.75rem', opacity: 0.6, fontSize: '0.8rem' }}>
                         Queries the Mining Rig Rentals API for current BTC and algorithm-specific balances for the selected client.
                     </p>

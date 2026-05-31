@@ -274,13 +274,13 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           if (fresh) {
             setNewRentalFound(fresh);
             
-            // Trigger Zalo Notification
-            const zaloMsg = `🚀 [Mining Tool] New Rig Rented!\n\nName: ${fresh.name || fresh.id}\nAlgo: ${fresh.algo || 'N/A'}\nDuration: ${fresh.hours}h\nClient: ${mrrClient}`;
-            onCall('/api/v2/notify/zalo', {
+            // Trigger Telegram Notification
+            const tgMsg = `🚀 <b>[Mining Tool] New Rig Rented!</b>\n\n<b>Name:</b> ${fresh.name || fresh.id}\n<b>Algo:</b> ${fresh.algo || 'N/A'}\n<b>Duration:</b> ${fresh.hours}h\n<b>Client:</b> ${mrrClient}`;
+            onCall('/api/v2/notify/telegram', {
               method: 'POST',
-              body: { message: zaloMsg },
+              body: { message: tgMsg },
               silent: true
-            }).catch(err => console.error('[zalo] Notification failed:', err));
+            }).catch(err => console.error('[telegram] Notification failed:', err));
 
             // Optionally trigger a system notification
             if (Notification.permission === 'granted') {
@@ -371,11 +371,16 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         <button className="btn-pro secondary" onClick={() => onCall('/api/v2/mrr/balance', { query: { client: mrrClient }, showModal: true })}>Balance</button>
         <button 
           className="btn-pro secondary" 
-          style={{ border: '1px solid #0068ff', color: '#0068ff' }} 
-          onClick={() => onCall('/api/v2/notify/zalo', { method: 'POST', body: { message: `🔔 [Test] Zalo Notification System is online!\nTime: ${new Date().toLocaleTimeString()}\nClient: ${mrrClient}` }, showModal: true })}
-          title="Verify Zalo OA configuration and connectivity"
+          style={{ border: '1px solid #24A1DE', color: '#24A1DE' }} 
+          onClick={() => onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: `🔔 [Test] Telegram Notification System is online!\nTime: ${new Date().toLocaleTimeString()}\nClient: ${mrrClient}` }, showModal: true })}
+          onClick={() => onCall('/api/v2/notify/telegram', { 
+            method: 'POST', 
+            body: { message: `🚀 <b>[Test] New Rig Rented!</b>\n\n<b>Name:</b> Test Rig #123\n<b>Algo:</b> SHA256\n<b>Duration:</b> 24h\n<b>Client:</b> ${mrrClient}\n\n<i>Time: ${new Date().toLocaleTimeString()}</i>` }, 
+            showModal: true 
+          })}
+          title="Verify Telegram bot configuration and connectivity"
         >
-          Test Zalo
+          Test Telegram
         </button>
       </div>
 
@@ -416,17 +421,6 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
               setNewRentalFound(null);
               openManagementModal('rental');
             }}>View All Rentals</button>
-            {import.meta.env.ZALO_USER_UID && (
-              <a 
-                href={`https://zalo.me/${import.meta.env.ZALO_ACCESS_TOKEN}`} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="btn-pro secondary"
-                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', border: '1px solid #0068ff', color: '#0068ff' }}
-              >
-                Open Zalo
-              </a>
-            )}
             <button className="btn-pro secondary" onClick={() => setNewRentalFound(null)}>Dismiss</button>
           </div>
         </div>

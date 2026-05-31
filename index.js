@@ -1257,6 +1257,33 @@ app.post('/api/v2/notify/zalo', asyncHandler(async (req, res) => {
   res.json(data);
 }));
 
+// Telegram Notifications
+app.post('/api/v2/notify/telegram', asyncHandler(async (req, res) => {
+  const { message } = req.body;
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!botToken || !chatId) {
+    console.warn('[telegram] Configuration missing. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env');
+    return res.status(400).json({ success: false, message: 'Telegram configuration missing in server .env' });
+  }
+
+  const response = await request(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: message,
+      parse_mode: 'HTML'
+    })
+  });
+
+  const data = await response.body.json();
+  res.json(data);
+}));
+
 // --- SERVE FRONTEND ---
 // Serve static files from the 'dist' directory (created by npm run build)
 const distPath = path.join(__dirname, 'dist', 'client');

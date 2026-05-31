@@ -11,7 +11,8 @@
 		"build": "vite build",
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
-		"deploy": "npm run build && wrangler deploy"
+		"deploy": "npm run build && wrangler deploy",
+		"test:notify": "node test-notifier.js"
 	},
 	"main": "index.js",
 	"bin": "index.js",

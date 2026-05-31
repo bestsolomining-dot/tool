@@ -77,7 +77,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
       },
       showModal: true
     }).then(res => {
-      if (res && !res.error) fetchOrders();
+      if (res && !res.errors && !res.error) fetchOrders();
     });
   };
 

@@ -87,56 +87,55 @@ export default function App() {
       });
 
       let data = null;
-      if (res.status !== 204 && res.status !== 205) {
+      if (res.status !== 204) {
         const text = await res.text();
         try {
           data = text ? JSON.parse(text) : null;
         } catch {
           data = text;
         }
-      }
 
-      if (!options.silent) {
-        setLastCall({
-          method,
-          path: finalPath,
-          status: `${res.status} ${res.statusText}`,
-          durationMs: Math.round(performance.now() - startedAt),
-        });
-      }
-
-      const isAppError = !res.ok || (data && typeof data === 'object' && (data.success === false || data.error));
-
-      if (!isAppError && (res.status === 304 || res.ok)) {
-        if (!options.silent && options.showModal) {
-          setError('');
-          if (res.status === 304) {
-            setModalContent({
-              status: res.status,
-              message: res.statusText,
-              note: 'Content not modified. Displaying previously fetched data if available.',
-            });
-          } else {
-            if (data && !options.silent) setOutput(data);
-            setModalContent(data || { success: true, message: 'Request completed successfully.' });
-          }
-          setResponseModalOpen(true);
-        } else if (!options.silent && data) {
-          setOutput(data);
+        if (!options.silent) {
+          setLastCall({
+            method,
+            path: finalPath,
+            status: `${res.status} ${res.statusText}`,
+            durationMs: Math.round(performance.now() - startedAt),
+          });
         }
-      } else if (!options.silent) {
-        const errorMsg =
-          typeof data === 'string' && data.length > 0
-            ? data
-            : data?.error || data?.message || data?.data?.message || res.statusText || 'Unknown API Error';
 
-        setError(errorMsg);
-        setOutput(null);
-        setModalContent(null);
-        setResponseModalOpen(false);
+        const isAppError = data && (data.success === false || data.error); // Check for common error indicators
+
+        if (!isAppError && (res.status === 304 || res.ok)) {
+          if (!options.silent && options.showModal) {
+            setError('');
+            if (res.status === 304) {
+              setModalContent({
+                status: res.status,
+                message: res.statusText,
+                note: 'Content not modified. Displaying previously fetched data if available.',
+              });
+              setResponseModalOpen(true);
+            } else {
+              if (!options.silent) setOutput(data);
+              setModalContent(data);
+              setResponseModalOpen(true);
+            }
+          }
+          if (!options.silent) setOutput(data);
+        } else if (!options.silent) {
+          const errorMsg =
+            typeof data === 'string'
+              ? data
+              : data?.error || data?.message || data?.data?.message || res.statusText || 'Unknown API Error';
+
+          setError(errorMsg);
+          setOutput(null);
+          setModalContent(null);
+          setResponseModalOpen(false);
+        }
       }
-
-      return data || (res.ok ? { success: true } : null);
+      return data;
     } catch (err) {
       if (!options.silent) {
         setError(err.message || String(err));

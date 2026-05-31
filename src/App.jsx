@@ -80,7 +80,7 @@ export default function App() {
       });
 
       let data = null;
-      if (res.status !== 204) {
+      if (res.status !== 204 && res.status !== 205) {
         const text = await res.text();
         try {
           data = text ? JSON.parse(text) : null;
@@ -112,25 +112,29 @@ export default function App() {
               message: res.statusText,
               note: 'Content not modified. Displaying previously fetched data if available.',
             });
-            setResponseModalOpen(true);
           } else {
             setOutput(data);
-            setModalContent(data);
-            setResponseModalOpen(true);
+            setModalContent(data || { success: true });
           }
+          setResponseModalOpen(true);
         }
       } else if (!options.silent) {
         const errorMsg =
           typeof data === 'string'
             ? data
-            : data?.error || data?.message || data?.data?.message || res.statusText;
+            : data?.errors?.[0]?.message || data?.error || data?.message || data?.data?.message || res.statusText;
 
         setError(errorMsg);
-        setOutput(null);
-        setModalContent(null);
-        setResponseModalOpen(false);
+        if (options.showModal) {
+          setModalContent(data || { error: errorMsg, status: res.status });
+          setResponseModalOpen(true);
+        } else {
+          setOutput(null);
+          setModalContent(null);
+          setResponseModalOpen(false);
+        }
       }
-      return data;
+      return data || (res.ok ? { success: true } : null);
     } catch (err) {
       if (!options.silent) {
         setError(err.message || String(err));

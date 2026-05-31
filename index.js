@@ -561,8 +561,7 @@ function nextMrrNonce(clientName) {
   // If for some reason nowMs is in microseconds (16 digits), truncate it to milliseconds
   if (nowMs > 9999999999999n) {
     console.warn(`[mrr:${clientName}] nowMs is too large (${nowMs}), truncating to 13-digit milliseconds.`);
-    mrrLastNonceByClient.set(clientName, 0n);
-    return nextMrrNonce(clientName);
+    nowMs = Number(String(nowMs).slice(0, 13));
   }
 
   const seconds = Math.floor(nowMs / 1000);

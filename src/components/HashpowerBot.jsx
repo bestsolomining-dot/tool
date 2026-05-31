@@ -118,7 +118,11 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
         await onCall(`/api/v2/hashpower/order/${myOrder.id}/update`, {
           method: 'POST',
           query: { client: nhClient },
-          body: { price: nextPrice.toFixed(8), limit: targetLimit },
+          body: { 
+            price: nextPrice.toFixed(8), 
+            limit: targetLimit,
+            displayMarketFactor: myOrder.displayMarketFactor || myOrder.algorithm?.displayMarketFactor 
+          },
           silent: true
         });
       }

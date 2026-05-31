@@ -627,7 +627,7 @@ function resolveMrrClient(clientNameRaw) {
 
   const clientConfig = mrrInstances.get(clientName);
   if (!clientConfig || !clientConfig.apiKey || !clientConfig.apiSecret) {
-    const err = new Error(`MRR credentials missing for client "${clientName}". Ensure MRR_KEY_RIG_${clientName} and MRR_SECRET_RIG_${clientName} are set in .env.`);
+    const err = new Error(`MRR credentials missing for client "${clientName}". Ensure MRR_KEY_RIG_${lookupSuffix} and MRR_SECRET_RIG_${lookupSuffix} are set in .env.`);
     err.statusCode = 400;
     throw err;
   }
@@ -1021,8 +1021,34 @@ app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
 app.get('/api/v2/mrr/rigs/pools', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
 
-  // 1. Fetch user's rigs to get IDs
-  const { data: rigsData } = await mrrApiCall({
+  if (clientParam === 'ALL') {
+    const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
+    const allResults = [];
+    const errors = [];
+
+    for (const clientName of allClientNames) {
+      try {
+        const { data: rigsData } = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: clientName });
+        const rigs = Array.isArray(rigsData?.data) ? rigsData.data : (Array.isArray(rigsData?.data?.rigs) ? rigsData.data.rigs : []);
+        
+        if (rigsData?.success && rigs.length > 0) {
+          const rigIds = rigs.map(r => r.id).join(';');
+          const { data: poolsData } = await mrrApiCall({ endpoint: `/rig/${rigIds}/pool`, clientNameRaw: clientName });
+          if (poolsData?.success) {
+            const items = Array.isArray(poolsData.data) ? poolsData.data : [poolsData.data];
+            allResults.push(...items.map(item => ({ ...item, mrrClient: clientName })));
+          }
+        }
+      } catch (err) {
+        errors.push({ client: clientName, message: err.message });
+      }
+    }
+    res.set('X-MRR-Client', 'ALL');
+    return res.json({ success: true, data: allResults, errors: errors.length > 0 ? errors : undefined });
+  }
+
+  // Single client logic
+  const { data: rigsData, clientName } = await mrrApiCall({
     endpoint: '/rig/mine',
     clientNameRaw: clientParam,
   });
@@ -1030,18 +1056,17 @@ app.get('/api/v2/mrr/rigs/pools', asyncHandler(async (req, res) => {
   const rigs = Array.isArray(rigsData?.data) ? rigsData.data : (Array.isArray(rigsData?.data?.rigs) ? rigsData.data.rigs : []);
   
   if (!rigsData?.success || rigs.length === 0) {
-    res.set('X-MRR-Client', clientParam);
+    res.set('X-MRR-Client', clientName);
     return res.json(rigsData || { success: true, data: [] });
   }
 
-  // 2. Fetch pools for all IDs in bulk using the semicolon separator supported by MRR
   const rigIds = rigs.map(r => r.id).join(';');
   const { statusCode, data } = await mrrApiCall({
     endpoint: `/rig/${rigIds}/pool`,
-    clientNameRaw: clientParam,
+    clientNameRaw: clientName,
   });
 
-  res.set('X-MRR-Client', clientParam);
+  res.set('X-MRR-Client', clientName);
   res.status(statusCode).json(data);
 }));
 
@@ -1290,7 +1315,7 @@ const distPath = path.join(__dirname, 'dist', 'client');
 app.use(express.static(distPath));
 
 // Catch-all route to serve the React app for any non-API request
-app.get('*', (req, res) => {
+app.get('(.*)', (req, res) => {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not Found' });
   res.sendFile(path.join(distPath, 'index.html'));
 });

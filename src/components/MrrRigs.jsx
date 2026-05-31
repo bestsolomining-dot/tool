@@ -26,6 +26,13 @@ function formatHashrateValue(rate) {
   return `${displayHash} ${String(rate.type || '').toUpperCase()}`.trim();
 }
 
+function getRawHashrate(rate) {
+  if (!rate) return 0;
+  if (typeof rate === 'number') return rate;
+  if (typeof rate === 'string') return parseFloat(rate) || 0;
+  return parseFloat(rate.hash ?? rate.hashrate ?? rate.advertised ?? 0);
+}
+
 function getRentalStartTime(rental) {
   return rental?.start || rental?.normalized?.startTime || null;
 }
@@ -192,8 +199,10 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
             percent: getRentalEfficiency(rental),
             startTime: getRentalStartTime(rental),
             endTime: getRentalEndTime(rental),
-            advertised: getRentalAdvertisedHashrate(rental),
-            average: getRentalAverageHashrate(rental),
+            advertised: getRentalAdvertisedHashrate(rental), // For display
+            average: getRentalAverageHashrate(rental),       // For display
+            rawAds: getRawHashrate(rental.hashrate?.advertised || rental.advertised),
+            rawAvg: getRawHashrate(rental.hashrate?.average || rental.average),
             pools: pools.map(p => ({
               host: p.host || p.stratumHost || p.stratumHostname || rental.rig?.stratumHost || rental.rig?.host || 'N/A',
               port: p.port || p.stratumPort || rental.rig?.stratumPort || rental.rig?.port || 'N/A',
@@ -421,8 +430,8 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                   </div>
                 </div>
                 <div>
-                  <div style={{ opacity: 0.5, fontSize: '13px', textTransform: 'uppercase' }}>Start Time</div>
-                  <div style={{ fontSize: (info?.startTime || rig.start) ? '11px' : '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.startTime || rig.start || ''}>
+                  <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>Start Time</div>
+                  <div style={{ fontSize: (info?.startTime || rig.start) ? '10px' : '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.startTime || rig.start || ''}>
                     {formatRentalStartTime(info?.startTime || rig.start)}
                   </div>
                 </div>
@@ -439,9 +448,40 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                     <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       {/* Fix: use rig.hashrate for list-view rentals to show efficiency immediately */}
                       {(() => {
-                        const eff = info?.percent || rig.hashrate?.average?.percent || rig.percent || '0.00';
-                        return <div><span style={{ opacity: 0.8 }}>Effect:</span> 
-                        <span style={{ color: (parseFloat(eff) || 0) < 90 ? '#f87171' : '#34d399' }}>{eff}%</span></div>;
+                        const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
+                        const eff = parseFloat(effValue).toFixed(2);
+
+                        // Calculate Target Hashrate to reach 100% completion
+                        const startT = new Date((info?.startTime || rig.start) + (String(info?.startTime || rig.start).endsWith('UTC') ? '' : ' UTC')).getTime();
+                        const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)).endsWith('UTC') ? '' : ' UTC')).getTime();
+                        
+                        // Fix: Always use raw numbers for math to prevent unit mismatch errors
+                        const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised);
+                        const avgVal = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash);
+                        
+                        const hSuffix = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || '';
+
+                        const totalMs = endT - startT;
+                        const now = Date.now();
+                        const elapsedMs = Math.max(0, Math.min(now - startT, totalMs));
+                        const remainingMs = Math.max(0, endT - now);
+                        
+                        const totalExpectedHashes = adsVal * (totalMs / 1000);
+                        const actualHashesDone = avgVal * (elapsedMs / 1000);
+                        // Removing the Math.max(0, ...) clamp to allow showing surplus
+                        const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
+                        const targetHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
+                        const isBehind = targetHashrate > adsVal;
+                        // A truly negative target means you've already delivered 100% of the work for the WHOLE rental
+                        const displayTarget = targetHashrate < 0 ? 0 : targetHashrate;
+
+                        return <div>
+                          <div><span style={{ opacity: 0.8 }}>Effect:</span> 
+                          <span style={{ color: parseFloat(eff) < 100 ? '#f87171' : '#34d399', marginLeft: '4px' }}>{eff}%</span></div>
+                          <div style={{ fontSize: '9px', marginTop: '2px' }}>
+                            <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
+                          </div>
+                        </div>;
                       })()}
                       <div style={{ fontSize: '9px', textAlign: 'right' }}>
                         {/* <div style={{ marginBottom: '2px' }}>{formatRentalStartTime(info?.startTime || rig.start)}</div> */}

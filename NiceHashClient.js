@@ -1,4 +1,3 @@
-import { request } from 'undici';
 import { createHmac, randomUUID } from 'node:crypto';
 
 export class NiceHashClient {
@@ -15,8 +14,8 @@ export class NiceHashClient {
    * Fetches server time to ensure synchronization.
    */
   async getServerTime() {
-    const response = await request(`${this.baseUrl}/api/v2/time`);
-    const data = await response.body.json();
+    const response = await fetch(`${this.baseUrl}/api/v2/time`);
+    const data = await response.json();
     return data.serverTime;
   }
 
@@ -94,14 +93,14 @@ export class NiceHashClient {
     };
 
     const url = `${this.baseUrl}${path}${queryString ? '?' + queryString : ''}`;
-    const response = await request(url, {
+    const response = await fetch(url, {
       method: method.toUpperCase(),
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
 
     if (response.statusCode >= 400) {
-      const errorText = await response.body.text();
+      const errorText = await response.text();
       let errorMessage = errorText;
       try {
         const errorJson = JSON.parse(errorText);
@@ -113,6 +112,6 @@ export class NiceHashClient {
       error.headers = response.headers;
       throw error;
     }
-    return response.body.json();
+    return response.json();
   }
 }

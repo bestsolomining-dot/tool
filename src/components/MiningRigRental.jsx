@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import MrrRigs from './MrrRigs';
 import Modal from './Modal';
+import TelegramManager from './TelegramManager';
 
 /** Safely extracts an array from various MRR API response shapes */
 function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'items', 'data']) {
@@ -88,7 +89,7 @@ export function CountdownTimer({ endTime }) {
 }
 
 /** Structured view for active rentals */
-function MrrRentalsTable({ data, onOpenPools }) {
+function MrrRentalsTable({ data, onOpenPools, onCall, mrrClient }) {
   // MRR API v2 GET /rental returns { "success": true, "data": { "rentals": [...] } }
   // OR sometimes the array is directly at data.data: { "success": true, "data": [...] }
   
@@ -115,37 +116,77 @@ function MrrRentalsTable({ data, onOpenPools }) {
 
   if (!Array.isArray(rentals) || !rentals.length) return <div style={{ padding: '30px', textAlign: 'center', opacity: 0.5 }}>No active rentals found.</div>;
 
+  const sendStatusToTelegram = (r, target) => {
+    const remainingStr = calculateRemainingTime(r.end);
+    const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0);
+    const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
+    const msg = `📢 <b>[Notice] Hash Completion</b>\n\n` +
+                `<b>Rig:</b> ${r.name || r.id}\n` +
+                `<b>Current Avg:</b> ${avg.toFixed(2)} ${suffix}\n` +
+                `<b>Target to 100%:</b> ${target.toFixed(2)} ${suffix}\n` +
+                `<b>Remaining:</b> ${remainingStr}\n` +
+                `<b>Client:</b> ${mrrClient}`;
+
+    onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: msg }, showModal: true });
+  };
+
+  const getRaw = (rate) => {
+    if (!rate) return 0;
+    if (typeof rate === 'number') return rate;
+    if (typeof rate === 'string') return parseFloat(rate) || 0;
+    return parseFloat(rate.hash ?? rate.hashrate ?? rate.advertised ?? 0);
+  };
+
   return (
     <div className="table-responsive">
       <table className="pro-table">
         <thead>
           <tr>
             <th>ID</th>
-            <th>Name / ID</th>
+            <th>Name</th>
             <th>Algo</th>
-            <th>Hashrate</th>
+            <th>Avg / Ads</th>
+            <th>Target to 100%</th>
             <th>Price</th>
             <th>Active P0 Pool</th>
-            <th>Duration</th>
-            <th>Remaining</th>
+            <th style={{ width: '120px' }}>Remaining</th>
             <th>Status</th>
             <th style={{ textAlign: 'right' }}>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {rentals.map(r => (
-            <tr key={r.id}>
+          {rentals.map(r => {
+            const now = Date.now();
+            const start = new Date(r.start + (String(r.start).endsWith('UTC') ? '' : ' UTC')).getTime();
+            const end = new Date(r.end + (String(r.end).endsWith('UTC') ? '' : ' UTC')).getTime();
+            const ads = getRaw(r.hashrate?.advertised || r.advertised);
+            const avg = getRaw(r.hashrate?.average || r.average);
+            const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
+            
+            const totalMs = end - start;
+            const elapsedMs = Math.max(0, Math.min(now - start, totalMs));
+            const remainingMs = Math.max(0, end - now);
+            
+            const totalExpectedHashes = ads * (totalMs / 1000);
+            const actualHashesDone = avg * (elapsedMs / 1000);
+            // Allow deficit to be negative (surplus)
+            const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
+            const target = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
+            const displayTarget = target < 0 ? 0 : target;
+
+            return (
+            <tr key={r.id} style={{ borderLeft: avg < ads * 0.9 ? '3px solid #f87171' : 'none' }}>
               <td style={{ fontFamily: 'monospace', color: '#94a3b8', fontSize: '11px' }}>{r.id}</td>
               <td style={{ fontWeight: 'bold' }}>
-                {r.rig?.name || r.name || r.rig_name || r.rigName || 'N/A'}{' '}
-                <small style={{ opacity: 0.5, fontWeight: 'normal' }}>
-                  #{r.rig?.id || r.rigid || r.rig_id || r.rigId || r.id}
-                </small>
+                {r.rig?.name || r.name || r.rig_name || r.rigName || 'N/A'}
               </td>
               <td style={{ color: '#60a5fa' }}>{r.rig?.type || r.algo || r.algorithm || r.miningAlgorithm || 'N/A'}</td>
               <td style={{ fontFamily: 'monospace' }}>
                 {r.hashrate?.advertised?.nice || (typeof r.hashrate === 'object' ? r.hashrate?.advertised : r.hashrate) || '0'} 
                 <small>{!r.hashrate?.advertised?.nice && (r.hashrate?.suffix || '')}</small>
+              </td>
+              <td style={{ color: '#fbbf24' }}>
+                <strong style={{ color: target > ads ? '#f87171' : '#34d399' }}>{displayTarget.toFixed(2)}</strong> <small>{suffix}</small>
               </td>
               <td style={{ color: '#fbbf24' }}>
                 {typeof r.price === 'object' ? (r.price?.paid || r.price?.advertised || r.price?.price || '0.00') : (r.price || '0.00')} {r.price?.currency || r.currency || r.price_unit || r.price_currency || 'BTC'}
@@ -156,9 +197,6 @@ function MrrRentalsTable({ data, onOpenPools }) {
                 </div>
                 <div style={{ opacity: 0.5, fontSize: '9px' }}>{r.user}</div>
               </td>
-              <td style={{ opacity: 0.8 }}>
-                {r.hours || r.length || '0'}h
-              </td>
               <td>
                 <CountdownTimer endTime={r.end} />
               </td>
@@ -168,12 +206,17 @@ function MrrRentalsTable({ data, onOpenPools }) {
                 </span>
               </td>
               <td style={{ textAlign: 'right' }}>
-                <button className="text-button" onClick={() => onOpenPools?.(r)} style={{ fontSize: '11px' }}>
-                  Pools
-                </button>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                  <button className="text-button" onClick={() => onOpenPools?.(r)} style={{ fontSize: '11px' }}>
+                    Pools
+                  </button>
+                  <button className="text-button" onClick={() => sendStatusToTelegram(r, target)} style={{ fontSize: '11px', color: '#24A1DE' }}>
+                    Notice
+                  </button>
+                </div>
               </td>
             </tr>
-          ))}
+          )})}
         </tbody>
       </table>
     </div>
@@ -426,17 +469,9 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         <button className="btn-pro secondary" onClick={() => openManagementModal('rental')}>
           Rentals {rentals.length > 0 && `(${rentals.length})`}
         </button>
-        <button className="btn-pro secondary" onClick={() => openManagementModal('list_all_rigs')}>Marketplace Status</button>
         <button className="btn-pro secondary" onClick={() => openManagementModal('rental_history')}>Rental History</button>
         <button className="btn-pro secondary" onClick={() => onCall('/api/v2/mrr/balance', { query: { client: mrrClient }, showModal: true })}>Balance</button>
-        <button 
-          className="btn-pro secondary" 
-          style={{ border: '1px solid #24A1DE', color: '#24A1DE' }} 
-          onClick={() => onCall('/api/v2/mrr/monitor/run', { method: 'POST', showModal: true })}
-          title="Manually trigger heartbeat status for all active rentals"
-        >
-          Force Heartbeat
-        </button>
+        <TelegramManager onCall={onCall} mrrClient={mrrClient} />
       </div>
 
       {/* New Rental Notification Modal */}
@@ -531,7 +566,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
               scrollbarWidth: 'thin',
               scrollbarColor: 'rgba(255,255,255,0.2) transparent'
             }}>
-              <MrrRentalsTable data={modalData} onOpenPools={onOpenMrrPools} />
+              <MrrRentalsTable data={modalData} onOpenPools={onOpenMrrPools} onCall={onCall} mrrClient={mrrClient} />
             </div>
           )}
 

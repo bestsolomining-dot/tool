@@ -8,6 +8,9 @@ var worker_entry_default = { fetch(request, env) {
 	const apiKeyPh = env.NICEHASH_API_KEY_PH;
 	const apiSecretPh = env.NICEHASH_API_SECRET_PH;
 	const orgIdPh = env.NICEHASH_ORG_ID_PH;
+	const apiKeyAll = env.NICEHASH_API_KEY_VN;
+	const apiSecretAll = env.NICEHASH_API_SECRET_VN;
+	const orgIdAll = env.NICEHASH_ORG_ID_VN;
 	const mrrKey = env.MRR_KEY_RIG_BT;
 	const mrrSecret = env.MRR_SECRET_RIG_BT;
 	if (url.pathname.startsWith("/api/v2/")) return Response.json({
@@ -16,6 +19,7 @@ var worker_entry_default = { fetch(request, env) {
 		auth: {
 			nicehash_default: !!(apiKey && apiSecret && orgId),
 			nicehash_ph: !!(apiKeyPh && apiSecretPh && orgIdPh),
+			nicehash_all: !!(apiKeyAll && apiSecretAll && orgIdAll),
 			mrr: !!(mrrKey && mrrSecret)
 		},
 		environments: {
@@ -26,7 +30,11 @@ var worker_entry_default = { fetch(request, env) {
 			phApiKey: env.NICEHASH_API_KEY_PH,
 			phApiSecret: env.NICEHASH_API_SECRET_PH,
 			phOrgId: env.NICEHASH_ORG_ID_PH,
-			phEnvironment: "production"
+			phEnvironment: "production",
+			allApiKey: env.NICEHASH_API_KEY_VN,
+			allApiSecret: env.NICEHASH_API_SECRET_VN,
+			allOrgId: env.NICEHASH_ORG_ID_VN,
+			allEnvironment: "production"
 		},
 		default_client: env.NH_DEFAULT_CLIENT || "BT"
 	});

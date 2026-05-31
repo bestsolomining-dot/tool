@@ -966,12 +966,12 @@ async function mrrRequest(endpoint, req, res, method = 'GET', body = undefined) 
 /**
  * Background monitor for MRR rentals. 
  * Saves state to SQLite and triggers Telegram notifications.
+ * Returns a summary of actions taken.
  */
 async function runRentalMonitor(forceNotify = false) {
   const mrrAccts = Object.keys(mrrConfigs).filter(k => mrrConfigs[k].apiKey && mrrConfigs[k].apiSecret);
   const now = Date.now();
-  
-  console.info(`[monitor] Starting ${forceNotify ? 'forced ' : ''}rental check cycle...`);
+  const notifications = [];
 
   for (const acct of mrrAccts) {
     try {
@@ -989,71 +989,88 @@ async function runRentalMonitor(forceNotify = false) {
         const remainingMs = endTime - now;
         const totalDurationMs = endTime - startTime;
 
-        // Target to 100% calculation (Catch-up Hashrate)
-        const totalExpectedHashes = info.hashrate.advertised * (totalDurationMs / 1000);
-        const actualHashesDone = info.hashrate.average * (elapsedMs / 1000);
-        const remainingHashesNeeded = Math.max(0, totalExpectedHashes - actualHashesDone);
+        // Fix: Use raw floats from normalized info object
+        const totalExpectedHashes = parseFloat(info.hashrate.advertised) * (totalDurationMs / 1000);
+        const actualHashesDone = parseFloat(info.hashrate.average) * (elapsedMs / 1000);
+        const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
         const requiredHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
+        const displayTarget = requiredHashrate < 0 ? 0 : requiredHashrate;
 
         // Update Database Snapshot
-        db.run(`INSERT INTO rentals (id, name, client, algo, target_100, last_updated) 
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET 
-                name=excluded.name, client=excluded.client, algo=excluded.algo, 
-                target_100=excluded.target_100, last_updated=excluded.last_updated`,
-          [String(r.id), r.name || r.id, acct, info.algo, requiredHashrate, now]
-        );
-
-        // Heartbeat Logic: Send every 10 minutes
-        db.get(`SELECT last_notified FROM rentals WHERE id = ?`, [String(r.id)], async (err, row) => {
-          if (err) return;
-          
-          const lastNotified = row?.last_notified || 0;
-          const shouldNotify = forceNotify || (now - lastNotified >= 600000); 
-
-          if (shouldNotify) {
-            const remHours = Math.max(0, remainingMs / 3600000).toFixed(2);
-            const hbType = forceNotify ? 'Forced Heartbeat' : 'Heartbeat';
-            const msg = `💓 <b>[${hbType}] Rig Status</b>\n\n` +
-                        `<b>Name:</b> ${r.name || r.id}\n` +
-                        `<b>Hashrate:</b> ${info.niceAverageHashrate}\n` +
-                        `<b>Efficiency:</b> ${info.percent}%\n` +
-                        `<b>Remaining:</b> ${remHours}h\n` +
-                        `<b>Target to 100%:</b> ${requiredHashrate.toFixed(2)} ${info.hashrate.suffix}\n` +
-                        `<b>Client:</b> ${acct}`;
-
-            try {
-              await sendTelegramInternal(msg);
-              db.run(`UPDATE rentals SET last_notified = ? WHERE id = ?`, [now, String(r.id)]);
-            } catch (tgErr) {
-              console.error(`[monitor:telegram] Failed: ${tgErr.message}`);
-            }
-          }
+        await new Promise((resolve) => {
+          db.run(`INSERT INTO rentals (id, name, client, algo, target_100, last_updated) 
+                  VALUES (?, ?, ?, ?, ?, ?)
+                  ON CONFLICT(id) DO UPDATE SET 
+                  name=excluded.name, client=excluded.client, algo=excluded.algo, 
+                  target_100=excluded.target_100, last_updated=excluded.last_updated`,
+            [String(r.id), r.name || r.id, acct, info.algo, requiredHashrate, now],
+            () => resolve()
+          );
         });
+
+        // Fetch last notification state to decide if we send heartbeat
+        const row = await new Promise((resolve) => {
+          db.get(`SELECT last_notified FROM rentals WHERE id = ?`, [String(r.id)], (err, row) => resolve(row));
+        });
+
+        const lastNotified = row?.last_notified || 0;
+        const shouldNotify = forceNotify || (now - lastNotified >= 600000); 
+
+        if (shouldNotify) {
+          const remHours = Math.max(0, remainingMs / 3600000).toFixed(2);
+          const hbType = forceNotify ? 'Forced Heartbeat' : 'Heartbeat';
+          const msg = `💓 <b>[${hbType}] Rig Status</b>\n\n` +
+                      `<b>Name:</b> ${r.name || r.id}\n` +
+                      `<b>Hashrate:</b> ${info.niceAverageHashrate}\n` +
+                      `<b>Efficiency:</b> ${info.percent}%\n` +
+                      `<b>Remaining:</b> ${remHours}h\n` +
+                      `<b>Target to 100%:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}\n` +
+                      `<b>Client:</b> ${acct}`;
+
+          try {
+            const tgRes = await sendTelegramInternal(msg);
+            await new Promise(res => db.run(`UPDATE rentals SET last_notified = ? WHERE id = ?`, [now, String(r.id)], () => res()));
+            notifications.push({ id: r.id, status: 'Sent', telegram: tgRes });
+          } catch (tgErr) {
+            notifications.push({ id: r.id, status: 'Failed', error: tgErr.message });
+          }
+        } else {
+          notifications.push({ id: r.id, status: 'Skipped', reason: 'Throttle (10m)' });
+        }
       }
     } catch (err) {
       console.error(`[monitor:error] Client ${acct}: ${err.message}`);
     }
   }
+  return notifications;
 }
 
 /** Internal Telegram Sender */
 async function sendTelegramInternal(message) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (!botToken || !chatId) return;
+  if (!botToken || !chatId) throw new Error('Telegram credentials missing');
 
-  await request(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+  const res = await request(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' })
   });
+  return res.body.json();
 }
 
-// New Endpoint for forced monitor runs
+// Trigger monitor and return details
 app.post('/api/v2/mrr/monitor/run', asyncHandler(async (req, res) => {
-  await runRentalMonitor(true);
-  res.json({ success: true, message: 'Monitor cycle triggered successfully.' });
+  const report = await runRentalMonitor(true);
+  res.json({ success: true, report });
+}));
+
+// Fetch current database state
+app.get('/api/v2/mrr/monitor/snapshot', asyncHandler(async (req, res) => {
+  db.all(`SELECT * FROM rentals ORDER BY last_updated DESC`, [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, data: rows });
+  });
 }));
 
 /**
@@ -1550,28 +1567,13 @@ app.post('/api/v2/notify/zalo', asyncHandler(async (req, res) => {
 // Telegram Notifications
 app.post('/api/v2/notify/telegram', asyncHandler(async (req, res) => {
   const { message } = req.body;
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-
-  if (!botToken || !chatId) {
-    console.warn('[telegram] Configuration missing. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env');
-    return res.status(400).json({ success: false, message: 'Telegram configuration missing in server .env' });
+  try {
+    const data = await sendTelegramInternal(message);
+    res.json(data);
+  } catch (err) {
+    console.warn(`[telegram] ${err.message}`);
+    res.status(400).json({ success: false, error: err.message });
   }
-
-  const response = await request(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: message,
-      parse_mode: 'HTML'
-    })
-  });
-
-  const data = await response.body.json();
-  res.json(data);
 }));
 
 // --- SERVE FRONTEND ---

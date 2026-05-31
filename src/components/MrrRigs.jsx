@@ -396,7 +396,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                       return hr;
                     })()}
                     {info?.isRental && (
-                      <div style={{ fontSize: '8px', opacity: 0.7 }}>
+                      <div style={{ fontSize: '11px', opacity: 0.7 }}>
                         Advertised: <span style={{ color: '#34d399' }}>{info.advertised}</span>
                       </div>
                     )}

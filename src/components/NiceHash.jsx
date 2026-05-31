@@ -56,22 +56,39 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
 
   const cancelOrder = () => {
     if (!selectedOrderId || !window.confirm('Are you sure you want to cancel this order?')) return;
-    onCall(`/api/v2/hashpower/order/${encodeURIComponent(selectedOrderId)}`, { method: 'DELETE' });
+    onCall(`/api/v2/hashpower/order/${encodeURIComponent(selectedOrderId)}`, { 
+      method: 'DELETE',
+      showModal: true 
+    }).then(res => {
+      if (res && !res.error) fetchOrders();
+    });
   };
 
   const updateOrder = () => {
-    if (!priceInput || !limitInput) return;
+    if (!selectedOrderId || priceInput === '' || limitInput === '') {
+      alert('Order selection, Price, and Limit are required.');
+      return;
+    }
     onCall(`/api/v2/hashpower/order/${encodeURIComponent(selectedOrderId)}/update`, {
       method: 'POST',
-      body: { price: priceInput, limit: limitInput }
+      body: { 
+        price: String(priceInput), 
+        limit: String(limitInput) 
+      },
+      showModal: true
+    }).then(res => {
+      if (res && !res.error) fetchOrders();
     });
   };
 
   const refillOrder = () => {
-    if (!refillInput) return;
+    if (!selectedOrderId || !refillInput) return;
     onCall(`/api/v2/hashpower/order/${encodeURIComponent(selectedOrderId)}/refill`, {
       method: 'POST',
-      body: { amount: refillInput }
+      body: { amount: String(refillInput) },
+      showModal: true
+    }).then(res => {
+      if (res && !res.error) fetchOrders();
     });
   };
 

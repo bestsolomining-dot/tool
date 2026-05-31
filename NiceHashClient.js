@@ -102,7 +102,13 @@ export class NiceHashClient {
 
     if (response.statusCode >= 400) {
       const errorText = await response.body.text();
-      const error = new Error(`NiceHash API [${response.statusCode}]: ${errorText}`);
+      let errorMessage = errorText;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.message || errorJson.error || errorText;
+      } catch (e) { /* use raw text */ }
+
+      const error = new Error(errorMessage);
       error.statusCode = response.statusCode;
       error.headers = response.headers;
       throw error;

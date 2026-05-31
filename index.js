@@ -2,10 +2,14 @@ import 'dotenv/config';
 import express from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createHash, createHmac } from 'crypto';
 import { request } from 'undici';
 import { NiceHashClient } from './NiceHashClient.js';
 import { mapNiceHashToMRR } from './src/core/algoMapping.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.set('etag', false); // Disable ETags to prevent 304 caching on API errors
@@ -236,11 +240,11 @@ const getNiceHashApp = (client) => ({
     getBusinessBuyerStats: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/business/buyer/stats' }),
     getBusinessBuyerInfo: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/business/buyers/info' }),
     getMyOrders: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/myOrders', query: { orgId: client.orgId, ...query } }),
-    createOrder: (orderData) => client.call({ method: 'POST', path: '/main/api/v2/hashpower/order', body: orderData }),
+    createOrder: (orderData) => client.call({ method: 'POST', path: '/main/api/v2/hashpower/order', body: orderData, query: { orgId: client.orgId } }),
     getOrderDetail: (orderId) => client.call({ method: 'GET', path: `/main/api/v2/hashpower/order/${orderId}`, query: { ts: Date.now().toString() } }),
-    cancelOrder: (orderId) => client.call({ method: 'DELETE', path: `/main/api/v2/hashpower/order/${orderId}` }),
-    refillOrder: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/refill`, body }),
-    updatePriceLimit: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/updatePriceAndLimit`, body }),
+    cancelOrder: (orderId) => client.call({ method: 'DELETE', path: `/main/api/v2/hashpower/order/${orderId}`, query: { orgId: client.orgId } }),
+    refillOrder: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/refill`, body, query: { orgId: client.orgId } }),
+    updatePriceLimit: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/updatePriceAndLimit`, body, query: { orgId: client.orgId } }),
     getVmmOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/vmm/orders', query: { ts: Date.now().toString() } }),
     // Public Hashpower
     getOrderPrice: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/order/price', query }),
@@ -1129,7 +1133,7 @@ app.post('/api/v2/notify/zalo', asyncHandler(async (req, res) => {
 
 // --- SERVE FRONTEND ---
 // Serve static files from the 'dist' directory (created by npm run build)
-const distPath = path.join(process.cwd(), 'dist');
+const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath));
 
 // Catch-all route to serve the React app for any non-API request

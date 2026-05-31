@@ -145,21 +145,21 @@ const NiceHashApp = {
   // --- RIG MANAGEMENT (MINER PRIVATE) ---
   mining: {
     getMiningAddress: () => client.call({ method: 'GET', path: '/main/api/v2/mining/miningAddress', query: { ts: Date.now().toString() } }),
-    getAlgoStats: () => client.call({ method: 'GET', path: '/main/api/v2/mining/algo/stats', query: { ts: Date.now().toString() } }),
+    getAlgoStats: (query) => client.call({ method: 'GET', path: '/main/api/v2/mining/algo/stats', query: { ts: Date.now().toString(), ...query } }),
     getGroups: () => client.call({ method: 'GET', path: '/main/api/v2/mining/groups/list', query: { ts: Date.now().toString() } }),
     getRigStatsAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rig/stats/algo', query: { ts: Date.now().toString() } }),
     getRigStatsUnpaid: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rig/stats/unpaid', query: { ts: Date.now().toString() } }),
     getRigDetails: (rigId) => client.call({ method: 'GET', path: `/main/api/v2/mining/rig2/${rigId}`, query: { ts: Date.now().toString() } }),
     getRigsLegacy: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs', query: { ts: Date.now().toString() } }),
     getActiveWorkers: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/activeWorkers', query: { ts: Date.now().toString() } }),
-    getPayouts: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/payouts', query: { ts: Date.now().toString() } }),
+    getPayouts: (query) => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/payouts', query: { ts: Date.now().toString(), ...query } }),
     getRigsStatsAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/algo', query: { ts: Date.now().toString() } }),
     getRigsStatsData: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/data', query: { ts: Date.now().toString() } }),
     getRigsStatsDataAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/data/algo', query: { ts: Date.now().toString() } }),
     getRigsStatsHistory: (query) => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/history', query }),
     getRigsStatsUnpaid: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/unpaid', query: { ts: Date.now().toString() } }),
     setRigStatus: (body) => client.call({ method: 'POST', path: '/main/api/v2/mining/rigs/status2', body }),
-    getRigs: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs2', query: { ts: Date.now().toString() } }),
+    getRigs: (query) => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs2', query: { ts: Date.now().toString(), ...query } }),
     exportOfflineRigs: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs2/exportOffline', query: { ts: Date.now().toString() } }),
   },
 
@@ -192,7 +192,7 @@ const NiceHashApp = {
 
   // --- POOL MANAGEMENT ---
   pools: {
-    getPools: () => client.call({ method: 'GET', path: '/main/api/v2/pools' }),
+    getPools: (query) => client.call({ method: 'GET', path: '/main/api/v2/pools', query }),
     getPoolDetails: (poolId) => client.call({ method: 'GET', path: `/main/api/v2/pool/${poolId}` }),
     createPool: (body) => client.call({ method: 'POST', path: '/main/api/v2/pool', body }),
     deletePool: (poolId) => client.call({ method: 'DELETE', path: `/main/api/v2/pool/${poolId}` }),
@@ -224,6 +224,21 @@ app.get('/api/v2/algorithms', asyncHandler(async (req, res) => res.json(await Ni
 app.get('/api/v2/public/currency-algos', asyncHandler(async (req, res) => res.json(await NiceHashApp.easyMining.getCurrencyAlgos())));
 app.get('/api/v2/mining/markets', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getMarkets())));
 app.get('/api/v2/public/stats/24h', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getGlobalStats24h())));
+
+async function fetchAllPages(apiMethod, query) {
+  let allItems = [];
+  let page = 0;
+  let totalPages = 1;
+  do {
+    const data = await apiMethod({ ...query, size: 100, page });
+    const list = data?.list || data?.myOrders || data?.payouts || (Array.isArray(data) ? data : []);
+    allItems = allItems.concat(list);
+    totalPages = data?.pagination?.totalPageCount || 1;
+    page++;
+  } while (page < totalPages && page < 50);
+  return { list: allItems, pagination: { totalCount: allItems.length, totalPageCount: 1, page: 0, size: allItems.length } };
+}
+
 app.get('/api/v2/algos/mapping', asyncHandler(async (req, res) => {
   const nhResponse = await NiceHashApp.public.getAlgorithms();
   const { data: mrrResponse, clientName } = await mrrApiCall({
@@ -272,19 +287,35 @@ app.post('/api/v2/accounting/withdrawal', asyncHandler(async (req, res) => res.j
 app.get('/api/v2/mining/address', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getMiningAddress())));
 
 // Mining
-app.get('/api/v2/mining/rigs2', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigs())));
+app.get('/api/v2/mining/rigs2', asyncHandler(async (req, res) => {
+  if (parseInt(req.query.size || '0', 10) > 100) {
+    return res.json(await fetchAllPages(NiceHashApp.mining.getRigs, req.query));
+  }
+  res.json(await NiceHashApp.mining.getRigs(req.query));
+}));
+
 app.get('/api/v2/mining/rig/:rigId', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigDetails(req.params.rigId))));
 app.post('/api/v2/mining/rigs/status', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.setRigStatus(req.body))));
-app.get('/api/v2/mining/payouts', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getPayouts())));
+app.get('/api/v2/mining/payouts', asyncHandler(async (req, res) => {
+  if (parseInt(req.query.size || '0', 10) > 100) {
+    return res.json(await fetchAllPages(NiceHashApp.mining.getPayouts, req.query));
+  }
+  res.json(await NiceHashApp.mining.getPayouts(req.query));
+}));
 app.get('/api/v2/mining/history', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigsStatsHistory(req.query))));
-app.get('/api/v2/mining/algo-stats', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getAlgoStats())));
+app.get('/api/v2/mining/algo-stats', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getAlgoStats(req.query))));
 
 // Hashpower
 app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
   const query = { ...req.query };
   if (!query.ts) query.ts = Date.now().toString();
-  console.log('Backend received /api/v2/hashpower/myOrders with query:', query);
-  const data = await NiceHashApp.hashpower.getMyOrders(query);
+
+  let data;
+  if (parseInt(query.size || '0', 10) > 100) {
+    data = await fetchAllPages(NiceHashApp.hashpower.getMyOrders, query);
+  } else {
+    data = await NiceHashApp.hashpower.getMyOrders(query);
+  }
 
   // Save to CSV on the server side (current path)
   const list = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
@@ -327,7 +358,12 @@ app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res
 app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.updatePriceLimit(req.params.orderId, req.body))));
 
 // Pools
-app.get('/api/v2/pools', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.getPools())));
+app.get('/api/v2/pools', asyncHandler(async (req, res) => {
+  if (parseInt(req.query.size || '0', 10) > 100) {
+    return res.json(await fetchAllPages(NiceHashApp.pools.getPools, req.query));
+  }
+  res.json(await NiceHashApp.pools.getPools(req.query));
+}));
 app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.getPoolDetails(req.params.poolId))));
 app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.createPool(req.body))));
 app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.verifyPool(req.body))));

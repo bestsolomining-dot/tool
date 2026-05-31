@@ -63,7 +63,7 @@ export default function Pools() {
 
   async function loadPools() {
     try {
-      const result = await poolApi.list();
+      const result = await poolApi.list({ size: 1000 });
       const normalized = ph.normalizeList(result.data);
       setPools(normalized);
       return normalized;
@@ -429,21 +429,6 @@ export default function Pools() {
     reader.readAsArrayBuffer(file);
   }
 
-  async function importFromUrl() {
-    const url = 'https://notepad.vn/01WUDFi17';
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      setPools(ph.normalizeList(data));
-    } catch (err) {
-      setError('URL Sync Failed: ' + err.message + '. Ensure the link returns raw JSON.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function verifyImported() {
     setError('');
     let targetPools = importedPools;
@@ -630,10 +615,6 @@ export default function Pools() {
           {/* Auto Run button (standalone) */}
           <button className="btn-pro" onClick={startRun} disabled={playing || running}>
             {running ? 'Running...' : 'Auto'}
-          </button>
-          {/* Sync Remote Config */}
-          <button className="btn-pro secondary" onClick={importFromUrl} disabled={playing || running}>
-            Sync Remote
           </button>
           {/* Stop button (conditional) */}
           {(playing || running) && (

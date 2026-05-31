@@ -135,7 +135,10 @@ export const poolHelpers = {
  * Shared API Actions
  */
 export const poolApi = {
-  list: () => apiFetch('/api/v2/pools'),
+  list: (params) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return apiFetch(`/api/v2/pools${qs}`);
+  },
   get: (id) => apiFetch(`/api/v2/pool/${encodeURIComponent(id)}`),
   verify: (body, signal) => apiFetch('/api/v2/pools/verify', {
     method: 'POST',
@@ -148,5 +151,8 @@ export const poolApi = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   }),
-  mrrRigs: () => apiFetch('/api/v2/mrr/rigs')
+  mrrRigs: (params) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return apiFetch(`/api/v2/mrr/rigs${qs}`);
+  }
 };

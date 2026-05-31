@@ -259,7 +259,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
   const lastHeartbeatTimes = useRef(new Map()); // Track 10m heartbeats for active rentals
 
   const fetchActiveRentals = useCallback(async () => {
-    if (!mrrClient || mrrClient === 'ALL' || loadingRentals) {
+    if (!mrrClient || loadingRentals) {
       setRentals([]);
       knownRentalIds.current.clear();
       return;
@@ -302,9 +302,9 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           const elapsedMs = now - startTime;
           const remainingMs = endTime - now;
           
-          const currentHash = parseFloat(r.hashrate?.hashrate || r.hashrate?.current || r.hash || 0);
+          const currentHash = parseFloat(r.hashrate?.average?.hash || r.hashrate?.current || r.hash || 0);
           // Use 15m avg if available in the rig status sub-object, otherwise fallback to the global average
-          const avg15m = parseFloat(r.rig?.status?.last_15min || r.hashrate?.average?.hash || r.hashrate?.average || 0);
+          const avg15m = parseFloat(r.rig?.status?.last_15min || r.hashrate?.average?.hash || currentHash || 0);
           const efficiency = parseFloat(r.hashrate?.average?.percent || r.percent || 100);
 
           // RULE 1: Started 00:00 - 00:02 (elapsed <= 2m), current hashrate is 0
@@ -339,23 +339,6 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
             }
           } else if (efficiency >= 80) {
             notifiedAlerts.current.delete(rule3Key); // Reset when efficiency recovers
-          }
-
-          // HEARTBEAT: Send status update every 10 minutes (600,000 ms)
-          const lastHeartbeat = lastHeartbeatTimes.current.get(rentalId) || 0;
-          if (now - lastHeartbeat >= 600000) {
-            const remainingStr = calculateRemainingTime(r.end);
-            const hashDisplay = r.hashrate?.nice || (currentHash > 0 ? `${currentHash.toFixed(2)}` : '0');
-            const hbMsg = `💓 <b>[Heartbeat] Rig Status</b>\n\n` +
-                          `<b>Name:</b> ${r.name || r.id}\n` +
-                          `<b>Hashrate:</b> ${hashDisplay}\n` +
-                          `<b>Efficiency:</b> ${efficiency}%\n` +
-                          `<b>Remaining:</b> ${remainingStr}\n` +
-                          `<b>Client:</b> ${mrrClient}`;
-            
-            onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: hbMsg }, silent: true }).then(() => {
-              lastHeartbeatTimes.current.set(rentalId, now);
-            }).catch(() => {});
           }
         });
 
@@ -449,15 +432,10 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         <button 
           className="btn-pro secondary" 
           style={{ border: '1px solid #24A1DE', color: '#24A1DE' }} 
-          onClick={() => onCall('/api/v2/notify/telegram', { method: 'POST', body: { message: `🔔 [Test] Telegram Notification System is online!\nTime: ${new Date().toLocaleTimeString()}\nClient: ${mrrClient}` }, showModal: true })}
-          onClick={() => onCall('/api/v2/notify/telegram', { 
-            method: 'POST', 
-            body: { message: `🚀 <b>[Test] New Rig Rented!</b>\n\n<b>Name:</b> Test Rig #123\n<b>Algo:</b> SHA256\n<b>Duration:</b> 24h\n<b>Client:</b> ${mrrClient}\n\n<i>Time: ${new Date().toLocaleTimeString()}</i>` }, 
-            showModal: true 
-          })}
-          title="Verify Telegram bot configuration and connectivity"
+          onClick={() => onCall('/api/v2/mrr/monitor/run', { method: 'POST', showModal: true })}
+          title="Manually trigger heartbeat status for all active rentals"
         >
-          Test Telegram
+          Force Heartbeat
         </button>
       </div>
 

@@ -122,6 +122,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
         <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
           <option value="BT">BT Account</option>
           <option value="PH">PH Account</option>
+          <option value="ALL">ALL Accounts</option>
         </select>
         <small style={{ opacity: 0.5, fontSize: '10px', marginLeft: '10px' }}>ACTIVE CLIENT</small>
       </div>
@@ -143,9 +144,10 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
             const poolName = order?.pool?.name || order?.pool?.stratumHostname;
             const label = poolName ? `${poolName} (${algo || 'N/A'})` : (algo || order?.title || order?.name || `Order ${index + 1}`);
             const statusCode = order?.status?.code || order?.status || '';
+            const clientSuffix = order?.nhClient ? ` [${order.nhClient}]` : '';
             return (
               <option key={id || `${label}-${index}`} value={id}>
-                {label}{statusCode ? ` [${statusCode}]` : ''}
+                {label}{statusCode ? ` [${statusCode}]` : ''}{clientSuffix}
               </option>
             );
           })}
@@ -255,6 +257,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
                 <tr>
                   <th style={{ padding: '8px' }}>Pool</th>
                   <th style={{ padding: '8px' }}>Algo</th>
+              {nhClient === 'ALL' && <th style={{ padding: '8px' }}>Account</th>}
                   <th style={{ padding: '8px' }}>Price</th>
                   <th style={{ padding: '8px' }}>Speed</th>
                   <th style={{ padding: '8px' }}>Status</th>
@@ -268,6 +271,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
                     <tr key={id || i} onClick={() => handleOrderSelect(id)} style={{ cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.02)' }} className="hover-row">
                       <td style={{ padding: '8px' }}>{o.pool?.name || o.pool?.stratumHostname || 'N/A'}</td>
                       <td style={{ padding: '8px' }}>{algo}</td>
+                  {nhClient === 'ALL' && <td style={{ padding: '8px', opacity: 0.7 }}>{o.nhClient}</td>}
                       <td style={{ padding: '8px', color: '#f59e0b' }}>{o.price}</td>
                       <td style={{ padding: '8px' }}>{parseFloat(o.acceptedCurrentSpeed || 0).toFixed(6)}</td>
                       <td style={{ padding: '8px', color: o.status?.code === 'ACTIVE' ? '#10b981' : 'inherit' }}>{o.status?.code}</td>

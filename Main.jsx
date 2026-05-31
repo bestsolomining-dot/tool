@@ -6,6 +6,7 @@ import NiceHash from './src/components/NiceHash';
 import MiningRigRental from './src/components/MiningRigRental';
 import MiningRigSection from './src/components/MiningRigSection';
 import HashrateCalculator from './src/components/HashrateCalculator';
+import HashCompletionCalculator from './src/components/HashCompletionCalculator';
 import MrrPoolsManager from './src/components/MrrPoolsManager';
 import './src/App.css';
 
@@ -17,6 +18,7 @@ export default function App() {
   const [activeSection, setActiveSection] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
   const [calculatorModalOpen, setCalculatorModalOpen] = useState(false);
+  const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
   const [algorithm, setAlgorithm] = useState('');
   const [market, setMarket] = useState('');
@@ -253,11 +255,16 @@ export default function App() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
-                <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>Open the hashrate calculator in a popup modal.</p>
+                <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>Unit conversions and rental projections.</p>
               </div>
-              <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
-                Open Calculator
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn-pro secondary" onClick={() => setCompletionModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
+                  Completion Calc
+                </button>
+                <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
+                  Unit Converter
+                </button>
+              </div>
             </div>
             {/* <article className="panel">
               <div style={{ marginTop: '5px' }}>
@@ -297,6 +304,14 @@ export default function App() {
         maxWidth="700px"
       >
         <HashrateCalculator />
+      </Modal>
+      <Modal
+        isOpen={completionModalOpen}
+        onClose={() => setCompletionModalOpen(false)}
+        title="Rental Completion Calculator"
+        maxWidth="750px"
+      >
+        <HashCompletionCalculator />
       </Modal>
       <Modal
         isOpen={responseModalOpen}

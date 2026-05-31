@@ -580,6 +580,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
           <option value="BT">NiceHash Client: BT</option>
           <option value="PH">NiceHash Client: PH</option>
+          <option value="ALL">NiceHash Client: ALL</option>
         </select>
 
         {/* <div className="pool-actions-toolbar" style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem', flexWrap: 'wrap', marginLeft: 'auto' }}>

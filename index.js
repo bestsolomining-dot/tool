@@ -892,8 +892,10 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
     
     // Endpoint for signature: MRR expects the full path after /api/v2, including the leading slash.
     const sigEndpoint = normalizedEndpoint;
-    if (query && typeof query === 'object') {
-      for (const [key, value] of Object.entries(query)) {
+    // Strip tool-internal query parameters before forwarding to MRR
+    const { client: _c, ts: _t, endpoint: _e, ...cleanQuery } = query || {};
+    if (Object.keys(cleanQuery).length > 0) {
+      for (const [key, value] of Object.entries(cleanQuery)) {
         if (value === undefined || value === null || value === '') continue;
         baseUrl.searchParams.set(key, String(value));
       }
@@ -968,8 +970,8 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
 }
 
 async function mrrRequest(endpoint, req, res, method = 'GET', body = undefined) {
-  // Destructure to remove internal parameters (client, endpoint) from the forwarding query
-  const { client: clientQuery, endpoint: _internalPath, ...forwardQuery } = req.query || {};
+  // Destructure to remove tool-internal parameters (client, endpoint, ts) from the forwarding query
+  const { client: clientQuery, endpoint: _internalPath, ts: _ts, ...forwardQuery } = req.query || {};
   
   // Default to primary client if 'ALL' is passed to a non-supporting endpoint
   const targetClient = String(clientQuery || '').toUpperCase() === 'ALL' ? defaultMrrClient : clientQuery;
@@ -1346,72 +1348,61 @@ app.get('/api/v2/mrr/balance', asyncHandler(async (req, res) => mrrRequest('/acc
 app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => mrrRequest('/info/algos', req, res)));
 app.get('/api/v2/mrr/profiles', asyncHandler(async (req, res) => mrrRequest('/profile', req, res)));
 
+/** Reusable logic for fetching rentals (current or history) with merged pool info */
+async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
+  const isAll = clientParam === 'ALL';
+  const allClientNames = isAll 
+    ? Object.keys(mrrConfigs).filter(c => c !== 'ALL' && mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret)
+    : [clientParam];
+
+  const allRentals = [];
+  const errors = [];
+
+  // Clean query for MRR (remove tool-internal params)
+  const { ts: _t, client: _c, ...mrrQuery } = query;
+
+  for (const clientName of allClientNames) {
+    try {
+      const { data, statusCode } = await mrrApiCall({ endpoint: '/rental', method: 'GET', clientNameRaw: clientName, query: mrrQuery });
+      if (statusCode === 200 && data.success) {
+        const rentals = Array.isArray(data.data) ? data.data : (data.data?.rentals || []);
+        if (rentals.length > 0) {
+          rentals.forEach(r => r.mrrClient = clientName);
+          const rentalIds = rentals.map(r => r.id).join(';');
+          const { data: poolsData } = await mrrApiCall({ endpoint: `/rental/${rentalIds}/pool`, clientNameRaw: clientName });
+          if (poolsData && poolsData.success) {
+            const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (poolsData.data?.result || poolsData.data?.rentals || []);
+            const poolMap = new Map(poolItems.map(item => [String(item.rigid || item.id || item.rentalid || item.rental_id), item.pools]));
+            rentals.forEach(r => {
+              const pools = poolMap.get(String(r.id));
+              if (pools && pools.length > 0) {
+                const p0 = pools.find(p => p.priority === 0 || p.priority === '0') || pools[0];
+                r.host = p0.host || p0.stratumHost; r.port = p0.port || p0.stratumPort; r.user = p0.user || p0.username;
+              }
+            });
+          }
+          allRentals.push(...rentals);
+        }
+      } else if (!isAll) {
+         return { statusCode, data, clientName }; // Return raw error for single client
+      }
+    } catch (err) { if (!isAll) throw err; errors.push({ client: clientName, message: err.message }); }
+  }
+  return { statusCode: 200, data: { success: true, data: { rentals: allRentals }, errors: errors.length > 0 ? errors : undefined }, clientName: isAll ? 'ALL' : clientParam };
+}
+
 app.get('/api/v2/mrr/rentals', asyncHandler(async (req, res) => {
   const { client: clientQuery, ...forwardQuery } = req.query || {};
-  const clientParam = String(clientQuery || defaultMrrClient).toUpperCase();
-
-  if (clientParam === 'ALL') {
-    const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
-    const allRentals = [];
-    const errors = [];
-
-    for (const clientName of allClientNames) {
-      try {
-        const { data, statusCode } = await mrrApiCall({ endpoint: '/rental', method: 'GET', clientNameRaw: clientName, query: forwardQuery });
-        if (statusCode === 200 && data.success) {
-          const rentals = Array.isArray(data.data) ? data.data : (data.data?.rentals || []);
-          if (rentals.length > 0) {
-            rentals.forEach(r => r.mrrClient = clientName);
-            const rentalIds = rentals.map(r => r.id).join(';');
-            const { data: poolsData } = await mrrApiCall({ endpoint: `/rental/${rentalIds}/pool`, clientNameRaw: clientName });
-            if (poolsData && poolsData.success) {
-              const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (poolsData.data?.result || poolsData.data?.rentals || []);
-              const poolMap = new Map(poolItems.map(item => [String(item.id || item.rentalid || item.rental_id), item.pools]));
-              rentals.forEach(r => {
-                const pools = poolMap.get(String(r.id));
-                if (pools && pools.length > 0) {
-                  const p0 = pools.find(p => p.priority === 0 || p.priority === '0') || pools[0];
-                  r.host = p0.host || p0.stratumHost; r.port = p0.port || p0.stratumPort; r.user = p0.user || p0.username;
-                }
-              });
-            }
-            allRentals.push(...rentals);
-          }
-        } else {
-          errors.push({ client: clientName, message: data?.message || `Status: ${statusCode}` });
-        }
-      } catch (err) { errors.push({ client: clientName, message: err.message }); }
-    }
-    return res.json({ success: true, data: { rentals: allRentals }, errors: errors.length > 0 ? errors : undefined });
-  }
-
-  const { statusCode, data, clientName } = await mrrApiCall({ endpoint: '/rental', method: 'GET', clientNameRaw: clientParam, query: forwardQuery });
-  if (statusCode === 200 && data.success) {
-    const rentals = Array.isArray(data.data) ? data.data : (data.data?.rentals || []);
-    if (rentals.length > 0) {
-      const rentalIds = rentals.map(r => r.id).join(';');
-      const { data: poolsData } = await mrrApiCall({ endpoint: `/rental/${rentalIds}/pool`, clientNameRaw: clientName });
-      if (poolsData && poolsData.success) {
-        const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (poolsData.data?.result || poolsData.data?.rentals || []);
-        const poolMap = new Map(poolItems.map(item => [String(item.id || item.rentalid || item.rental_id), item.pools]));
-        rentals.forEach(r => {
-          const pools = poolMap.get(String(r.id));
-          if (pools && pools.length > 0) {
-            const p0 = pools.find(p => p.priority === 0 || p.priority === '0') || pools[0];
-            r.host = p0.host || p0.stratumHost; r.port = p0.port || p0.stratumPort; r.user = p0.user || p0.username;
-          }
-        });
-      }
-    }
-  }
-  res.set('X-MRR-Client', clientName);
-  res.status(statusCode).json(data);
+  const result = await fetchAggregatedRentals(forwardQuery, String(clientQuery || defaultMrrClient).toUpperCase());
+  res.set('X-MRR-Client', result.clientName);
+  res.status(result.statusCode).json(result.data);
 }));
 
 app.get('/api/v2/mrr/rental/history', asyncHandler(async (req, res) => {
-  // MRR retrieves history via the main rental endpoint with a query flag
-  req.query.history = '1';
-  return mrrRequest('/rental', req, res);
+  const { client: clientQuery, ...forwardQuery } = req.query || {};
+  const result = await fetchAggregatedRentals({ ...forwardQuery, history: '1' }, String(clientQuery || defaultMrrClient).toUpperCase());
+  res.set('X-MRR-Client', result.clientName);
+  res.status(result.statusCode).json(result.data);
 }));
 app.get('/api/v2/mrr/rig/all', asyncHandler(async (req, res) => mrrRequest('/rig', req, res))); // New endpoint for all available rigs
 app.get('/api/v2/mrr/whoami', asyncHandler(async (req, res) => mrrRequest('/account/whoami', req, res)));

@@ -41,37 +41,41 @@ export function useTelegram(onCall, mrrClient) {
   }, [onCall]);
 
   const notifyNewRental = useCallback((fresh) => {
+    const account = fresh.mrrClient || mrrClient;
     const msg = `🚀 <b>[New Rental]</b>\n\n` +
                 `<b>Rig:</b> ${fresh.name || fresh.id}\n` +
                 `<b>Algo:</b> ${fresh.algo || 'N/A'}\n` +
                 `<b>Duration:</b> ${fresh.hours}h\n` +
-                `<b>Account:</b> ${mrrClient}`;
+                `<b>Account:</b> ${account}`;
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
   const notifyZeroHashrate = useCallback((r, elapsedMs) => {
+    const account = r.mrrClient || mrrClient;
     const msg = `⚠️ <b>[Critical] Zero Hashrate!</b>\n\n` +
                 `<b>Rig:</b> ${r.name || r.id}\n` +
                 `<b>Started:</b> ${Math.round(elapsedMs/1000)}s ago\n` +
                 `<b>Current Hash:</b> 0\n` +
-                `<b>Account:</b> ${mrrClient}`;
+                `<b>Account:</b> ${account}`;
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
   const notifyHashrateDrop = useCallback((r) => {
+    const account = r.mrrClient || mrrClient;
     const msg = `🛑 <b>[Alert] Hashrate Drop (15m)</b>\n\n` +
                 `<b>Rig:</b> ${r.name || r.id}\n` +
                 `<b>Avg (15m):</b> 0\n` +
-                `<b>Account:</b> ${mrrClient}`;
+                `<b>Account:</b> ${account}`;
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
   const notifyLowEfficiency = useCallback((r, remainingMs, efficiency) => {
+    const account = r.mrrClient || mrrClient;
     const msg = `📉 <b>[Alert] Low Efficiency</b>\n\n` +
                 `<b>Rig:</b> ${r.name || r.id}\n` +
                 `<b>Remaining:</b> ${Math.round(remainingMs/60000)}m\n` +
                 `<b>Efficiency:</b> ${efficiency}%\n` +
-                `<b>Account:</b> ${mrrClient}`;
+                `<b>Account:</b> ${account}`;
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
@@ -79,6 +83,7 @@ export function useTelegram(onCall, mrrClient) {
     const remainingStr = calculateRemainingTime(r.end);
     const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0);
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
+    const account = r.mrrClient || mrrClient;
     const msg = `📢 <b>[Notice] Hash Completion</b>\n\n` +
                 `<b>Rig:</b> ${r.name || r.id}\n` +
                 `<b>Algo:</b> ${r.rig?.type || r.algo || 'N/A'}\n` +
@@ -86,7 +91,7 @@ export function useTelegram(onCall, mrrClient) {
                 `<b>Efficiency:</b> ${r.hashrate?.average?.percent || r.percent || '0'}%\n` +
                 `<b>Remaining:</b> ${remainingStr}\n` +
                 `<b>Target to 100%:</b> ${target.toFixed(2)} ${suffix}\n` +
-                `<b>Account:</b> ${mrrClient}`;
+                `<b>Account:</b> ${account}`;
     return sendTelegram(msg, { showModal: true });
   }, [sendTelegram, mrrClient]);
 

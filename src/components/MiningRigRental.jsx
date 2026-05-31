@@ -10,12 +10,16 @@ function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'ite
 
   for (const key of keys) {
     if (Array.isArray(payload[key])) return payload[key];
+    // Deep check for payload.data.rentals etc.
+    if (payload.data && Array.isArray(payload.data[key])) return payload.data[key];
   }
 
   // If payload.data contains an array, return it directly
   if (Array.isArray(payload.data)) {
     return payload.data;
   }
+  
+  if (payload.rentals && Array.isArray(payload.rentals)) return payload.rentals;
 
   // If payload.data is an object, recurse once to look for array keys inside the envelope
   if (payload.data && typeof payload.data === 'object') {
@@ -372,8 +376,8 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
     setActiveModal(type);
     if (type === 'list') return; // MrrRigs fetches its own data
 
-    if ((!mrrClient || mrrClient === 'ALL') && (type === 'rental' || type === 'rental_history')) {
-      setModalData({ success: false, message: "Client 'ALL' is not supported for this action. Please select a specific client." });
+    if (!mrrClient) {
+      setModalData({ success: false, message: "Please select a client first." });
       setModalLoading(false);
       return;
     }

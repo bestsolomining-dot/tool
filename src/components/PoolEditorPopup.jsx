@@ -6,10 +6,11 @@ import PoolEditor from './PoolEditor'
  * A wrapper component that decides whether to render the PoolEditor 
  * inside a Modal (Popup) or a separate Window (Popout).
  */
-export default function PoolEditorPopup({ editor, onClose, onSaveSuccess, onVerifySuccess }) {
+export default function PoolEditorPopup({ editor, selectedClient, onClose, onSaveSuccess, onVerifySuccess }) {
   const content = (
     <PoolEditor
       pool={editor}
+      selectedClient={selectedClient}
       onClose={onClose}
       onSaveSuccess={onSaveSuccess}
       onVerifySuccess={onVerifySuccess}

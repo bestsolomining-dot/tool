@@ -139,18 +139,27 @@ export const poolApi = {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return apiFetch(`/api/v2/pools${qs}`);
   },
-  get: (id) => apiFetch(`/api/v2/pool/${encodeURIComponent(id)}`),
-  verify: (body, signal) => apiFetch('/api/v2/pools/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal
-  }),
-  save: (body) => apiFetch('/api/v2/pool', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  }),
+  get: (id, params) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return apiFetch(`/api/v2/pool/${encodeURIComponent(id)}${qs}`);
+  },
+  verify: (body, params, signal) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return apiFetch(`/api/v2/pools/verify${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal
+    });
+  },
+  save: (body, params) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return apiFetch(`/api/v2/pool${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  },
   mrrRigs: (params) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return apiFetch(`/api/v2/mrr/rigs${qs}`);

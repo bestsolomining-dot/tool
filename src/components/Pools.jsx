@@ -28,6 +28,7 @@ export default function Pools() {
   const [currentRunStartTime, setCurrentRunStartTime] = useState(null)
   const [currentRunElapsed, setCurrentRunElapsed] = useState(0)
 
+  const [selectedClient, setSelectedClient] = useState('DEFAULT') // Support DEFAULT or PH
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false) // State for Pool Selection Modal
   const [enableVerifyAllButton, setEnableVerifyAllButton] = useState(true)
@@ -63,7 +64,7 @@ export default function Pools() {
 
   async function loadPools() {
     try {
-      const result = await poolApi.list({ size: 1000 });
+      const result = await poolApi.list({ size: 1000, client: selectedClient });
       const normalized = ph.normalizeList(result.data);
       setPools(normalized);
       return normalized;
@@ -78,8 +79,9 @@ export default function Pools() {
     loadPools().then(() => {
       setSelected(null)
       setSelectedId('')
+      setVerifyResults([])
     })
-  }, [])
+  }, [selectedClient])
 
   useEffect(() => {
     poolsRef.current = pools
@@ -89,7 +91,7 @@ export default function Pools() {
     setLoading(true);
     setMrrRigs(null);
     try {
-      const result = await poolApi.mrrRigs();
+      const result = await poolApi.mrrRigs({ client: selectedClient });
       if (result.ok) setMrrRigs(result.data);
       else throw new Error(result.data?.error || 'Failed to fetch MRR rigs');
     } catch (err) {
@@ -139,7 +141,7 @@ export default function Pools() {
 
     setDetailsLoading(true)
     try {
-      const result = await poolApi.get(poolId);
+      const result = await poolApi.get(poolId, { client: selectedClient });
 
       if (!result.ok) {
         const message = typeof result.data === 'string'
@@ -175,9 +177,9 @@ export default function Pools() {
       const poolId = ph.getId(selected);
       if (poolId) {
         try {
-          const details = (await poolApi.get(poolId)).data;
+          const details = (await poolApi.get(poolId, { client: selectedClient })).data;
           const fullPayload = ph.buildVerifyBody(details)
-          return await performVerification(fullPayload, details)
+          return await performVerification(fullPayload, details, { client: selectedClient })
         } catch (e) {
           setError(`Details Error: ${e.message}`);
           setLoading(false);
@@ -188,12 +190,12 @@ export default function Pools() {
       setLoading(false)
       return
     }
-    await performVerification(payload, selected)
+    await performVerification(payload, selected, { client: selectedClient })
   }
 
-  async function performVerification(payload, poolDetails) {
+  async function performVerification(payload, poolDetails, params) {
     try {
-      let result = await poolApi.verify(payload);
+      let result = await poolApi.verify(payload, params);
 
       if (result.status === 429) {
         const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
@@ -201,7 +203,7 @@ export default function Pools() {
         setRateLimitStatus(`Rate limit hit. Retrying in ${seconds}s...`);
         try {
           await new Promise(r => setTimeout(r, seconds * 1000));
-          result = await poolApi.verify(payload);
+          result = await poolApi.verify(payload, params);
         } finally {
           setRateLimitStatus(null);
         }
@@ -224,7 +226,7 @@ export default function Pools() {
     }
   }
 
-  async function verifyPoolBody(poolDetails, signal) {
+  async function verifyPoolBody(poolDetails, params, signal) {
     const payload = ph.buildVerifyBody(poolDetails)
     const missingFields = ph.getMissingVerifyFields(payload)
 
@@ -233,7 +235,7 @@ export default function Pools() {
     }
 
     try {
-      const result = await poolApi.verify(payload, signal);
+      const result = await poolApi.verify(payload, params, signal);
       return { ...result, poolDetails, requestBody: payload };
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -273,13 +275,13 @@ export default function Pools() {
         try {
           let details = pool
           if (poolId) {
-            let resDetails = await poolApi.get(poolId);
+          let resDetails = await poolApi.get(poolId, { client: selectedClient });
             if (resDetails.status === 429) {
               const seconds = parseInt(resDetails.headers?.get('Retry-After') || resDetails.data?.headers?.['retry-after'], 10) || 10;
               setRateLimitStatus(`Rate limit hit on details. Waiting ${seconds}s...`);
               try {
                 await new Promise(r => setTimeout(r, seconds * 1000));
-                resDetails = await poolApi.get(poolId);
+              resDetails = await poolApi.get(poolId, { client: selectedClient });
               } finally {
                 setRateLimitStatus(null);
               }
@@ -288,7 +290,7 @@ export default function Pools() {
           }
 
           const bodyToSend = typeof details === 'string' ? JSON.parse(details) : details
-          result = await verifyPoolBody(bodyToSend, controller.signal)
+          result = await verifyPoolBody(bodyToSend, { client: selectedClient }, controller.signal)
 
           if (result.status === 429) {
             const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
@@ -297,7 +299,7 @@ export default function Pools() {
             try {
               await new Promise(r => setTimeout(r, seconds * 1000));
               // Retry once for this pool
-              result = await verifyPoolBody(bodyToSend, controller.signal);
+              result = await verifyPoolBody(bodyToSend, { client: selectedClient }, controller.signal);
             } finally {
               setRateLimitStatus(null);
             }
@@ -575,6 +577,23 @@ export default function Pools() {
           </div>
         </Modal>
       )}
+      <div className="client-selector" style={{ marginBottom: '1rem', padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <label style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>NiceHash Account:</label>
+        <select 
+          className="input-pro" 
+          value={selectedClient} 
+          onChange={(e) => setSelectedClient(e.target.value)}
+          style={{ width: '150px' }}
+          disabled={playing || running}
+        >
+          <option value="DEFAULT">Primary (Default)</option>
+          <option value="PH">PH Account</option>
+        </select>
+        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+          {selectedClient === 'PH' ? 'Using Org: 806de471...' : 'Using Default Credentials'}
+        </span>
+      </div>
+
       <div className="pool-actions" style={{ minWidth: '500px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
         <div className="pool-actions" style={{ width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'left', gap: '0.8rem', marginBottom: '1rem' }}>
           
@@ -824,7 +843,7 @@ export default function Pools() {
                   {poolAlgorithmGroups.map(([algorithm, count]) => (
                     <div className="algorithm-row" key={algorithm}>
                       <span>{algorithm}</span>
-                      <strong style={{ marginLeft: 'auto', marginRight: '1rem', flexWrap: 'wrap', alignItems: 'flex-start', display: 'flex', gap: '6.5rem' }}>
+                      <strong style={{ marginLeft: 'auto', marginRight: '1rem' }}>
                         {count}
                       </strong>
                       <button
@@ -864,6 +883,7 @@ export default function Pools() {
         <PoolEditorPopup
           key={editor.key}
           editor={editor}
+          selectedClient={selectedClient}
           onClose={() => closePoolEditor(editor.key)}
           onSaveSuccess={handleEditorSaveSuccess}
           onVerifySuccess={handleEditorVerifySuccess}

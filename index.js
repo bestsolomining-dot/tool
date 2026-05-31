@@ -57,12 +57,39 @@ app.use((req, res, next) => {
 /**
  * NiceHashApp organizes API calls into logical domains.
  */
-const config = {
-  apiKey: normalizeCredential(process.env.NICEHASH_API_KEY),
-  apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET),
-  orgId: normalizeCredential(process.env.NICEHASH_ORG_ID),
-  environment: normalizeCredential(process.env.NICEHASH_ENVIRONMENT) || 'production'
+const nhConfigs = {
+  DEFAULT: {
+    apiKey: normalizeCredential(process.env.NICEHASH_API_KEY),
+    apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET),
+    orgId: normalizeCredential(process.env.NICEHASH_ORG_ID),
+  },
+  PH: {
+    apiKey: normalizeCredential(process.env.NICEHASH_API_KEY_PH),
+    apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET_PH),
+    orgId: normalizeCredential(process.env.NICEHASH_ORG_ID_PH),
+  }
 };
+
+const nhInstances = new Map();
+
+function resolveNhClient(clientNameRaw) {
+  const clientName = String(clientNameRaw || 'DEFAULT').toUpperCase();
+  if (nhInstances.has(clientName)) return nhInstances.get(clientName);
+
+  const conf = nhConfigs[clientName];
+  if (!conf || !conf.apiKey || !conf.apiSecret || !conf.orgId) {
+    const err = new Error(`NiceHash credentials missing for client "${clientName}".`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const instance = new NiceHashClient({
+    ...conf,
+    environment: normalizeCredential(process.env.NICEHASH_ENVIRONMENT) || 'production'
+  });
+  nhInstances.set(clientName, instance);
+  return instance;
+}
 
 const mrrConfigs = {
   BT: {
@@ -87,116 +114,110 @@ const defaultMrrClient = (function () {
   return 'BT';
 })();
 
-if (!config.apiKey || !config.apiSecret || !config.orgId) {
-  console.warn('NICEHASH_API_KEY, NICEHASH_API_SECRET, and NICEHASH_ORG_ID are required for NiceHash v2 requests.');
-}
-
-const client = new NiceHashClient(config);
-
 const NiceHashApp = {
   // --- PUBLIC DATA ---
   public: {
-    getTime: () => client.getServerTime(),
-    getDoc: () => client.call({ method: 'GET', path: '/api/v2/doc' }),
-    getAlgorithms: () => client.call({ method: 'GET', path: '/main/api/v2/mining/algorithms' }),
-    getMarkets: () => client.call({ method: 'GET', path: '/main/api/v2/mining/markets' }),
-    getCurrencies: () => client.call({ method: 'GET', path: '/main/api/v2/public/currencies' }),
-    getNetworks: () => client.call({ method: 'GET', path: '/main/api/v2/public/networks' }),
-    getFeeInfo: () => client.call({ method: 'GET', path: '/main/api/v2/public/service/fee/info' }),
-    getCountries: () => client.call({ method: 'GET', path: '/api/v2/enum/countries' }),
-    getOrgIndustry: () => client.call({ method: 'GET', path: '/api/v2/enum/organisationIndustry' }),
-    getPermissions: () => client.call({ method: 'GET', path: '/api/v2/enum/permissions' }),
-    getXchCountries: () => client.call({ method: 'GET', path: '/api/v2/enum/xchCountries' }),
-    getSystemFlags: () => client.call({ method: 'GET', path: '/api/v2/system/flags' }),
+    getTime: (nh) => nh.getServerTime(),
+    getDoc: (nh) => nh.call({ method: 'GET', path: '/api/v2/doc' }),
+    getAlgorithms: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/algorithms' }),
+    getMarkets: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/markets' }),
+    getCurrencies: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/public/currencies' }),
+    getNetworks: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/public/networks' }),
+    getFeeInfo: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/public/service/fee/info' }),
+    getCountries: (nh) => nh.call({ method: 'GET', path: '/api/v2/enum/countries' }),
+    getOrgIndustry: (nh) => nh.call({ method: 'GET', path: '/api/v2/enum/organisationIndustry' }),
+    getPermissions: (nh) => nh.call({ method: 'GET', path: '/api/v2/enum/permissions' }),
+    getXchCountries: (nh) => nh.call({ method: 'GET', path: '/api/v2/enum/xchCountries' }),
+    getSystemFlags: (nh) => nh.call({ method: 'GET', path: '/api/v2/system/flags' }),
   },
 
   // --- ACCOUNTING & WALLET ---
   accounting: {
-    getBalances: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/accounts2', query: { ts: Date.now().toString() } }),
-    getBalance: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/account2/${currency}`, query: { ts: Date.now().toString() } }),
-    getActivitiesAll: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/activities', query: { ts: Date.now().toString() } }),
-    getActivity: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/activity/${currency}`, query: { ts: Date.now().toString() } }),
-    getCurrencies: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/currencies', query: { ts: Date.now().toString() } }),
-    getDepositAddressLn: (body) => client.call({ method: 'POST', path: '/main/api/v2/accounting/depositAddress/ln', body }),
-    getDepositAddresses: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/depositAddresses', query: { ts: Date.now().toString() } }),
-    getDepositsAll: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/deposits', query: { ts: Date.now().toString() } }),
-    getDeposits: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/deposits/${currency}`, query: { ts: Date.now().toString() } }),
-    getDepositDetail: (currency, id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/deposits2/${currency}/${id}`, query: { ts: Date.now().toString() } }),
-    getExchangeTrades: (id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/exchange/${id}/trades`, query: { ts: Date.now().toString() } }),
-    getHashpowerTransactions: (id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/hashpower/${id}/transactions`, query: { ts: Date.now().toString() } }),
-    getMiningEarnings: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/hashpowerEarnings/${currency}`, query: { ts: Date.now().toString() } }),
-    getIndividualBalance: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/individual/balance', query: { ts: Date.now().toString() } }),
-    listVirginUtxos: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/list/virginUtxo', query: { ts: Date.now().toString() } }),
-    selectVirginUtxo: (body) => client.call({ method: 'POST', path: '/main/api/v2/accounting/select/virginUtxo', body }),
-    getTransaction: (currency, transactionId) => client.call({ method: 'GET', path: `/main/api/v2/accounting/transaction/${currency}/${transactionId}`, query: { ts: Date.now().toString() } }),
-    getTransactions: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/transactions/${currency}`, query: { ts: Date.now().toString() } }),
-    transitionConsolidation: (body) => client.call({ method: 'POST', path: '/main/api/v2/accounting/transition/consolidation', body }),
-    getTravelRuleData: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/travelrule/transaction/data', query: { ts: Date.now().toString() } }),
-    getTravelRuleVasps: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/travelrule/vasps', query: { ts: Date.now().toString() } }),
-    resolveWithheld: (id) => client.call({ method: 'POST', path: `/main/api/v2/accounting/travelrule/withheldDeposit/resolve/${id}` }),
-    createWithdrawal: (body) => client.call({ method: 'POST', path: '/main/api/v2/accounting/withdrawal', body }),
-    cancelWithdrawal: (currency, id) => client.call({ method: 'DELETE', path: `/main/api/v2/accounting/withdrawal/${currency}/${id}` }),
-    getWithdrawalDetail: (currency, id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawal2/${currency}/${id}`, query: { ts: Date.now().toString() } }),
-    getWithdrawalAddress: (id) => client.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawalAddress/${id}`, query: { ts: Date.now().toString() } }),
-    getWithdrawalAddresses: () => client.call({ method: 'GET', path: '/main/api/v2/accounting/withdrawalAddresses', query: { ts: Date.now().toString() } }),
-    getWithdrawals: (currency) => client.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawals/${currency}`, query: { ts: Date.now().toString() } }),
+    getBalances: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/accounting/accounts2', query: { ts: Date.now().toString() } }),
+    getBalance: (nh, currency) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/account2/${currency}`, query: { ts: Date.now().toString() } }),
+    getActivitiesAll: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/accounting/activities', query: { ts: Date.now().toString() } }),
+    getActivity: (nh, currency) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/activity/${currency}`, query: { ts: Date.now().toString() } }),
+    getCurrencies: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/accounting/currencies', query: { ts: Date.now().toString() } }),
+    getDepositAddressLn: (nh, body) => nh.call({ method: 'POST', path: '/main/api/v2/accounting/depositAddress/ln', body }),
+    getDepositAddresses: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/accounting/depositAddresses', query: { ts: Date.now().toString() } }),
+    getDepositsAll: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/accounting/deposits', query: { ts: Date.now().toString() } }),
+    getDeposits: (nh, currency) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/deposits/${currency}`, query: { ts: Date.now().toString() } }),
+    getDepositDetail: (nh, currency, id) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/deposits2/${currency}/${id}`, query: { ts: Date.now().toString() } }),
+    getExchangeTrades: (nh, id) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/exchange/${id}/trades`, query: { ts: Date.now().toString() } }),
+    getHashpowerTransactions: (nh, id) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/hashpower/${id}/transactions`, query: { ts: Date.now().toString() } }),
+    getMiningEarnings: (nh, currency) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/hashpowerEarnings/${currency}`, query: { ts: Date.now().toString() } }),
+    getIndividualBalance: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/accounting/individual/balance', query: { ts: Date.now().toString() } }),
+    listVirginUtxos: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/accounting/list/virginUtxo', query: { ts: Date.now().toString() } }),
+    selectVirginUtxo: (nh, body) => nh.call({ method: 'POST', path: '/main/api/v2/accounting/select/virginUtxo', body }),
+    getTransaction: (nh, currency, transactionId) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/transaction/${currency}/${transactionId}`, query: { ts: Date.now().toString() } }),
+    getTransactions: (nh, currency) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/transactions/${currency}`, query: { ts: Date.now().toString() } }),
+    transitionConsolidation: (nh, body) => nh.call({ method: 'POST', path: '/main/api/v2/accounting/transition/consolidation', body }),
+    getTravelRuleData: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/accounting/travelrule/transaction/data', query: { ts: Date.now().toString() } }),
+    getTravelRuleVasps: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/accounting/travelrule/vasps', query: { ts: Date.now().toString() } }),
+    resolveWithheld: (nh, id) => nh.call({ method: 'POST', path: `/main/api/v2/accounting/travelrule/withheldDeposit/resolve/${id}` }),
+    createWithdrawal: (nh, body) => nh.call({ method: 'POST', path: '/main/api/v2/accounting/withdrawal', body }),
+    cancelWithdrawal: (nh, currency, id) => nh.call({ method: 'DELETE', path: `/main/api/v2/accounting/withdrawal/${currency}/${id}` }),
+    getWithdrawalDetail: (nh, currency, id) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawal2/${currency}/${id}`, query: { ts: Date.now().toString() } }),
+    getWithdrawalAddress: (nh, id) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawalAddress/${id}`, query: { ts: Date.now().toString() } }),
+    getWithdrawalAddresses: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/accounting/withdrawalAddresses', query: { ts: Date.now().toString() } }),
+    getWithdrawals: (nh, currency) => nh.call({ method: 'GET', path: `/main/api/v2/accounting/withdrawals/${currency}`, query: { ts: Date.now().toString() } }),
   },
 
   // --- RIG MANAGEMENT (MINER PRIVATE) ---
   mining: {
-    getMiningAddress: () => client.call({ method: 'GET', path: '/main/api/v2/mining/miningAddress', query: { ts: Date.now().toString() } }),
-    getAlgoStats: (query) => client.call({ method: 'GET', path: '/main/api/v2/mining/algo/stats', query: { ts: Date.now().toString(), ...query } }),
-    getGroups: () => client.call({ method: 'GET', path: '/main/api/v2/mining/groups/list', query: { ts: Date.now().toString() } }),
-    getRigStatsAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rig/stats/algo', query: { ts: Date.now().toString() } }),
-    getRigStatsUnpaid: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rig/stats/unpaid', query: { ts: Date.now().toString() } }),
-    getRigDetails: (rigId) => client.call({ method: 'GET', path: `/main/api/v2/mining/rig2/${rigId}`, query: { ts: Date.now().toString() } }),
-    getRigsLegacy: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs', query: { ts: Date.now().toString() } }),
-    getActiveWorkers: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/activeWorkers', query: { ts: Date.now().toString() } }),
-    getPayouts: (query) => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/payouts', query: { ts: Date.now().toString(), ...query } }),
-    getRigsStatsAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/algo', query: { ts: Date.now().toString() } }),
-    getRigsStatsData: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/data', query: { ts: Date.now().toString() } }),
-    getRigsStatsDataAlgo: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/data/algo', query: { ts: Date.now().toString() } }),
-    getRigsStatsHistory: (query) => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/history', query }),
-    getRigsStatsUnpaid: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/unpaid', query: { ts: Date.now().toString() } }),
-    setRigStatus: (body) => client.call({ method: 'POST', path: '/main/api/v2/mining/rigs/status2', body }),
-    getRigs: (query) => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs2', query: { ts: Date.now().toString(), ...query } }),
-    exportOfflineRigs: () => client.call({ method: 'GET', path: '/main/api/v2/mining/rigs2/exportOffline', query: { ts: Date.now().toString() } }),
+    getMiningAddress: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/miningAddress', query: { ts: Date.now().toString() } }),
+    getAlgoStats: (nh, query) => nh.call({ method: 'GET', path: '/main/api/v2/mining/algo/stats', query: { ts: Date.now().toString(), ...query } }),
+    getGroups: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/groups/list', query: { ts: Date.now().toString() } }),
+    getRigStatsAlgo: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rig/stats/algo', query: { ts: Date.now().toString() } }),
+    getRigStatsUnpaid: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rig/stats/unpaid', query: { ts: Date.now().toString() } }),
+    getRigDetails: (nh, rigId) => nh.call({ method: 'GET', path: `/main/api/v2/mining/rig2/${rigId}`, query: { ts: Date.now().toString() } }),
+    getRigsLegacy: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rigs', query: { ts: Date.now().toString() } }),
+    getActiveWorkers: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rigs/activeWorkers', query: { ts: Date.now().toString() } }),
+    getPayouts: (nh, query) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rigs/payouts', query: { ts: Date.now().toString(), ...query } }),
+    getRigsStatsAlgo: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/algo', query: { ts: Date.now().toString() } }),
+    getRigsStatsData: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/data', query: { ts: Date.now().toString() } }),
+    getRigsStatsDataAlgo: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/data/algo', query: { ts: Date.now().toString() } }),
+    getRigsStatsHistory: (nh, query) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/history', query }),
+    getRigsStatsUnpaid: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rigs/stats/unpaid', query: { ts: Date.now().toString() } }),
+    setRigStatus: (nh, body) => nh.call({ method: 'POST', path: '/main/api/v2/mining/rigs/status2', body }),
+    getRigs: (nh, query) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rigs2', query: { ts: Date.now().toString(), ...query } }),
+    exportOfflineRigs: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/rigs2/exportOffline', query: { ts: Date.now().toString() } }),
   },
 
   // --- HASHPOWER MARKETPLACE ---
   hashpower: {
-    getBusinessBuyerStats: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/business/buyer/stats' }),
-    getBusinessBuyerInfo: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/business/buyers/info' }),
-    getMyOrders: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/myOrders', query: { orgId: config.orgId, ...query } }),
-    createOrder: (orderData) => client.call({ method: 'POST', path: '/main/api/v2/hashpower/order', body: orderData }),
-    getOrderDetail: (orderId) => client.call({ method: 'GET', path: `/main/api/v2/hashpower/order/${orderId}`, query: { ts: Date.now().toString() } }),
-    cancelOrder: (orderId) => client.call({ method: 'DELETE', path: `/main/api/v2/hashpower/order/${orderId}` }),
-    refillOrder: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/refill`, body }),
-    updatePriceLimit: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/updatePriceAndLimit`, body }),
-    getVmmOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/vmm/orders', query: { ts: Date.now().toString() } }),
+    getBusinessBuyerStats: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/hashpower/business/buyer/stats' }),
+    getBusinessBuyerInfo: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/hashpower/business/buyers/info' }),
+    getMyOrders: (nh, query) => nh.call({ method: 'GET', path: '/main/api/v2/hashpower/myOrders', query: { orgId: nh.orgId, ...query } }),
+    createOrder: (nh, orderData) => nh.call({ method: 'POST', path: '/main/api/v2/hashpower/order', body: orderData }),
+    getOrderDetail: (nh, orderId) => nh.call({ method: 'GET', path: `/main/api/v2/hashpower/order/${orderId}`, query: { ts: Date.now().toString() } }),
+    cancelOrder: (nh, orderId) => nh.call({ method: 'DELETE', path: `/main/api/v2/hashpower/order/${orderId}` }),
+    refillOrder: (nh, orderId, body) => nh.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/refill`, body }),
+    updatePriceLimit: (nh, orderId, body) => nh.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/updatePriceAndLimit`, body }),
+    getVmmOrders: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/hashpower/vmm/orders', query: { ts: Date.now().toString() } }),
     // Public Hashpower
-    getOrderPrice: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/order/price', query }),
-    getOrderBook: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/orderBook', query: { ts: Date.now().toString(), ...query } }),
-    getGlobalStats24h: () => client.call({ method: 'GET', path: '/main/api/v2/public/stats/global/24h' }),
+    getOrderPrice: (nh, query) => nh.call({ method: 'GET', path: '/main/api/v2/hashpower/order/price', query }),
+    getOrderBook: (nh, query) => nh.call({ method: 'GET', path: '/main/api/v2/hashpower/orderBook', query: { ts: Date.now().toString(), ...query } }),
+    getGlobalStats24h: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/public/stats/global/24h' }),
   },
 
   // --- EASYMINING ---
   easyMining: {
-    getMassBuyConfigs: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/easymining/massbuy/configurations', query: { ts: Date.now().toString() } }),
-    getSoloOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/solo/order', query: { ts: Date.now().toString() } }),
-    buySoloPackage: (body) => client.call({ method: 'POST', path: '/main/api/v2/hashpower/solo/order', body }),
+    getMassBuyConfigs: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/hashpower/easymining/massbuy/configurations', query: { ts: Date.now().toString() } }),
+    getSoloOrders: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/hashpower/solo/order', query: { ts: Date.now().toString() } }),
+    buySoloPackage: (nh, body) => nh.call({ method: 'POST', path: '/main/api/v2/hashpower/solo/order', body }),
     // Public EasyMining
-    getCurrencyAlgos: () => client.call({ method: 'GET', path: '/main/api/v2/public/currency-algos' }),
-    getPackages: () => client.call({ method: 'GET', path: '/main/api/v2/public/easymining/packages' }),
+    getCurrencyAlgos: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/public/currency-algos' }),
+    getPackages: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/public/easymining/packages' }),
   },
 
   // --- POOL MANAGEMENT ---
   pools: {
-    getPools: (query) => client.call({ method: 'GET', path: '/main/api/v2/pools', query }),
-    getPoolDetails: (poolId) => client.call({ method: 'GET', path: `/main/api/v2/pool/${poolId}` }),
-    createPool: (body) => client.call({ method: 'POST', path: '/main/api/v2/pool', body }),
-    deletePool: (poolId) => client.call({ method: 'DELETE', path: `/main/api/v2/pool/${poolId}` }),
-    verifyPool: (body) => client.call({ method: 'POST', path: '/main/api/v2/pools/verify', body }),
+    getPools: (nh, query) => nh.call({ method: 'GET', path: '/main/api/v2/pools', query }),
+    getPoolDetails: (nh, poolId) => nh.call({ method: 'GET', path: `/main/api/v2/pool/${poolId}` }),
+    createPool: (nh, body) => nh.call({ method: 'POST', path: '/main/api/v2/pool', body }),
+    deletePool: (nh, poolId) => nh.call({ method: 'DELETE', path: `/main/api/v2/pool/${poolId}` }),
+    verifyPool: (nh, body) => nh.call({ method: 'POST', path: '/main/api/v2/pools/verify', body }),
   }
 };
 
@@ -219,28 +240,53 @@ const asyncHandler = fn => (req, res, next) => {
 };
 
 // Public
-app.get('/api/v2/time', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getTime())));
-app.get('/api/v2/algorithms', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getAlgorithms())));
-app.get('/api/v2/public/currency-algos', asyncHandler(async (req, res) => res.json(await NiceHashApp.easyMining.getCurrencyAlgos())));
-app.get('/api/v2/mining/markets', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getMarkets())));
-app.get('/api/v2/public/stats/24h', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getGlobalStats24h())));
+app.get('/api/v2/time', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getTime(resolveNhClient(req.query.client)))));
+app.get('/api/v2/algorithms', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getAlgorithms(resolveNhClient(req.query.client)))));
+app.get('/api/v2/public/currency-algos', asyncHandler(async (req, res) => res.json(await NiceHashApp.easyMining.getCurrencyAlgos(resolveNhClient(req.query.client)))));
+app.get('/api/v2/mining/markets', asyncHandler(async (req, res) => res.json(await NiceHashApp.public.getMarkets(resolveNhClient(req.query.client)))));
+app.get('/api/v2/public/stats/24h', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getGlobalStats24h(resolveNhClient(req.query.client)))));
 
-async function fetchAllPages(apiMethod, query) {
+async function fetchAllPages(nhClient, apiMethod, query) {
   let allItems = [];
   let page = 0;
-  let totalPages = 1;
-  do {
-    const data = await apiMethod({ ...query, size: 100, page });
-    const list = data?.list || data?.myOrders || data?.payouts || (Array.isArray(data) ? data : []);
+  let hasMore = true;
+  const pageSize = 100;
+
+  while (hasMore && page < 50) {
+    const data = await apiMethod(nhClient, { ...query, size: pageSize, page });
+    // Deep search for the list in common NiceHash wrappers
+    const list = 
+      data?.list || 
+      data?.pools || 
+      data?.result?.list || 
+      data?.result?.pools || 
+      data?.data?.list ||
+      data?.data?.pools ||
+      data?.myOrders || 
+      data?.payouts || 
+      (Array.isArray(data) ? data : []);
+
+    if (!Array.isArray(list) || list.length === 0) break;
+
     allItems = allItems.concat(list);
-    totalPages = data?.pagination?.totalPageCount || 1;
+    
+    const pagination = data?.pagination || data?.result?.pagination || data?.data?.pagination;
+    if (pagination?.totalPageCount !== undefined) {
+      hasMore = (page + 1) < pagination.totalPageCount;
+    } else if (pagination?.totalCount !== undefined) {
+      hasMore = allItems.length < pagination.totalCount;
+    } else {
+      // Fallback: if we got a full page, assume there might be more
+      hasMore = list.length === pageSize;
+    }
     page++;
-  } while (page < totalPages && page < 50);
+  }
   return { list: allItems, pagination: { totalCount: allItems.length, totalPageCount: 1, page: 0, size: allItems.length } };
 }
 
 app.get('/api/v2/algos/mapping', asyncHandler(async (req, res) => {
-  const nhResponse = await NiceHashApp.public.getAlgorithms();
+  const nhClient = resolveNhClient(req.query.client);
+  const nhResponse = await NiceHashApp.public.getAlgorithms(nhClient);
   const { data: mrrResponse, clientName } = await mrrApiCall({
     endpoint: '/info/algos',
     method: 'GET',
@@ -281,40 +327,43 @@ app.get('/api/v2/algos/mapping', asyncHandler(async (req, res) => {
 }));
 
 // Accounting
-app.get('/api/v2/accounting/balances', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.getBalances())));
-app.get('/api/v2/accounting/balance/:currency', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.getBalance(req.params.currency))));
-app.post('/api/v2/accounting/withdrawal', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.createWithdrawal(req.body))));
-app.get('/api/v2/mining/address', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getMiningAddress())));
+app.get('/api/v2/accounting/balances', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.getBalances(resolveNhClient(req.query.client)))));
+app.get('/api/v2/accounting/balance/:currency', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.getBalance(resolveNhClient(req.query.client), req.params.currency))));
+app.post('/api/v2/accounting/withdrawal', asyncHandler(async (req, res) => res.json(await NiceHashApp.accounting.createWithdrawal(resolveNhClient(req.query.client), req.body))));
+app.get('/api/v2/mining/address', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getMiningAddress(resolveNhClient(req.query.client)))));
 
 // Mining
 app.get('/api/v2/mining/rigs2', asyncHandler(async (req, res) => {
+  const nhClient = resolveNhClient(req.query.client);
   if (parseInt(req.query.size || '0', 10) > 100) {
-    return res.json(await fetchAllPages(NiceHashApp.mining.getRigs, req.query));
+    return res.json(await fetchAllPages(nhClient, NiceHashApp.mining.getRigs, req.query));
   }
-  res.json(await NiceHashApp.mining.getRigs(req.query));
+  res.json(await NiceHashApp.mining.getRigs(nhClient, req.query));
 }));
 
-app.get('/api/v2/mining/rig/:rigId', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigDetails(req.params.rigId))));
-app.post('/api/v2/mining/rigs/status', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.setRigStatus(req.body))));
+app.get('/api/v2/mining/rig/:rigId', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigDetails(resolveNhClient(req.query.client), req.params.rigId))));
+app.post('/api/v2/mining/rigs/status', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.setRigStatus(resolveNhClient(req.query.client), req.body))));
 app.get('/api/v2/mining/payouts', asyncHandler(async (req, res) => {
+  const nhClient = resolveNhClient(req.query.client);
   if (parseInt(req.query.size || '0', 10) > 100) {
-    return res.json(await fetchAllPages(NiceHashApp.mining.getPayouts, req.query));
+    return res.json(await fetchAllPages(nhClient, NiceHashApp.mining.getPayouts, req.query));
   }
-  res.json(await NiceHashApp.mining.getPayouts(req.query));
+  res.json(await NiceHashApp.mining.getPayouts(nhClient, req.query));
 }));
-app.get('/api/v2/mining/history', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigsStatsHistory(req.query))));
-app.get('/api/v2/mining/algo-stats', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getAlgoStats(req.query))));
+app.get('/api/v2/mining/history', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getRigsStatsHistory(resolveNhClient(req.query.client), req.query))));
+app.get('/api/v2/mining/algo-stats', asyncHandler(async (req, res) => res.json(await NiceHashApp.mining.getAlgoStats(resolveNhClient(req.query.client), req.query))));
 
 // Hashpower
 app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
+  const nhClient = resolveNhClient(req.query.client);
   const query = { ...req.query };
   if (!query.ts) query.ts = Date.now().toString();
 
   let data;
   if (parseInt(query.size || '0', 10) > 100) {
-    data = await fetchAllPages(NiceHashApp.hashpower.getMyOrders, query);
+    data = await fetchAllPages(nhClient, NiceHashApp.hashpower.getMyOrders, query);
   } else {
-    data = await NiceHashApp.hashpower.getMyOrders(query);
+    data = await NiceHashApp.hashpower.getMyOrders(nhClient, query);
   }
 
   // Save to CSV on the server side (current path)
@@ -350,23 +399,24 @@ app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
   }
   res.json(data);
 }));
-app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getOrderDetail(req.params.orderId))));
-app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.createOrder(req.body))));
-app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getOrderBook(req.query))));
-app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.cancelOrder(req.params.orderId))));
-app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.refillOrder(req.params.orderId, req.body))));
-app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.updatePriceLimit(req.params.orderId, req.body))));
+app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getOrderDetail(resolveNhClient(req.query.client), req.params.orderId))));
+app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.createOrder(resolveNhClient(req.query.client), req.body))));
+app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.getOrderBook(resolveNhClient(req.query.client), req.query))));
+app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.cancelOrder(resolveNhClient(req.query.client), req.params.orderId))));
+app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.refillOrder(resolveNhClient(req.query.client), req.params.orderId, req.body))));
+app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res) => res.json(await NiceHashApp.hashpower.updatePriceLimit(resolveNhClient(req.query.client), req.params.orderId, req.body))));
 
 // Pools
 app.get('/api/v2/pools', asyncHandler(async (req, res) => {
+  const nhClient = resolveNhClient(req.query.client);
   if (parseInt(req.query.size || '0', 10) > 100) {
-    return res.json(await fetchAllPages(NiceHashApp.pools.getPools, req.query));
+    return res.json(await fetchAllPages(nhClient, NiceHashApp.pools.getPools, req.query));
   }
-  res.json(await NiceHashApp.pools.getPools(req.query));
+  res.json(await NiceHashApp.pools.getPools(nhClient, req.query));
 }));
-app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.getPoolDetails(req.params.poolId))));
-app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.createPool(req.body))));
-app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.verifyPool(req.body))));
+app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.getPoolDetails(resolveNhClient(req.query.client), req.params.poolId))));
+app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.createPool(resolveNhClient(req.query.client), req.body))));
+app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await NiceHashApp.pools.verifyPool(resolveNhClient(req.query.client), req.body))));
 
 // --- MINING RIG RENTALS V2 ---
 function nextMrrNonce(clientName) {
@@ -858,12 +908,6 @@ app.post('/api/v2/mrr/call', asyncHandler(async (req, res) => {
 
 // Error handling wrapper for Express
 
-// Example: Applying the wrapper to one route
-app.get('/api/v2/mining/address', asyncHandler(async (req, res) => {
-  const data = await NiceHashApp.mining.getMiningAddress();
-  res.json(data);
-}));
-
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, (err) => {
   if (err) {
@@ -873,7 +917,7 @@ const server = app.listen(PORT, (err) => {
   }
 
   console.log(`--- NiceHash API Toolbox Server Started ---`);
-  console.log(`Environment: ${config.environment.toUpperCase()}`);
+  console.log(`Port: ${PORT}`);
   console.log(`Listening on http://localhost:${PORT}`);
 });
 

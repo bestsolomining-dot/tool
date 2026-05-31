@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import Modal from './Modal'
 import { poolHelpers as ph, apiFetch, poolApi } from './poolUtils'
 
-export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySuccess, initialPoolData, isNew, isPopout = false }) {
+export default function PoolEditor({ pool, selectedClient, onClose, onSaveSuccess, onVerifySuccess, initialPoolData, isNew, isPopout = false }) {
   const [editorBody, setEditorBody] = useState('')
   const [editorVerifyBody, setEditorVerifyBody] = useState(null)
   const [editorResponse, setEditorResponse] = useState(null)
@@ -53,7 +53,7 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
       if (!currentPoolId || isNew) return
 
       setEditorDetailsLoading(true)
-      const result = await callEditorApi(poolApi.get(currentPoolId), 'Pool details');
+      const result = await callEditorApi(poolApi.get(currentPoolId, { client: selectedClient }), 'Pool details');
 
       if (cancelled) return
 
@@ -133,7 +133,7 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
     }
 
     try {
-      const result = await callEditorApi(poolApi.verify(payload), 'Verify pool');
+      const result = await callEditorApi(poolApi.verify(payload, { client: selectedClient }), 'Verify pool');
       const enrichedResult = { ...result, poolDetails }
       setEditorResponse(enrichedResult)
 
@@ -172,7 +172,7 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
     }
 
     try {
-      const saveResult = await callEditorApi(poolApi.save(savePayload), 'Save pool');
+      const saveResult = await callEditorApi(poolApi.save(savePayload, { client: selectedClient }), 'Save pool');
       setEditorSaveResponse(saveResult)
 
       if (!saveResult.ok) {
@@ -184,7 +184,7 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
 
       const savedId = saveResult.data?.id || saveResult.data?.poolId || savePayload.id
       if (savedId) {
-        const detailResult = await callEditorApi(poolApi.get(savedId), 'Reload pool details');
+        const detailResult = await callEditorApi(poolApi.get(savedId, { client: selectedClient }), 'Reload pool details');
 
         if (detailResult.ok) {
           setEditorBody(JSON.stringify(detailResult.data, null, 2))

@@ -580,27 +580,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
           <option value="BT">NiceHash Client: BT</option>
           <option value="LN">NiceHash Client: LN</option>
-          <option value="VN">NiceHash Client: VN (Aggregated)</option>
+          <option value="VN">NiceHash Client: VN (all MRR clients)</option>
         </select>
-
-        {/* <div className="pool-actions-toolbar" style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem', flexWrap: 'wrap', marginLeft: 'auto' }}>
-          <button
-            className="btn-pro"
-            style={{ flex: 1, minWidth: '160px' }}
-            onClick={() => setSelectorOpen(true)}
-            disabled={loading || detailsLoading || playing || running}
-          >
-            Select Single Pool
-          </button>
-          <button
-            className="btn-pro"
-            style={{ flex: 1, minWidth: '160px' }}
-            onClick={verify}
-            disabled={loading || detailsLoading || playing || !selected || running}
-          >
-            {loading ? 'Verifying...' : `Verify ${selected ? ph.getLabel(selected) : 'Selected Pool'}`}
-          </button>
-        </div> */}
         <div className="pool-automation-main" style={{ flex: 1, minWidth: '600px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Integrated Pool Automation & Bulk Verification Section */}
           <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -625,7 +606,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '15px', background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="field">
@@ -771,7 +752,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                   maxHeight: '400px',
                   overflowY: 'hiden',
                   overflowX: 'auto',
-                  
+
                   scrollbarWidth: 'thin',
                   scrollbarColor: 'rgba(255,255,255,0.1) transparent'
                 }}

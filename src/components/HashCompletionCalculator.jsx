@@ -40,7 +40,7 @@ export default function HashCompletionCalculator() {
 
     const currentOverallCompletion = (actualHashesDone / totalExpectedHashes) * 100;
     const timeProgress = (elapsedMs / totalDurationMs) * 100;
-    
+
     // Target average for the remaining time to hit 100% of Advertised Total
     const requiredHashrateRaw = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
     const requiredHashrateFormatted = (requiredHashrateRaw / unit).toFixed(2);
@@ -62,7 +62,7 @@ export default function HashCompletionCalculator() {
   return (
     <div className="hash-completion-calculator nh-theme" style={{ padding: '15px' }}>
       <h2 className="section-title" style={{ marginBottom: '20px' }}>Rental Completion Calculator</h2>
-      
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
         <div className="field">
           <label className="label" style={{ fontSize: '10px' }}>START TIME (LOCAL)</label>
@@ -113,7 +113,7 @@ export default function HashCompletionCalculator() {
               <div style={{ fontSize: '9px', opacity: 0.7 }}>Needed for remaining {results.remainingHrs}h to reach 100% total</div>
             </div>
           </div>
-          
+
           <div style={{ marginTop: '20px', fontSize: '11px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '15px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
               <span style={{ opacity: 0.6 }}>Hashes Delivered:</span>

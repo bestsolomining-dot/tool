@@ -22,7 +22,7 @@ export const algoMap = {
   'AUTOLYKOS': 'AUTOLYKOS',
   'ERG': 'AUTOLYKOS',
   'FISHHASH': 'FISHHASH',
-  
+
   // Common ASIC Algorithms
   'SHA256': 'SHA256',
   'SHA256ASICBOOST': 'SHA256ASICBOOST',
@@ -34,7 +34,7 @@ export const algoMap = {
   'QUARK': 'QUARK',
   'X13': 'X13',
   'KECCAK': 'KECCAK',
-  
+
   // Equihash Variants
   'EQUIHASH': 'EQUIHASH',
   'ZHASH': 'ZHASH',
@@ -67,7 +67,7 @@ export function normalizeAlgoForNiceHash(algo) {
 /**
  * Reverse mapping: NiceHash identifier to MRR slug.
  */
-export function mapNiceHashToMRR(algo) { 
+export function mapNiceHashToMRR(algo) {
   if (!algo) return '';
   const entry = Object.entries(algoMap).find(([mrr, nh]) => nh === algo.toUpperCase());
   return entry ? entry[0] : algo.toUpperCase();

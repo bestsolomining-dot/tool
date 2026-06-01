@@ -183,7 +183,7 @@ export default function App() {
     const rigObj = typeof rig === 'object' ? rig : { id: rig };
     const statusStr = String(typeof rigObj.status === 'object' ? rigObj.status.status : rigObj.status || '').toLowerCase();
     const isRented = statusStr.includes('rented');
-    
+
     // Correctly distinguish between the physical Rig ID and the Rental ID (Rig Card ID)
     // When rented, the 'id' field is often the rental ID. The physical rig ID is in 'rigid' or 'rig.id'.
     const rigId = String(rigObj.rigid || rigObj.rig_id || rigObj.rig?.id || (isRented ? '' : rigObj.id)).trim();
@@ -194,7 +194,7 @@ export default function App() {
 
     const path = `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
     const result = await handleMiningCall(path, { query: { client: targetClient }, silent: true });
-    
+
     setMrrPoolData(result);
     setMrrPoolRigId(rigId);
 
@@ -207,68 +207,68 @@ export default function App() {
 
   return (
     <RentedRigProvider nhClient={nhClient} callApi={callApi}>
-    <div className="app-shell" style={{ padding: '0 20px 40px', maxWidth: '1600px', margin: '0 auto' }}>
-      <header className="app-header" style={{
-        padding: '40px 0',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
-        marginBottom: '30px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-end'
-      }}>
-        <div className="brand-block" style={{ flex: 1 }}>
-          <h3>Ben Tre Mining Tool</h3>
-          <div className="status-card" style={{ marginBottom: '2px' }}>
-            <div className="status-item">
-              <span style={{ opacity: 0.5, marginRight: '10px' }}>SYSTEM:</span>
-              <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`}>
-                {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
-              </span>
+      <div className="app-shell" style={{ padding: '0 20px 40px', maxWidth: '1600px', margin: '0 auto' }}>
+        <header className="app-header" style={{
+          padding: '40px 0',
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          marginBottom: '30px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-end'
+        }}>
+          <div className="brand-block" style={{ flex: 1 }}>
+            <h3>Ben Tre Mining Tool</h3>
+            <div className="status-card" style={{ marginBottom: '2px' }}>
+              <div className="status-item">
+                <span style={{ opacity: 0.5, marginRight: '10px' }}>SYSTEM:</span>
+                <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`}>
+                  {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
-      <section
-        className="pools-section"
-        style={{
-          marginBottom: '15px',
-          marginTop: '0px',
-          background: 'rgba(255, 255, 255, 0.02)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          borderRadius: '16px',
-          padding: '24px',
-          height: '700px',
-          minHeight: '200px'
-        }}
-      >
-        <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhClient} setNhClient={setNhClient} />
-      </section>
-      <main className="dashboard">
-        <RentedRigsSummarySection />
+        </header>
+        <section
+          className="pools-section"
+          style={{
+            marginBottom: '15px',
+            marginTop: '0px',
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            borderRadius: '16px',
+            padding: '24px',
+            height: '700px',
+            minHeight: '200px'
+          }}
+        >
+          <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhClient} setNhClient={setNhClient} />
+        </section>
+        <main className="dashboard">
+          <RentedRigsSummarySection />
 
-        <section className="quick-actions">
-          <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <article className="panel">
-              <NiceHash
-                key={nhClient}
-                output={output}
-                onCall={handleMiningCall}
-                algorithm={algorithm}
-                market={market}
-                nhClient={nhClient}
-                setNhClient={setNhClient}
-              />
-            </article>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
-                <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>Open the hashrate calculator in a popup modal.</p>
+          <section className="quick-actions">
+            <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <article className="panel">
+                <NiceHash
+                  key={nhClient}
+                  output={output}
+                  onCall={handleMiningCall}
+                  algorithm={algorithm}
+                  market={market}
+                  nhClient={nhClient}
+                  setNhClient={setNhClient}
+                />
+              </article>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
+                  <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>Open the hashrate calculator in a popup modal.</p>
+                </div>
+                <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
+                  Open Calculator
+                </button>
               </div>
-              <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
-                Open Calculator
-              </button>
-            </div>
-            {/* <article className="panel">
+              {/* <article className="panel">
               <div style={{ marginTop: '5px' }}>
                 <HashpowerBot
                   algorithm={algorithm}
@@ -279,50 +279,50 @@ export default function App() {
                 />
               </div>
             </article> */}
-          </div>
-          <article className="panel">
-            <MiningRigSection
-              onCall={handleMiningCall}
-              mrrClient={mrrClient}
-              setMrrClient={setMrrClient}
-              onOpenMrrPools={handleOpenMrrPools}
-            />
-          </article>
-          <article className="panel">
-            <MrrPoolsManager
-              onCall={handleMiningCall}
-              mrrClient={mrrClient}
-              externalPoolData={mrrPoolData}
-              externalRigId={mrrPoolRigId}
-              externalRentalId={mrrPoolRentalId}
-            />
-          </article>
-        </section>
-      </main>
-      <Modal
-        isOpen={calculatorModalOpen}
-        onClose={() => setCalculatorModalOpen(false)}
-        title="Hashrate Calculator"
-        maxWidth="700px"
-      >
-        <HashrateCalculator />
-      </Modal>
-      <Modal
-        isOpen={responseModalOpen}
-        onClose={() => setResponseModalOpen(false)}
-        title="API Response Details"
-        maxWidth="1100px"
-      >
-        {lastCall && (
-          <div className="response-meta" style={{ marginBottom: '15px', opacity: 0.8, fontSize: '12px' }}>
-            <span>{lastCall.method} {lastCall.path} — {lastCall.status} ({lastCall.durationMs}ms)</span>
-          </div>
-        )}
-        <pre className="response-body modal" style={{ maxHeight: '60vh', overflow: 'auto' }}>
-          {JSON.stringify(modalContent || output, null, 2)}
-        </pre>
-      </Modal>
-    </div>
+            </div>
+            <article className="panel">
+              <MiningRigSection
+                onCall={handleMiningCall}
+                mrrClient={mrrClient}
+                setMrrClient={setMrrClient}
+                onOpenMrrPools={handleOpenMrrPools}
+              />
+            </article>
+            <article className="panel">
+              <MrrPoolsManager
+                onCall={handleMiningCall}
+                mrrClient={mrrClient}
+                externalPoolData={mrrPoolData}
+                externalRigId={mrrPoolRigId}
+                externalRentalId={mrrPoolRentalId}
+              />
+            </article>
+          </section>
+        </main>
+        <Modal
+          isOpen={calculatorModalOpen}
+          onClose={() => setCalculatorModalOpen(false)}
+          title="Hashrate Calculator"
+          maxWidth="700px"
+        >
+          <HashrateCalculator />
+        </Modal>
+        <Modal
+          isOpen={responseModalOpen}
+          onClose={() => setResponseModalOpen(false)}
+          title="API Response Details"
+          maxWidth="1100px"
+        >
+          {lastCall && (
+            <div className="response-meta" style={{ marginBottom: '15px', opacity: 0.8, fontSize: '12px' }}>
+              <span>{lastCall.method} {lastCall.path} — {lastCall.status} ({lastCall.durationMs}ms)</span>
+            </div>
+          )}
+          <pre className="response-body modal" style={{ maxHeight: '60vh', overflow: 'auto' }}>
+            {JSON.stringify(modalContent || output, null, 2)}
+          </pre>
+        </Modal>
+      </div>
     </RentedRigProvider>
   );
 }
@@ -338,7 +338,7 @@ function RentedRigsSummarySection() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
         <h3 style={{ margin: 0 }}>Active Rented Power</h3>
         <div style={{ fontSize: '0.9rem' }}>
-          Total Paid: <span style={{ color: '#f3ba2f', fontWeight: 'bold' }}>{summary.totalPaid} BTC</span> 
+          Total Paid: <span style={{ color: '#f3ba2f', fontWeight: 'bold' }}>{summary.totalPaid} BTC</span>
           <span style={{ margin: '0 10px', opacity: 0.3 }}>|</span>
           Orders: <b>{summary.count}</b>
         </div>

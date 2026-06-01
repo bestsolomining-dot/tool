@@ -4,7 +4,7 @@ import { CountdownTimer } from './MiningRigRental';
 import { normalizeAlgoForNiceHash } from '../core/algoMapping';
 
 /** Power factor mapping for normalization (EH/s base) */
-const UNIT_TO_POWER = { 
+const UNIT_TO_POWER = {
   'EH': 0, 'LN': -3, 'TH': -6, 'GH': -9, 'MH': -12,
   'E': 0, 'P': -3, 'T': -6, 'G': -9, 'M': -12,
   'EHS': 0, 'PHS': -3, 'THS': -6, 'GHS': -9, 'MHS': -12
@@ -16,7 +16,7 @@ const UNIT_TO_POWER = {
 export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
   const nhPriceNum = Number.parseFloat(nhPrice || 0);
   const mrrPriceNum = Number.parseFloat(mrrPrice || 0);
-  
+
   if (nhPriceNum <= 0 || mrrPriceNum <= 0) return null;
 
   // Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH')
@@ -49,7 +49,7 @@ function findRigArray(obj) {
   if (Array.isArray(obj)) return obj;
   if (Array.isArray(obj.rigs)) return obj.rigs;
   if (Array.isArray(obj.data)) return obj.data;
-  
+
   for (const key in obj) {
     const result = findRigArray(obj[key]);
     if (result && result.length > 0) return result;
@@ -175,7 +175,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
 
           const res = await fetch(`/api/v2/hashpower/order/price?algorithm=${nhAlgo}&market=USA&client=${mrrClient}&ts=${Date.now()}`);
           const data = await res.json();
-          
+
           // Handle wrapped response: { price: { ... } }
           const nhPriceData = data?.price || data;
           if (nhPriceData && !data.error && (nhPriceData.fixedPrice || nhPriceData.standardPrice)) {
@@ -202,18 +202,18 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
     try {
       // 1. Prepare parameters for Marketplace
       const params = { endpoint };
-      
+
       if (endpoint === '/rig') {
         if (algo) params.algo = String(algo).trim();
-        
+
         // Server-side status filtering for the Marketplace
         if (statusFilter !== 'all') {
           params.status = statusFilter;
         }
       }
 
-      const result = await poolApi.mrrRigs(mrrClient, endpoint, params); 
-      
+      const result = await poolApi.mrrRigs(mrrClient, endpoint, params);
+
       if (result.ok) {
         const rigList = findRigArray(result.data);
 
@@ -253,8 +253,8 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
     try {
       const apiBase = ''; // Rely on Vite dev proxy for /api routes
 
-      const url = (isRented && rentalId) 
-        ? `${apiBase}/api/v2/mrr/rental/${encodeURIComponent(rentalId)}?client=${mrrClient}&ts=${Date.now()}` 
+      const url = (isRented && rentalId)
+        ? `${apiBase}/api/v2/mrr/rental/${encodeURIComponent(rentalId)}?client=${mrrClient}&ts=${Date.now()}`
         : `${apiBase}/api/v2/mrr/rig/${encodeURIComponent(rigId || rig.id)}/info?client=${mrrClient}&ts=${Date.now()}`;
       // Adding ts parameter prevents the browser from serving cached results when refreshing stats
 
@@ -266,7 +266,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
           const rental = data.data || data;
           const pools = rental.pools || [];
           const firstPool = pools[0];
-          
+
           // Normalize NH data if present in rental info
           const nhPriceData = rental.nicehashPrice?.price || rental.nicehashPrice;
 
@@ -372,7 +372,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fbbf24' }}>
             {(() => {
               const effs = rigs.map(r => parseFloat(r.percent || r.hashrate?.average?.percent || 0)).filter(e => e > 0);
-              return effs.length ? (effs.reduce((a,b) => a+b, 0) / effs.length).toFixed(1) : '0.0';
+              return effs.length ? (effs.reduce((a, b) => a + b, 0) / effs.length).toFixed(1) : '0.0';
             })()}%
           </div>
         </div>
@@ -382,11 +382,11 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
         {filteredRigs.length === 0 && !loading && !error && (
           <div style={{ opacity: 0.5, textAlign: 'center', padding: '20px' }}>No rigs found for this account.</div>
         )}
-        
-        <div className="rig-grid-container" style={{ 
+
+        <div className="rig-grid-container" style={{
           minHeight: '800px',
           maxHeight: 'auto',
-          overflowY: 'auto', 
+          overflowY: 'auto',
           paddingRight: '8px',
           overscrollBehavior: 'contain'
         }}>
@@ -394,16 +394,16 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
             const isExpanded = expandedAlgos[algoName];
             return (
               <div key={algoName} className="algo-group-container" style={{ marginBottom: '10px' }}>
-                <div 
-                  className="algo-group-header" 
+                <div
+                  className="algo-group-header"
                   onClick={() => toggleAlgoGroup(algoName)}
-                  style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    padding: '10px 15px', 
-                    background: isExpanded ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.03)', 
-                    borderRadius: '6px', 
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px 15px',
+                    background: isExpanded ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.03)',
+                    borderRadius: '6px',
                     cursor: 'pointer',
                     border: '1px solid rgba(255,255,255,0.05)',
                     transition: 'all 0.2s ease'
@@ -417,281 +417,282 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                 </div>
 
                 {isExpanded && (
-                  <div className="rig-grid" style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
+                  <div className="rig-grid" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
                     gap: '15px',
                     padding: '15px 5px'
                   }}>
                     {rigsInGroup.map((rig) => {
-            const rigId = rig.id || rig.rigid || rig.rig_id;
-            const isMine = rigId && userRigIds.has(String(rigId));
-            const info = enrichedInfo[rig.id];
-            const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
-            const isRented = statusStr.includes('rented');
-            const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id;
-            const displayId = (isRented && rentalId) ? rentalId : rig.id;
-            const idLabel = (isRented && rentalId) ? 'Rental' : 'Rig';
-            
-            const rawNhData = algoMarketPrices[algoName.toUpperCase()] || info?.nicehashPrice;
-            // Support both direct results and results wrapped in a 'price' property
-            const nhBase = Array.isArray(rawNhData) ? rawNhData[0] : rawNhData;
-            const nhData = nhBase?.price || nhBase;
-            
-            const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised);
+                      const rigId = rig.id || rig.rigid || rig.rig_id;
+                      const isMine = rigId && userRigIds.has(String(rigId));
+                      const info = enrichedInfo[rig.id];
+                      const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
+                      const isRented = statusStr.includes('rented');
+                      const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id;
+                      const displayId = (isRented && rentalId) ? rentalId : rig.id;
+                      const idLabel = (isRented && rentalId) ? 'Rental' : 'Rig';
 
-            const hasNhPrice = nhData && (parseFloat(nhData.fixedPrice) > 0 || parseFloat(nhData.standardPrice?.fast || nhData.standardPrice) > 0);
+                      const rawNhData = algoMarketPrices[algoName.toUpperCase()] || info?.nicehashPrice;
+                      // Support both direct results and results wrapped in a 'price' property
+                      const nhBase = Array.isArray(rawNhData) ? rawNhData[0] : rawNhData;
+                      const nhData = nhBase?.price || nhBase;
 
-            // Calculate percentage difference
-            const mrrPriceNum = (() => {
-              let p = rig.price;
-              if (typeof p === 'object' && p !== null) {
-                const unit = rig.price_converted || 'BTC';
-                p = p[unit]?.price ?? p[unit] ?? '0';
-              }
-              const val = parseFloat(p || 0);
-              if (isRented) {
-                const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
-                if (hours > 0 && adsVal > 0) {
-                  return val / (hours / 24) / adsVal;
-                }
-              }
-              return val;
-            })();
-            
-            const diffPercent = calculatePriceComparison(
-              mrrPriceNum, 
-              rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH',
-              nhData?.fixedPrice || nhData?.standardPrice?.fast || nhData?.standardPrice || 0,
-              nhData?.speedUnit || 'TH'
-            );
+                      const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised);
 
-            return (
-              <div key={rig.id} style={{padding: '0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <div style={{ padding: '0 2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ background: isMine ? '#5c005f' : 'rgba(255,255,255,0.05)', color: 'white', fontSize: '8px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                    {idLabel}: #{displayId} 
-                  </span>
-                  {rig.mrrClient && (
-                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: rig.mrrClient === 'SL' ? '#3b82f6' : rig.mrrClient === 'BT' ? '#fbbf24' : rig.mrrClient === 'LN' ? '#10b981' : '#f87171' }}>
-                      {rig.mrrClient}
-                    </span>
-                  )}
-                </div>
-                <div className="rig-card" style={{ 
-                  background: isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)', 
-                  border: isMine ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)', 
-                  borderRadius: '8px', 
-                  padding: '10px',
-                  position: 'relative'
-                }}>
-                
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', gap: '8px' }}>
-                <strong style={{ fontSize: '12px', lineHeight: '1.2', flex: 1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{rig.name}</strong>
-                <span 
-                  style={{ 
-                    fontSize: '9px', 
-                    fontWeight: 'bold', 
-                    padding: '2px 6px', 
-                    borderRadius: '4px', 
-                    letterSpacing: '0.5px',
-                    whiteSpace: 'nowrap',
-                    ...getStatusClass(rig.status)
-                  }}>
-                  {(() => {
-                    const s = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toUpperCase();
-                    return s.includes('AVAILABLE') ? 'AVAILABLE' : s.includes('RENTED') ? 'RENTED' : s;
-                  })()}
-                </span>
-              </div>
+                      const hasNhPrice = nhData && (parseFloat(nhData.fixedPrice) > 0 || parseFloat(nhData.standardPrice?.fast || nhData.standardPrice) > 0);
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '10px', marginBottom: '8px' }}>
-                <div>
-                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Algo</div>
-                  <div style={{ color: '#60a5fa' }}>{info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>
-                    Avg Hashrate
-                  </div>
-                  <div>
-                    {(() => {
-                      if (info?.isRental) return info.average || '0 N/A';
-                      const hr = rig.hashrate || rig.hash;
-                      if (!hr && hr !== 0) return '0 N/A';
-                      if (typeof hr === 'object') {
-                        // Use Average for rented rigs if available in the payload
-                        if (isRented && hr.average) {
-                          if (typeof hr.average === 'object') {
-                            return hr.average.nice || `${parseFloat(hr.average.hash || 0).toFixed(2)} ${hr.average.type || ''}`.trim();
-                          }
-                          return hr.average;
+                      // Calculate percentage difference
+                      const mrrPriceNum = (() => {
+                        let p = rig.price;
+                        if (typeof p === 'object' && p !== null) {
+                          const unit = rig.price_converted || 'BTC';
+                          p = p[unit]?.price ?? p[unit] ?? '0';
                         }
-                        // Fallback to "nice" formatted strings or advertised rate
-                        return hr.advertised?.nice || hr.nice || hr.advertised?.hash || hr.advertised || '0';
-                      }
-                      return hr;
-                    })()}
-                    {info?.isRental && (
-                      <div style={{ fontSize: '11px', opacity: 0.7 }}>
-                        Advertised: <span style={{ color: '#34d399' }}>{info.advertised}</span>
-                      </div>
-                    )}
+                        const val = parseFloat(p || 0);
+                        if (isRented) {
+                          const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
+                          if (hours > 0 && adsVal > 0) {
+                            return val / (hours / 24) / adsVal;
+                          }
+                        }
+                        return val;
+                      })();
 
-                  </div>
-                </div>
-                <div>
-                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Price</div>
-                  <div style={{ color: '#fbbf24' }}>
-                    {(() => {
-                      let p = rig.price;
-                      if (typeof p === 'object' && p !== null) {
-                        const unit = rig.price_converted || 'BTC';
-                        p = p[unit]?.price ?? p[unit] ?? '0.00';
-                      }
-                      if (endpoint === '/rig' && !p) { // Marketplace fallback
-                        p = rig.min_price || rig.price;
-                      }
-                      return p || '0.00';
-                    })()}
-                    <small style={{ opacity: 0.5, marginLeft: '2px' }}>{rig.price_unit || 'BTC'}</small>
-                  {isRented && info?.price?.paid && (
-                    <div style={{ fontSize: '9px', color: '#10b981', marginTop: '1px' }}>
-                      Paid: <strong>{info.price.paid}</strong> <small style={{ opacity: 0.7 }}>{info.price.currency || 'BTC'}</small>
-                    </div>
-                  )}
-                  </div>
-                  {hasNhPrice && (
-                    <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>
-                        NH: <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>
-                          {parseFloat(nhData.fixedPrice || nhData.standardPrice?.fast || nhData.standardPrice || 0).toFixed(4)}
-                        </span> 
-                        <small style={{ marginLeft: '2px', opacity: 0.7 }}>{nhData.fixedPrice ? 'Fix' : 'Std'}</small>
-                        {diffPercent !== null && (
-                        <span style={{ color: parseFloat(diffPercent) < 0 ? '#34d399' : '#f87171', fontWeight: 'bold', marginLeft: '5px' }}>
-                          ({parseFloat(diffPercent) < 0 ? '' : '+'}{diffPercent}%)
-                        </span>
-                      )}</span>
-                    </div>
-                  )}
-                  {!hasNhPrice && !loading && !loadingInfoIds.has(rig.id) && (
-                    <div style={{ fontSize: '8px', color: '#d18d8d', opacity: 0.6, marginTop: '2px' }}>
-                      NH price unavailable
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>Start Time</div>
-                  <div style={{ fontSize: (info?.startTime || rig.start) ? '10px' : '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.startTime || rig.start || ''}>
-                    {formatRentalStartTime(info?.startTime || rig.start)}
-                  </div>
-                </div>
-              </div>
+                      const diffPercent = calculatePriceComparison(
+                        mrrPriceNum,
+                        rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH',
+                        nhData?.fixedPrice || nhData?.standardPrice?.fast || nhData?.standardPrice || 0,
+                        nhData?.speedUnit || 'TH'
+                      );
 
-              {(info || rig.host) && (
-                <div className="rig-pool-summary" style={{ background: 'rgba(0,0,0,0.25)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.02)', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.2)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.host || info?.stratumHost}><span style={{ opacity: 0.7 }}>Host:</span> {rig.host || info?.stratumHost || 'N/A'}</div>
-                    <div><span style={{ opacity: 0.7 }}>Port:</span> {rig.port || info?.stratumPort || 'N/A'}</div>
-                    <div style={{ gridColumn: 'span 2', overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.user || info?.username}><span style={{ opacity: 0.7 }}>User:</span> {rig.user || info?.username || 'N/A'}</div>
-                  </div>
-                  {isRented && (
-                    <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      {/* Fix: use rig.hashrate for list-view rentals to show efficiency immediately */}
-                      {(() => {
-                        const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
-                        const eff = parseFloat(effValue).toFixed(2);
-
-                        // Calculate Target Hashrate to reach 100% completion
-                        const startT = new Date((info?.startTime || rig.start) + (String(info?.startTime || rig.start).endsWith('UTC') ? '' : ' UTC')).getTime();
-                        const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)).endsWith('UTC') ? '' : ' UTC')).getTime();
-                        
-                        // Fix: Always use raw numbers for math to prevent unit mismatch errors
-                        const avgVal = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash);
-                        
-                        const hSuffix = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || '';
-
-                        const totalMs = endT - startT;
-                        const now = Date.now();
-                        const elapsedMs = Math.max(0, Math.min(now - startT, totalMs));
-                        const remainingMs = Math.max(0, endT - now);
-                        
-                        const totalExpectedHashes = adsVal * (totalMs / 1000);
-                        const actualHashesDone = avgVal * (elapsedMs / 1000);
-                        // Removing the Math.max(0, ...) clamp to allow showing surplus
-                        const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
-                        const targetHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
-                        const targetDiff = adsVal > 0 ? ((targetHashrate - adsVal) / adsVal * 100).toFixed(1) : null;
-                        const isBehind = targetHashrate > adsVal;
-                        // A truly negative target means you've already delivered 100% of the work for the WHOLE rental
-                        const displayTarget = targetHashrate < 0 ? 0 : targetHashrate;
-
-                        return <div>
-                          <div><span style={{ opacity: 0.8 }}>Effect:</span> 
-                          <span style={{ color: parseFloat(eff) < 100 ? '#f87171' : '#34d399', marginLeft: '4px' }}>{eff}%</span></div>
-                          <div style={{ fontSize: '9px', marginTop: '2px' }}>
-                            <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
-                            {targetDiff !== null && (
-                              <span style={{ color: isBehind ? '#71f89a' : '#d33434', marginLeft: '4px', fontWeight: 'bold' }}>
-                                ({targetDiff > 0 ? '+' : ''}{targetDiff}%)
+                      return (
+                        <div key={rig.id} style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <div style={{ padding: '0 2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ background: isMine ? '#5c005f' : 'rgba(255,255,255,0.05)', color: 'white', fontSize: '8px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                              {idLabel}: #{displayId}
+                            </span>
+                            {rig.mrrClient && (
+                              <span style={{ fontSize: '10px', fontWeight: 'bold', color: rig.mrrClient === 'SL' ? '#3b82f6' : rig.mrrClient === 'BT' ? '#fbbf24' : rig.mrrClient === 'LN' ? '#10b981' : '#f87171' }}>
+                                {rig.mrrClient}
                               </span>
                             )}
                           </div>
-                        </div>;
-                      })()}
-                      <div style={{ fontSize: '9px', textAlign: 'right' }}>
-                        {/* <div style={{ marginBottom: '2px' }}>{formatRentalStartTime(info?.startTime || rig.start)}</div> */}
-                        <div><span style={{ opacity: 0.8 }}>End in:</span> <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                          <div className="rig-card" style={{
+                            background: isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)',
+                            border: isMine ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '8px',
+                            padding: '10px',
+                            position: 'relative'
+                          }}>
 
-              <div style={{ display: 'flex', gap: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px' }}>
-                {(isMine || isRented) && (
-                  <button 
-                    className="btn-pro secondary" 
-                    style={{ 
-                      flex: 1, 
-                      fontSize: '10px', 
-                      padding: '4px',
-                      background: isRented ? 'rgba(167, 139, 250, 0.15)' : undefined,
-                      borderColor: isRented ? '#a78bfa' : undefined,
-                      color: isRented ? '#a78bfa' : undefined,
-                      fontWeight: isRented ? 'bold' : 'normal'
-                    }} 
-                    onClick={() => onOpenPool?.(rig, info)}
-                  >
-                    {isRented ? 'Pools' : 'Pools'}
-                  </button>
-                )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', gap: '8px' }}>
+                              <strong style={{ fontSize: '12px', lineHeight: '1.2', flex: 1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{rig.name}</strong>
+                              <span
+                                style={{
+                                  fontSize: '9px',
+                                  fontWeight: 'bold',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  letterSpacing: '0.5px',
+                                  whiteSpace: 'nowrap',
+                                  ...getStatusClass(rig.status)
+                                }}>
+                                {(() => {
+                                  const s = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toUpperCase();
+                                  return s.includes('AVAILABLE') ? 'AVAILABLE' : s.includes('RENTED') ? 'RENTED' : s;
+                                })()}
+                              </span>
+                            </div>
 
-                {isRented && info && (
-                  <button 
-                    className="btn-pro secondary" 
-                    style={{ width: '28px', fontSize: '12px', padding: '4px 0', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
-                    onClick={() => fetchRigDetailInfo(rig)}
-                    disabled={loadingInfoIds.has(rig.id)}
-                    title="Refresh Stats"
-                  >
-                    {loadingInfoIds.has(rig.id) ? '...' : '↻'}
-                  </button>
-                )}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '10px', marginBottom: '8px' }}>
+                              <div>
+                                <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Algo</div>
+                                <div style={{ color: '#60a5fa' }}>{info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</div>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>
+                                  Avg Hashrate
+                                </div>
+                                <div>
+                                  {(() => {
+                                    if (info?.isRental) return info.average || '0 N/A';
+                                    const hr = rig.hashrate || rig.hash;
+                                    if (!hr && hr !== 0) return '0 N/A';
+                                    if (typeof hr === 'object') {
+                                      // Use Average for rented rigs if available in the payload
+                                      if (isRented && hr.average) {
+                                        if (typeof hr.average === 'object') {
+                                          return hr.average.nice || `${parseFloat(hr.average.hash || 0).toFixed(2)} ${hr.average.type || ''}`.trim();
+                                        }
+                                        return hr.average;
+                                      }
+                                      // Fallback to "nice" formatted strings or advertised rate
+                                      return hr.advertised?.nice || hr.nice || hr.advertised?.hash || hr.advertised || '0';
+                                    }
+                                    return hr;
+                                  })()}
+                                  {info?.isRental && (
+                                    <div style={{ fontSize: '11px', opacity: 0.7 }}>
+                                      Advertised: <span style={{ color: '#34d399' }}>{info.advertised}</span>
+                                    </div>
+                                  )}
 
-                <button 
-                  className="btn-pro" 
-                  style={{ flex: 1, fontSize: '10px', padding: '4px' }} 
-                  onClick={() => info ? setEnrichedInfo(prev => { const n = {...prev}; delete n[rig.id]; return n; }) : fetchRigDetailInfo(rig)}
-                  disabled={loadingInfoIds.has(rig.id)}
-                >
-                  {loadingInfoIds.has(rig.id) ? '...' : info ? 'Hide Info' : 'More Info'}
-                </button>
-              </div>
-            </div>
-            </div>
-                    )})}
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Price</div>
+                                <div style={{ color: '#fbbf24' }}>
+                                  {(() => {
+                                    let p = rig.price;
+                                    if (typeof p === 'object' && p !== null) {
+                                      const unit = rig.price_converted || 'BTC';
+                                      p = p[unit]?.price ?? p[unit] ?? '0.00';
+                                    }
+                                    if (endpoint === '/rig' && !p) { // Marketplace fallback
+                                      p = rig.min_price || rig.price;
+                                    }
+                                    return p || '0.00';
+                                  })()}
+                                  <small style={{ opacity: 0.5, marginLeft: '2px' }}>{rig.price_unit || 'BTC'}</small>
+                                  {isRented && info?.price?.paid && (
+                                    <div style={{ fontSize: '9px', color: '#10b981', marginTop: '1px' }}>
+                                      Paid: <strong>{info.price.paid}</strong> <small style={{ opacity: 0.7 }}>{info.price.currency || 'BTC'}</small>
+                                    </div>
+                                  )}
+                                </div>
+                                {hasNhPrice && (
+                                  <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>
+                                      NH: <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>
+                                        {parseFloat(nhData.fixedPrice || nhData.standardPrice?.fast || nhData.standardPrice || 0).toFixed(4)}
+                                      </span>
+                                      <small style={{ marginLeft: '2px', opacity: 0.7 }}>{nhData.fixedPrice ? 'Fix' : 'Std'}</small>
+                                      {diffPercent !== null && (
+                                        <span style={{ color: parseFloat(diffPercent) < 0 ? '#34d399' : '#f87171', fontWeight: 'bold', marginLeft: '5px' }}>
+                                          ({parseFloat(diffPercent) < 0 ? '' : '+'}{diffPercent}%)
+                                        </span>
+                                      )}</span>
+                                  </div>
+                                )}
+                                {!hasNhPrice && !loading && !loadingInfoIds.has(rig.id) && (
+                                  <div style={{ fontSize: '8px', color: '#d18d8d', opacity: 0.6, marginTop: '2px' }}>
+                                    NH price unavailable
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>Start Time</div>
+                                <div style={{ fontSize: (info?.startTime || rig.start) ? '10px' : '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.startTime || rig.start || ''}>
+                                  {formatRentalStartTime(info?.startTime || rig.start)}
+                                </div>
+                              </div>
+                            </div>
+
+                            {(info || rig.host) && (
+                              <div className="rig-pool-summary" style={{ background: 'rgba(0,0,0,0.25)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.02)', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.2)' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.host || info?.stratumHost}><span style={{ opacity: 0.7 }}>Host:</span> {rig.host || info?.stratumHost || 'N/A'}</div>
+                                  <div><span style={{ opacity: 0.7 }}>Port:</span> {rig.port || info?.stratumPort || 'N/A'}</div>
+                                  <div style={{ gridColumn: 'span 2', overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.user || info?.username}><span style={{ opacity: 0.7 }}>User:</span> {rig.user || info?.username || 'N/A'}</div>
+                                </div>
+                                {isRented && (
+                                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    {/* Fix: use rig.hashrate for list-view rentals to show efficiency immediately */}
+                                    {(() => {
+                                      const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
+                                      const eff = parseFloat(effValue).toFixed(2);
+
+                                      // Calculate Target Hashrate to reach 100% completion
+                                      const startT = new Date((info?.startTime || rig.start) + (String(info?.startTime || rig.start).endsWith('UTC') ? '' : ' UTC')).getTime();
+                                      const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)).endsWith('UTC') ? '' : ' UTC')).getTime();
+
+                                      // Fix: Always use raw numbers for math to prevent unit mismatch errors
+                                      const avgVal = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash);
+
+                                      const hSuffix = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || '';
+
+                                      const totalMs = endT - startT;
+                                      const now = Date.now();
+                                      const elapsedMs = Math.max(0, Math.min(now - startT, totalMs));
+                                      const remainingMs = Math.max(0, endT - now);
+
+                                      const totalExpectedHashes = adsVal * (totalMs / 1000);
+                                      const actualHashesDone = avgVal * (elapsedMs / 1000);
+                                      // Removing the Math.max(0, ...) clamp to allow showing surplus
+                                      const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
+                                      const targetHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
+                                      const targetDiff = adsVal > 0 ? ((targetHashrate - adsVal) / adsVal * 100).toFixed(1) : null;
+                                      const isBehind = targetHashrate > adsVal;
+                                      // A truly negative target means you've already delivered 100% of the work for the WHOLE rental
+                                      const displayTarget = targetHashrate < 0 ? 0 : targetHashrate;
+
+                                      return <div>
+                                        <div><span style={{ opacity: 0.8 }}>Effect:</span>
+                                          <span style={{ color: parseFloat(eff) < 100 ? '#f87171' : '#34d399', marginLeft: '4px' }}>{eff}%</span></div>
+                                        <div style={{ fontSize: '9px', marginTop: '2px' }}>
+                                          <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
+                                          {targetDiff !== null && (
+                                            <span style={{ color: isBehind ? '#71f89a' : '#d33434', marginLeft: '4px', fontWeight: 'bold' }}>
+                                              ({targetDiff > 0 ? '+' : ''}{targetDiff}%)
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>;
+                                    })()}
+                                    <div style={{ fontSize: '9px', textAlign: 'right' }}>
+                                      {/* <div style={{ marginBottom: '2px' }}>{formatRentalStartTime(info?.startTime || rig.start)}</div> */}
+                                      <div><span style={{ opacity: 0.8 }}>End in:</span> <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /></div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            <div style={{ display: 'flex', gap: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px' }}>
+                              {(isMine || isRented) && (
+                                <button
+                                  className="btn-pro secondary"
+                                  style={{
+                                    flex: 1,
+                                    fontSize: '10px',
+                                    padding: '4px',
+                                    background: isRented ? 'rgba(167, 139, 250, 0.15)' : undefined,
+                                    borderColor: isRented ? '#a78bfa' : undefined,
+                                    color: isRented ? '#a78bfa' : undefined,
+                                    fontWeight: isRented ? 'bold' : 'normal'
+                                  }}
+                                  onClick={() => onOpenPool?.(rig, info)}
+                                >
+                                  {isRented ? 'Pools' : 'Pools'}
+                                </button>
+                              )}
+
+                              {isRented && info && (
+                                <button
+                                  className="btn-pro secondary"
+                                  style={{ width: '28px', fontSize: '12px', padding: '4px 0', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                  onClick={() => fetchRigDetailInfo(rig)}
+                                  disabled={loadingInfoIds.has(rig.id)}
+                                  title="Refresh Stats"
+                                >
+                                  {loadingInfoIds.has(rig.id) ? '...' : '↻'}
+                                </button>
+                              )}
+
+                              <button
+                                className="btn-pro"
+                                style={{ flex: 1, fontSize: '10px', padding: '4px' }}
+                                onClick={() => info ? setEnrichedInfo(prev => { const n = { ...prev }; delete n[rig.id]; return n; }) : fetchRigDetailInfo(rig)}
+                                disabled={loadingInfoIds.has(rig.id)}
+                              >
+                                {loadingInfoIds.has(rig.id) ? '...' : info ? 'Hide Info' : 'More Info'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>

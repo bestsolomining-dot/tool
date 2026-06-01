@@ -23,7 +23,9 @@ db.serialize(() => {
     algo TEXT,
     target_100 REAL,
     last_notified INTEGER DEFAULT 0,
-    last_updated INTEGER
+    last_updated INTEGER,
+    low_hashrate_start INTEGER DEFAULT 0,
+    zero_hashrate_start INTEGER DEFAULT 0
   )`);
   db.run(`CREATE TABLE IF NOT EXISTS mrr_nonces (
     client TEXT PRIMARY KEY,
@@ -65,7 +67,7 @@ async function initNonces() {
           try {
             mrrLastNonceByClient.set(row.client, BigInt(row.last_nonce));
             console.log(`[mrr:init] Loaded last nonce baseline for ${row.client}: ${row.last_nonce}`);
-          } catch (e) {}
+          } catch (e) { }
         });
       }
       resolve();
@@ -85,26 +87,26 @@ async function syncMrrClock() {
   console.log('[mrr:clock] Synchronizing with NiceHash server time...');
 
   mrrSyncPromise = (async () => {
-  try {
-    const { client } = resolveNhClient('BT');
-    if (!client) return;
+    try {
+      const { client } = resolveNhClient('BT');
+      if (!client) return;
 
-    const serverTimeMs = await client.getServerTime();
-    const localTimeMs = Date.now();
-    mrrClockOffset = BigInt(serverTimeMs) - BigInt(localTimeMs);
-    mrrClockSynced = true;
+      const serverTimeMs = await client.getServerTime();
+      const localTimeMs = Date.now();
+      mrrClockOffset = BigInt(serverTimeMs) - BigInt(localTimeMs);
+      mrrClockSynced = true;
 
-    if (Math.abs(Number(mrrClockOffset)) > 1000) {
-      console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (NH Server: ${serverTimeMs}, Local: ${localTimeMs})`);
-    } else {
-      console.info(`[mrr:clock] Synced with NiceHash. Offset: ${mrrClockOffset}ms.`);
+      if (Math.abs(Number(mrrClockOffset)) > 1000) {
+        console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (NH Server: ${serverTimeMs}, Local: ${localTimeMs})`);
+      } else {
+        console.info(`[mrr:clock] Synced with NiceHash. Offset: ${mrrClockOffset}ms.`);
+      }
+    } catch (err) {
+      console.warn(`[mrr:clock] Synchronization failed: ${err.message}. Using raw system clock.`);
+      mrrClockSynced = true; // Mark as attempted to avoid blocking every request
+    } finally {
+      mrrSyncPromise = null;
     }
-  } catch (err) {
-    console.warn(`[mrr:clock] Synchronization failed: ${err.message}. Using raw system clock.`);
-    mrrClockSynced = true; // Mark as attempted to avoid blocking every request
-  } finally {
-    mrrSyncPromise = null;
-  }
   })();
   return mrrSyncPromise;
 }
@@ -116,7 +118,7 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   // Explicitly expose custom headers so the browser allows the frontend to read them
   res.setHeader('Access-Control-Expose-Headers', 'X-MRR-Client, Retry-After, X-RateLimit-Limit');
-  
+
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -164,13 +166,6 @@ const nhConfigs = {
     apiKey: normalizeCredential(process.env.NICEHASH_API_KEY_PH),
     apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET_PH),
     orgId: normalizeCredential(process.env.NICEHASH_ORG_ID_PH),
-    environment: normalizeCredential(process.env.NICEHASH_ENVIRONMENT_PH || process.env.NICEHASH_ENVIRONMENT || 'production')
-  },
-  VN: {
-    apiKey: normalizeCredential(process.env.NICEHASH_API_KEY_VN),
-    apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET_VN),
-    orgId: normalizeCredential(process.env.NICEHASH_ORG_ID_VN),
-    environment: normalizeCredential(process.env.NICEHASH_ENVIRONMENT_VN || process.env.NICEHASH_ENVIRONMENT || 'production')
   }
 };
 
@@ -183,14 +178,10 @@ const mrrConfigs = {
     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_SL),
     apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_SL),
   },
-  
+
   LN: {
     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_LN),
     apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_LN),
-  },
-  VN: {
-    apiKey: normalizeCredential(process.env.MRR_KEY_RIG_VN),
-    apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_VN),
   },
 };
 
@@ -209,22 +200,19 @@ const nhInstances = new Map();
 function resolveNhClient(clientNameRaw) {
   const clientName = isAggregate(clientNameRaw) ? AGGREGATE_CLIENT : String(clientNameRaw || 'BT').trim().toUpperCase();
 
+  if (isAggregate(clientName)) return { client: nhInstances.get('BT'), clientName: AGGREGATE_CLIENT };
+
   const targetName = nhConfigs[clientName] ? clientName : 'BT';
 
   if (!nhInstances.has(targetName)) {
     const cfg = nhConfigs[targetName];
-    if (cfg.apiKey && cfg.apiSecret && cfg.orgId) {
-      try {
-        const newClient = new NiceHashClient({ ...cfg, name: targetName });
-        nhInstances.set(targetName, newClient);
-        return { client: newClient, clientName: targetName };
-      } catch (e) {
-        console.error(`[api:error] Failed to create NiceHashClient for "${targetName}" due to invalid configuration: ${e.message}`);
-        // Fallback to BT if client creation fails
-      }
+    if (cfg?.apiKey && cfg?.apiSecret && cfg?.orgId) {
+      const newClient = new NiceHashClient({ ...cfg, name: targetName });
+      nhInstances.set(targetName, newClient);
+      return { client: newClient, clientName: targetName };
     }
-    
-    // If target (like LN) isn't configured or client creation failed, fallback to BT and warn
+
+    // If target isn't configured, fallback to BT only for default requests
     const btClient = nhInstances.get('BT');
     if (targetName !== 'BT') console.warn(`[api:warn] Client "${targetName}" is not fully configured in .env. Falling back to BT.`);
     return { client: btClient, clientName: 'BT' };
@@ -386,7 +374,7 @@ const asyncHandler = fn => (req, res, next) => {
 // MRR Middleware to resolve client and attach app helper
 app.use('/api/v2', (req, res, next) => {
   if (req.path.startsWith('/mrr/') || req.path === '/algos/mapping') return next();
-  
+
   try {
     const { client, clientName } = resolveNhClient(req.query.client);
     if (client) {
@@ -462,7 +450,7 @@ app.get('/api/v2/accounting/balances', asyncHandler(async (req, res) => {
       try {
         const data = await getNiceHashApp(client).accounting.getBalances();
         if (data) results.push({ client: clientName, data });
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (results.length === 0) return res.json({ currencies: [], total: { available: "0", pending: "0", totalBalance: "0", currency: "BTC" } });
@@ -496,7 +484,7 @@ app.get('/api/v2/mining/address', asyncHandler(async (req, res) => res.json(awai
 app.get('/api/v2/mining/rigs2', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || 'BT').toUpperCase();
   if (isAggregate(clientParam)) {
-    const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
+    const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
     const allRigs = [];
     const processedClients = new Set();
     for (const acct of nhAccounts) {
@@ -508,7 +496,7 @@ app.get('/api/v2/mining/rigs2', asyncHandler(async (req, res) => {
         if (data?.miningRigs) {
           allRigs.push(...data.miningRigs.map(r => ({ ...r, nhClient: clientName })));
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     return res.json({ miningRigs: allRigs });
   }
@@ -528,7 +516,7 @@ app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
 
   let data;
   if (isAggregate(clientParam)) {
-    const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
+    const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
     const allOrders = [];
     const processedClients = new Set();
     for (const acct of nhAccounts) {
@@ -540,7 +528,7 @@ app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
         if (result?.list) {
           allOrders.push(...result.list.map(o => ({ ...o, nhClient: clientName })));
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     data = { list: allOrders };
   } else {
@@ -567,7 +555,7 @@ app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
       }));
 
       const headers = Object.keys(flattenedData[0]).join(',');
-      const rows = flattenedData.map(row => 
+      const rows = flattenedData.map(row =>
         Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
       ).join('\n');
 
@@ -593,7 +581,7 @@ app.get('/api/v2/hashpower/rented-summary', asyncHandler(async (req, res) => {
 
   const clientParam = String(req.query.client || 'ALL').toUpperCase();
   const nhAccounts = isAggregate(clientParam)
-    ? Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret)
+    ? Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k))
     : [clientParam];
 
   let totalPaid = 0;
@@ -602,11 +590,11 @@ app.get('/api/v2/hashpower/rented-summary', asyncHandler(async (req, res) => {
   for (const acct of nhAccounts) {
     const { client, clientName } = resolveNhClient(acct);
     if (!client || (acct !== 'BT' && clientName === 'BT' && acct !== 'LN')) continue;
-    
+
     try {
       const result = await getNiceHashApp(client).hashpower.getMyOrders({ limit: 1000 });
       const list = result?.list || [];
-      
+
       list.forEach(o => {
         const status = typeof o.status === 'object' ? o.status.code : o.status;
         const price = parseFloat(o.price);
@@ -616,7 +604,7 @@ app.get('/api/v2/hashpower/rented-summary', asyncHandler(async (req, res) => {
           matchingOrders.push({ id: o.id, account: clientName, price: o.price, paid: o.payedAmount });
         }
       });
-    } catch (e) {}
+    } catch (e) { }
   }
 
   res.json({ success: true, maxPrice, totalPaid: totalPaid.toFixed(8), count: matchingOrders.length, orders: matchingOrders });
@@ -625,7 +613,7 @@ app.get('/api/v2/hashpower/rented-summary', asyncHandler(async (req, res) => {
 app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || 'BT').toUpperCase();
   if (isAggregate(clientParam)) {
-    const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
+    const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
     const processedClients = new Set();
     for (const acct of nhAccounts) {
       const { client, clientName } = resolveNhClient(acct);
@@ -634,10 +622,10 @@ app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => {
       try {
         const data = await getNiceHashApp(client).hashpower.getOrderDetail(req.params.orderId);
         if (data && !data.error) {
-           res.set('X-NH-Client', clientName);
-           return res.json(data);
+          res.set('X-NH-Client', clientName);
+          return res.json(data);
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }
   res.json(await req.nhApp.hashpower.getOrderDetail(req.params.orderId));
@@ -654,7 +642,7 @@ app.get('/api/v2/pools', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || 'BT').toUpperCase();
   if (isAggregate(clientParam)) {
     const allPools = [];
-    const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
+    const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
     const processedClients = new Set();
     for (const acct of nhAccounts) {
       const { client, clientName } = resolveNhClient(acct);
@@ -665,7 +653,7 @@ app.get('/api/v2/pools', asyncHandler(async (req, res) => {
         if (result?.list) {
           allPools.push(...result.list.map(p => ({ ...p, nhClient: clientName })));
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     return res.json({ list: allPools, totalCount: allPools.length });
   }
@@ -700,7 +688,7 @@ async function nextMrrNonce(clientName) {
     const now14 = nowMs * 10n; // 14 digits (ms + 1 decimal)
     nonce = now14 > lastNonce ? now14 : lastNonce + 1n;
   }
-  
+
   mrrLastNonceByClient.set(cleanName, nonce);
   await new Promise((resolve) => {
     db.run(
@@ -720,17 +708,17 @@ function resolveMrrClient(clientNameRaw) {
   if (!mrrInstances.has(clientName)) {
     let config = mrrConfigs[clientName];
 
-    const envKey = process.env[`MRR_KEY_RIG_${lookupSuffix}`] || 
-                   process.env[`MRR_API_KEY_${lookupSuffix}`];
-    const envSecret = process.env[`MRR_SECRET_RIG_${lookupSuffix}`] || 
-                     process.env[`MRR_API_SECRET_${lookupSuffix}`];
+    const envKey = process.env[`MRR_KEY_RIG_${lookupSuffix}`] ||
+      process.env[`MRR_API_KEY_${lookupSuffix}`];
+    const envSecret = process.env[`MRR_SECRET_RIG_${lookupSuffix}`] ||
+      process.env[`MRR_API_SECRET_${lookupSuffix}`];
 
     // Look for nonce baseline in .env using multiple naming conventions
     const envNonce = normalizeCredential(
-      process.env[`RIG_NOUNCE_${lookupSuffix}`] || 
-      process.env[`RIG_NONCE_${lookupSuffix}`] || 
-      process.env[`RIG_${lookupSuffix}_NOUNCE`] || 
-      process.env[`RIG_${lookupSuffix}_NONCE`] || 
+      process.env[`RIG_NOUNCE_${lookupSuffix}`] ||
+      process.env[`RIG_NONCE_${lookupSuffix}`] ||
+      process.env[`RIG_${lookupSuffix}_NOUNCE`] ||
+      process.env[`RIG_${lookupSuffix}_NONCE`] ||
       process.env[`MRR_NOUNCE_${lookupSuffix}`] ||
       process.env[`MRR_NONCE_${lookupSuffix}`]
     );
@@ -744,27 +732,24 @@ function resolveMrrClient(clientNameRaw) {
 
     if (config?.apiKey && config?.apiSecret) {
       mrrInstances.set(clientName, config);
-      
-      if (envNonce) {
-        try {
-          const bigEnv = BigInt(envNonce);
-          // Relaxed limit to support 19-digit nanosecond nonces
-          if (bigEnv > 9999999999999999999n) {
-            console.warn(`[mrr:${clientName}] Baseline nonce from .env is too large (${bigEnv}). Ignoring to prevent Bad Nonce errors.`);
-          } else {
-            mrrLastNonceByClient.set(clientName, bigEnv);
-            console.log(`[mrr:${clientName}] Initialized with baseline nonce from .env: ${bigEnv}`);
-          }
-        } catch (e) {
-          console.warn(`[mrr:${clientName}] Invalid nonce in environment: ${envNonce}`);
-        }
-      }
     }
   }
 
   const clientConfig = mrrInstances.get(clientName);
-  if (!clientConfig || !clientConfig.apiKey || !clientConfig.apiSecret) {
-    const err = new Error(`MRR credentials missing for client "${clientName}". Ensure MRR_KEY_RIG_${lookupSuffix} and MRR_SECRET_RIG_${lookupSuffix} are set in .env.`);
+  if (!clientConfig) {
+    // If we're aggregate, we shouldn't be resolving a config for 'VN' itself
+    if (isAggregate(clientName)) return { clientName, clientConfig: null };
+
+    const lookupSuffix = clientName;
+    const envKey = process.env[`MRR_KEY_RIG_${lookupSuffix}`];
+    const envSecret = process.env[`MRR_SECRET_RIG_${lookupSuffix}`];
+    if (envKey && envSecret) {
+       const cfg = { apiKey: normalizeCredential(envKey), apiSecret: normalizeCredential(envSecret) };
+       mrrInstances.set(clientName, cfg);
+       return { clientName, clientConfig: cfg };
+    }
+    
+    const err = new Error(`MRR credentials missing for client "${clientName}". Ensure MRR_KEY_RIG_${lookupSuffix} is set.`);
     err.statusCode = 400;
     throw err;
   }
@@ -864,7 +849,7 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
 
     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedEndpoint}`);
-    
+
     // Endpoint for signature: MRR expects the full path after /api/v2, including the leading slash.
     const sigEndpoint = normalizedEndpoint;
     // Strip tool-internal query parameters before forwarding to MRR
@@ -875,7 +860,7 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
         baseUrl.searchParams.set(key, String(value));
       }
     }
-    
+
     const send = async (nStr, sig, authHeaders = {}) => request(baseUrl.toString(), {
       method: requestMethod,
       headers: {
@@ -948,7 +933,7 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
 async function mrrRequest(endpoint, req, res, method = 'GET', body = undefined) {
   // Destructure to remove tool-internal parameters (client, endpoint, ts) from the forwarding query
   const { client: clientQuery, endpoint: _internalPath, ts: _ts, ...forwardQuery } = req.query || {};
-  
+
   const targetClient = isAggregate(clientQuery) ? defaultMrrClient : clientQuery;
 
   const { statusCode, data, clientName } = await mrrApiCall({
@@ -962,6 +947,13 @@ async function mrrRequest(endpoint, req, res, method = 'GET', body = undefined) 
   res.status(statusCode).json(data);
 }
 
+// Track offline counts per account to detect sudden increases
+const lastOfflineCounts = new Map();
+const lastAlertTimes = new Map(); // Tracks last alert timestamp per account
+
+const ALERT_COOLDOWN_MS = 600000; // 10 minutes cooldown for same alert type
+const WARNING_RIG_THRESHOLD = 5; // Alert if warning rigs exceed this
+
 /**
  * Background monitor for MRR rentals. 
  * Saves state to SQLite and triggers Telegram notifications.
@@ -972,25 +964,71 @@ async function runRentalMonitor(forceNotify = false) {
   const mrrAccts = Object.keys(mrrConfigs).filter(k => mrrConfigs[k].apiKey && mrrConfigs[k].apiSecret);
   const now = Date.now();
   const notifications = [];
+  const summaryParts = [];
+  let totalAll = 0;
+  let availableAll = 0;
+  let rentedAll = 0;
+  const allRentedRigs = [];
 
   console.log(`[${monitorTime}] [monitor] Starting check for ${mrrAccts.length} accounts...`);
 
   for (const acct of mrrAccts) {
     try {
-      // If triggered manually, fetch and send a summary of all rigs for this account
-      if (forceNotify) {
-        const rigsRes = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: acct });
-        if (rigsRes.data?.success) {
-          const rigList = Array.isArray(rigsRes.data.data) ? rigsRes.data.data : (rigsRes.data.data?.rigs || []);
-          const total = rigList.length;
-          const available = rigList.filter(r => String(r.status || '').toLowerCase().includes('available')).length;
-          const rentedCount = rigList.filter(r => String(r.status || '').toLowerCase().includes('rented')).length;
+      // Always fetch rig list to monitor offline count changes even in background cycles
+      const rigsRes = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: acct });
+      if (rigsRes.data?.success) {
+        const rigList = Array.isArray(rigsRes.data.data) ? rigsRes.data.data : (rigsRes.data.data?.rigs || []);
+        const total = rigList.length;
+        const parseStatus = (rig) => String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
+        const rentedRigs = [];
+        let availableCount = 0;
+        let offlineCount = 0;
+        let disabledCount = 0;
+        let warningCount = 0;
 
-          const summaryMsg = `📊 <b>[Account Summary: ${acct}]</b>\n\n` +
-                            `<b>Total Rigs:</b> ${total}\n` +
-                            `<b>Available:</b> ${available}\n` +
-                            `<b>Rented:</b> ${rentedCount}`;
-          await sendTelegramInternal(summaryMsg);
+        for (const rig of rigList) {
+          const status = parseStatus(rig);
+          if (status.includes('rented') || status.includes('active')) rentedRigs.push(rig);
+          if (status.includes('available') || status.includes('online')) availableCount += 1;
+          if (status.includes('offline')) offlineCount += 1;
+          if (status.includes('disabled')) disabledCount += 1;
+          if (status.includes('warning')) warningCount += 1;
+        }
+        const rentedCount = rentedRigs.length;
+
+        const msg = `📊 <b>[Account Summary: ${acct}]</b>\n\n` +
+          `Total Rigs: ${total}\n` +
+          `Available: ${availableCount}\n` +
+          `Rented: ${rentedCount}`;
+
+        // Auto-send summary heartbeat if requested or on interval
+        if (forceNotify || (now - (lastAlertTimes.get(`${acct}_summary`) || 0) >= 1800000)) {
+          await sendTelegramInternal(msg).then(() => {
+            console.log(`[${monitorTime}] [monitor] Sending Telegram summary for account ${acct}`);
+          }).catch(e => console.error(`[monitor:error] Summary Telegram failed for ${acct}: ${e.message}`));
+          lastAlertTimes.set(`${acct}_summary`, now);
+        }
+
+        // ALERT: Warning Threshold
+        const alertKeyWarn = `${acct}_warn`;
+        const lastWarnAlert = lastAlertTimes.get(alertKeyWarn) || 0;
+        if (warningCount >= WARNING_RIG_THRESHOLD && (now - lastWarnAlert > ALERT_COOLDOWN_MS)) {
+          const warnMsg = `⚠️ <b>[Status Alert: ${acct}]</b>\n\n` +
+            `High number of rigs in warning state: <b>${warningCount}</b>\n` +
+            `Please check your rig connectivity.`;
+          await sendTelegramInternal(warnMsg).catch(e => console.error(`[monitor:error] Failed to send warning alert: ${e.message}`));
+          lastAlertTimes.set(alertKeyWarn, now);
+        }
+
+        if (forceNotify) {
+          summaryParts.push(
+            `▪️ <b>${acct}</b>: ${total} rigs (Avail: ${availableCount}, Rented: ${rentedRigs.length}, Offline: ${offlineCount}, Disabled: ${disabledCount}, Warn: ${warningCount})`
+          );
+
+          totalAll += total;
+          availableAll += availableCount;
+          rentedAll += rentedRigs.length;
+          allRentedRigs.push(...rentedRigs.map(r => ({ ...r, acct })));
         }
       }
 
@@ -1003,41 +1041,102 @@ async function runRentalMonitor(forceNotify = false) {
         const info = extractRentalInfo(r);
         const startTime = new Date(r.start + (String(r.start).endsWith('UTC') ? '' : ' UTC')).getTime();
         const endTime = new Date(r.end + (String(r.end).endsWith('UTC') ? '' : ' UTC')).getTime();
-        
+
         const elapsedMs = now - startTime;
         const remainingMs = endTime - now;
         const totalDurationMs = endTime - startTime;
 
         // Fix: Use raw floats from normalized info object
-        const totalExpectedHashes = parseFloat(info.hashrate.advertised) * (totalDurationMs / 1000);
-        const actualHashesDone = parseFloat(info.hashrate.average) * (elapsedMs / 1000);
+        const advertised = parseFloat(info.hashrate.advertised);
+        const average = parseFloat(info.hashrate.average);
+        const totalExpectedHashes = advertised * (totalDurationMs / 1000);
+        const actualHashesDone = average * (elapsedMs / 1000);
         const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
         const requiredHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
         const displayTarget = requiredHashrate < 0 ? 0 : requiredHashrate;
+        const efficiency = parseFloat(info.percent || 0);
+        const currentHash = info.hashrate.current;
+
+        // Fetch previous condition states from DB
+        const row = await new Promise((resolve) => {
+          db.get(`SELECT last_notified, low_hashrate_start, zero_hashrate_start FROM rentals WHERE id = ?`, [String(r.id)], (err, row) => resolve(row));
+        });
+
+        let lowHashStart = row?.low_hashrate_start || 0;
+        let zeroHashStart = row?.zero_hashrate_start || 0;
+
+        // Rule: < 50% hashrate for 15 mins
+        if (efficiency < 50 && efficiency > 0) {
+          if (lowHashStart === 0) lowHashStart = now;
+          if (now - lowHashStart >= 900000) { // 15 mins
+            const alertKey = `${r.id}_low_50`;
+            const lastAlert = lastAlertTimes.get(alertKey) || 0;
+            if (now - lastAlert > ALERT_COOLDOWN_MS) {
+              const msg = `⚠️ <b>[Performance Alert: ${acct}]</b>\n\n` +
+                `Rig <b>${r.name || r.id}</b> is underperforming!\n` +
+                `Efficiency: <b>${efficiency}%</b> (< 50% for 15m)`;
+              await sendTelegramInternal(msg).catch(e => console.error(`[monitor:error] Low hashrate alert failed: ${e.message}`));
+              console.log(`[${monitorTime}] [monitor] Sending Telegram alert: [Performance Alert] for Rig ${r.id}`);
+              lastAlertTimes.set(alertKey, now);
+            }
+          }
+        } else {
+          lowHashStart = 0;
+        }
+
+        // Rule: Zero hashrate for 5 mins
+        if (currentHash === 0) {
+          if (zeroHashStart === 0) zeroHashStart = now;
+          if (now - zeroHashStart >= 300000) { // 5 mins
+            const alertKey = `${r.id}_zero_5m`;
+            const lastAlert = lastAlertTimes.get(alertKey) || 0;
+            if (now - lastAlert > ALERT_COOLDOWN_MS) {
+              const msg = `🚨 <b>[Critical Alert: ${acct}]</b>\n\n` +
+                `Rig <b>${r.name || r.id}</b> has ZERO hashrate!\n` +
+                `Duration: <b>> 5 mins</b>`;
+              await sendTelegramInternal(msg).catch(e => console.error(`[monitor:error] Zero hashrate alert failed: ${e.message}`));
+              console.log(`[${monitorTime}] [monitor] Sending Telegram alert: [Critical Alert] for Rig ${r.id}`);
+              lastAlertTimes.set(alertKey, now);
+            }
+          }
+        } else {
+          zeroHashStart = 0;
+        }
+
+        // Rule: Startup efficiency < 70% in first hour (< 1h completed)
+        if (elapsedMs > 0 && elapsedMs < 3600000 && efficiency < 70 && efficiency > 0) {
+          const startupKey = `${r.id}_startup_70`;
+          const lastAlert = lastAlertTimes.get(startupKey) || 0;
+          if (now - lastAlert > ALERT_COOLDOWN_MS) {
+            const msg = `⚠️ <b>[Startup Alert: ${acct}]</b>\n\n` +
+              `Rig <b>${r.name || r.id}</b> startup efficiency is low!\n` +
+              `Efficiency: <b>${efficiency}%</b> (< 70% in first hour)\n` +
+              `Account: ${acct}`;
+            console.log(`[${monitorTime}] [monitor] Sending Telegram alert: [Startup Alert] for Rig ${r.id}`);
+            await sendTelegramInternal(msg).catch(e => console.error(`[monitor:error] Startup alert failed: ${e.message}`));
+            lastAlertTimes.set(startupKey, now);
+          }
+        }
 
         // Update Database Snapshot
         await new Promise((resolve) => {
-          db.run(`INSERT INTO rentals (id, name, client, algo, target_100, last_updated) 
-                  VALUES (?, ?, ?, ?, ?, ?)
+          db.run(`INSERT INTO rentals (id, name, client, algo, target_100, last_updated, low_hashrate_start, zero_hashrate_start) 
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                   ON CONFLICT(id) DO UPDATE SET 
                   name=excluded.name, client=excluded.client, algo=excluded.algo, 
-                  target_100=excluded.target_100, last_updated=excluded.last_updated`,
-            [String(r.id), r.name || r.id, acct, info.algo, requiredHashrate, now],
+                  target_100=excluded.target_100, last_updated=excluded.last_updated,
+                  low_hashrate_start=excluded.low_hashrate_start, zero_hashrate_start=excluded.zero_hashrate_start`,
+            [String(r.id), r.name || r.id, acct, info.algo, requiredHashrate, now, lowHashStart, zeroHashStart],
             () => resolve()
           );
         });
 
-        // Fetch last notification state to decide if we send heartbeat
-        const row = await new Promise((resolve) => {
-          db.get(`SELECT last_notified FROM rentals WHERE id = ?`, [String(r.id)], (err, row) => resolve(row));
-        });
-
         const lastNotified = row?.last_notified || 0;
-        const shouldNotify = forceNotify || (now - lastNotified >= 600000); 
+        const shouldNotify = forceNotify || (now - lastNotified >= 600000);
 
         if (shouldNotify) {
           const remHours = Math.max(0, remainingMs / 3600000).toFixed(2);
-          
+
           let hbType = forceNotify ? 'Forced Monitor' : 'Heartbeat';
           let icon = '💓';
           if (lastNotified === 0 && !forceNotify) {
@@ -1046,14 +1145,14 @@ async function runRentalMonitor(forceNotify = false) {
           }
 
           const msg = `${icon} <b>[${hbType}]</b>\n\n` +
-                      `<b>Rig:</b> ${r.name || r.id}\n` +
-                      `<b>Algo:</b> ${info.algo}\n` +
-                      `<b>Current Avg:</b> ${info.niceAverageHashrate}\n` +
-                      `<b>Efficiency:</b> ${info.percent}%\n` +
-                      `<b>Paid:</b> ${info.price.paid} ${info.price.currency}\n` +
-                      `<b>Remaining:</b> ${remHours}h\n` +
-                      `<b>Target to 100%:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}\n` +
-                      `<b>Account:</b> ${acct}`;
+            `<b>Rig:</b> ${r.name || r.id}\n` +
+            `<b>Algo:</b> ${info.algo}\n` +
+            `<b>Current Avg:</b> ${info.niceAverageHashrate}\n` +
+            `<b>Efficiency:</b> ${info.percent}%\n` +
+            `<b>Paid:</b> ${info.price.paid} ${info.price.currency}\n` +
+            `<b>Remaining:</b> ${remHours}h\n` +
+            `<b>Target to 100%:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}\n` +
+            `<b>Account:</b> ${acct}`;
 
           try {
             console.log(`[${monitorTime}] [monitor] Sending Telegram alert: ${hbType} for Rig ${r.id}`);
@@ -1071,6 +1170,20 @@ async function runRentalMonitor(forceNotify = false) {
       console.error(`[monitor:error] Client ${acct}: ${err.message}`);
     }
   }
+
+  if (forceNotify && summaryParts.length > 0) {
+    const allSummaryMsg = `🌐 <b>Global Rig Summary</b>\n\n` +
+      summaryParts.join('\n') +
+      `\n\n<b>Totals</b>: ${totalAll} rigs | ${availableAll} Avail | ${rentedAll} Rented` +
+      (allRentedRigs.length > 0 ? `\n\n<b>Active Rentals:</b>\n${allRentedRigs.map(r => `- [${r.acct}] ${r.name || r.id}`).join('\n')}` : '');
+
+    try {
+      await sendTelegramInternal(allSummaryMsg);
+    } catch (e) {
+      console.error(`[monitor:error] Failed to send ALL summary: ${e.message}`);
+    }
+  }
+
   return notifications;
 }
 
@@ -1078,7 +1191,10 @@ async function runRentalMonitor(forceNotify = false) {
 async function sendTelegramInternal(message) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (!botToken || !chatId) throw new Error('Telegram credentials missing');
+  if (!botToken || !chatId) {
+    console.warn('[telegram] Telegram credentials missing. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env');
+    throw new Error('Telegram credentials missing');
+  }
 
   const res = await request(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
@@ -1092,6 +1208,26 @@ async function sendTelegramInternal(message) {
 app.post('/api/v2/mrr/monitor/run', asyncHandler(async (req, res) => {
   const report = await runRentalMonitor(true);
   res.json({ success: true, report });
+}));
+
+// Test endpoint for the "New Rental" notice formatting
+app.post('/api/v2/test/rented-notice', asyncHandler(async (req, res) => {
+  const msg = `🚀 <b>[New Rental] (Test)</b>\n\n` +
+    `<b>Rig:</b> Test-Rig-Notice\n` +
+    `<b>Algo:</b> SHA256\n` +
+    `<b>Current Avg:</b> 1.23 TH/s\n` +
+    `<b>Efficiency:</b> 100.0%\n` +
+    `<b>Paid:</b> 0.00045000 BTC\n` +
+    `<b>Remaining:</b> 24.00h\n` +
+    `<b>Target to 100%:</b> 1.23 TH/s\n` +
+    `<b>Account:</b> TEST_BT`;
+
+  try {
+    const tgRes = await sendTelegramInternal(msg);
+    res.json({ success: true, message: 'Test notice sent', telegram: tgRes });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 }));
 
 // Fetch current database state
@@ -1133,7 +1269,7 @@ function extractRentalInfo(rental) {
   if (hr && typeof hr === 'object') {
     // MRR hashrate object structure
     currentHash = parseFloat(hr.hashrate || hr.current || hr.hash || 0);
-    
+
     if (hr.advertised && typeof hr.advertised === 'object') {
       advertisedHash = parseFloat(hr.advertised.hash || hr.advertised.hashrate || 0);
       hashrateSuffix = hr.advertised.type || hr.advertised.suffix || '';
@@ -1147,7 +1283,7 @@ function extractRentalInfo(rental) {
     } else {
       averageHash = parseFloat(hr.average || 0);
     }
-    
+
     hashrateSuffix = hashrateSuffix || hr.suffix || '';
   } else if (typeof hr === 'number' || typeof hr === 'string') {
     currentHash = parseFloat(hr);
@@ -1156,12 +1292,12 @@ function extractRentalInfo(rental) {
 
   // Determine a 'nice' formatted hashrate for display
   const niceHashrate = (hr && typeof hr === 'object' && hr.nice) ||
-                       (hr && typeof hr === 'object' && hr.advertised?.nice) ||
-                       (advertisedHash > 0 ? `${advertisedHash} ${hashrateSuffix}`.trim() : 
-                       (currentHash > 0 ? `${currentHash} ${hashrateSuffix}`.trim() : '0 N/A'));
+    (hr && typeof hr === 'object' && hr.advertised?.nice) ||
+    (advertisedHash > 0 ? `${advertisedHash} ${hashrateSuffix}`.trim() :
+      (currentHash > 0 ? `${currentHash} ${hashrateSuffix}`.trim() : '0 N/A'));
 
-  const niceAverageHashrate = (hr && typeof hr === 'object' && hr.average?.nice) || 
-                              (averageHash > 0 ? `${averageHash.toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');
+  const niceAverageHashrate = (hr && typeof hr === 'object' && hr.average?.nice) ||
+    (averageHash > 0 ? `${averageHash.toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');
 
   return {
     algo, // Algorithm name (e.g., "SHA256")
@@ -1205,10 +1341,10 @@ function extractRigInfo(payload) {
         const poolHost = pool.stratumHost || pool.host || '';
         const poolUser = pool.username || pool.user || '';
         const poolPass = pool.password || pool.pass || '';
-    const poolPortFromHost = (poolHost.match(/:(\d+)$/) || [])[1];
-    const poolPort = Number(pool.port || pool.stratumPort || poolPortFromHost || null);
+        const poolPortFromHost = (poolHost.match(/:(\d+)$/) || [])[1];
+        const poolPort = Number(pool.port || pool.stratumPort || poolPortFromHost || null);
 
-    if (poolAlgo && poolHost && poolUser && poolPass && Number.isFinite(poolPort)) {
+        if (poolAlgo && poolHost && poolUser && poolPass && Number.isFinite(poolPort)) {
           return { miningAlgorithm: poolAlgo, stratumHost: poolHost, stratumPort: poolPort, username: poolUser, password: poolPass };
         }
       }
@@ -1227,7 +1363,7 @@ app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
   const targetEndpoint = req.query.endpoint || '/rig/mine';
 
   if (isAggregate(clientParam)) {
-    const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
+    const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret && !isAggregate(c));
     const allRigs = [];
     const errors = [];
 
@@ -1246,7 +1382,7 @@ app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
               const id = String(item.rigId || item.rigid || item.id || item.rentalid || '');
               return [id, item.pools];
             }).filter(i => i[0]));
-            
+
             rigs.forEach(rig => {
               const pools = poolMap.get(String(rig.id));
               if (pools && pools.length > 0) {
@@ -1308,7 +1444,7 @@ app.get('/api/v2/mrr/rigs/pools', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
 
   if (isAggregate(clientParam)) {
-    const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
+    const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret && !isAggregate(c));
     const allResults = [];
     const errors = [];
 
@@ -1316,7 +1452,7 @@ app.get('/api/v2/mrr/rigs/pools', asyncHandler(async (req, res) => {
       try {
         const { data: rigsData } = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: clientName });
         const rigs = Array.isArray(rigsData?.data) ? rigsData.data : (Array.isArray(rigsData?.data?.rigs) ? rigsData.data.rigs : []);
-        
+
         if (rigsData?.success && rigs.length > 0) {
           const rigIds = rigs.map(r => r.id).join(';');
           const { data: poolsData } = await mrrApiCall({ endpoint: `/rig/${rigIds}/pool`, clientNameRaw: clientName });
@@ -1340,7 +1476,7 @@ app.get('/api/v2/mrr/rigs/pools', asyncHandler(async (req, res) => {
   });
 
   const rigs = Array.isArray(rigsData?.data) ? rigsData.data : (Array.isArray(rigsData?.data?.rigs) ? rigsData.data.rigs : []);
-  
+
   if (!rigsData?.success || rigs.length === 0) {
     res.set('X-MRR-Client', clientName);
     return res.json(rigsData || { success: true, data: [] });
@@ -1367,27 +1503,27 @@ app.get('/api/v2/mrr/profiles', asyncHandler(async (req, res) => mrrRequest('/pr
 app.get('/api/v2/mrr/compare', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
   const algoParam = req.query.algorithm || req.query.algo;
-  
-  const { data: mrrData } = await mrrApiCall({ 
-    endpoint: '/rig', 
-    query: { algo: algoParam }, 
-    clientNameRaw: clientParam 
+
+  const { data: mrrData } = await mrrApiCall({
+    endpoint: '/rig',
+    query: { algo: algoParam },
+    clientNameRaw: clientParam
   });
-  
-  const rigs = Array.isArray(mrrData?.data?.rigs) ? mrrData.data.rigs : 
-               Array.isArray(mrrData?.data) ? mrrData.data : [];
+
+  const rigs = Array.isArray(mrrData?.data?.rigs) ? mrrData.data.rigs :
+    Array.isArray(mrrData?.data) ? mrrData.data : [];
 
   if (rigs.length === 0) return res.json({ success: true, data: [] });
 
   const uniqueAlgos = [...new Set(rigs.map(r => String(r.algo || r.type || 'SHA256').toUpperCase()))];
   const { client: nhClient } = resolveNhClient(clientParam);
   const nhApp = getNiceHashApp(nhClient);
-  
+
   const priceMap = new Map();
   for (const a of uniqueAlgos) {
     try {
       priceMap.set(a, await nhApp.hashpower.getOrderPrice({ algorithm: a, market: 'USA' }));
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const comparison = rigs.map(r => {
@@ -1407,8 +1543,8 @@ app.get('/api/v2/mrr/compare', asyncHandler(async (req, res) => {
 /** Reusable logic for fetching rentals (current or history) with merged pool info */
 async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
   const isAll = isAggregate(clientParam);
-  const allClientNames = isAll 
-    ? Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret)
+  const allClientNames = isAll
+    ? Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret && !isAggregate(c))
     : [clientParam];
 
   const allRentals = [];
@@ -1440,7 +1576,7 @@ async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
           allRentals.push(...rentals);
         }
       } else if (!isAll) {
-         return { statusCode, data, clientName }; // Return raw error for single client
+        return { statusCode, data, clientName }; // Return raw error for single client
       }
     } catch (err) { if (!isAll) throw err; errors.push({ client: clientName, message: err.message }); }
   }
@@ -1484,7 +1620,7 @@ app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
     if (statusCode === 200 && data?.success && rental) {
       // Fallback: Specific rental endpoints often miss algo/hashrate. 
       // If missing, search for this ID in the active list which is usually "richer".
-      
+
       // Check normalized values to see if we actually found useful info
       const initialNorm = extractRentalInfo(rental);
       const hasAlgo = initialNorm.algo !== 'Unknown';
@@ -1514,7 +1650,7 @@ app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
         const pData = poolRes.data.data || poolRes.data;
         rental.pools = Array.isArray(pData.pools) ? pData.pools : (Array.isArray(pData) ? pData : []);
       }
-      
+
       // Attach a normalized object for the UI to consume easily
       const normalized = extractRentalInfo(rental);
 
@@ -1525,7 +1661,7 @@ app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
         try {
           const { client: nhClient } = resolveNhClient(clientParam);
           rental.nicehashPrice = await getNiceHashApp(nhClient).hashpower.getOrderPrice({ algorithm: nhAlgo, market: 'USA' });
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (data.data) data.data = { ...rental, normalized };
@@ -1535,7 +1671,7 @@ app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
   }
 
   if (isAggregate(clientParam)) {
-    const clients = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
+    const clients = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret && !isAggregate(c));
     for (const clientName of clients) {
       const { statusCode, data } = await fetchAggressiveRental(clientName);
       if (statusCode === 200 && data?.success) {
@@ -1588,7 +1724,7 @@ app.get('/api/v2/mrr/rig/:rigIds/info', asyncHandler(async (req, res) => {
         try {
           const { client: nhClient } = resolveNhClient(req.query.client);
           info.nicehashPrice = await getNiceHashApp(nhClient).hashpower.getOrderPrice({ algorithm: nhAlgo, market: 'USA' });
-        } catch (e) {}
+        } catch (e) { }
       }
 
       return { rigId: id, success: true, ...info };
@@ -1725,14 +1861,14 @@ async function cleanAllCache() {
 /**
  * Keep logic for local execution if needed
  */
-if (process.env.RUN_MAIN === 'true') {
+if (process.env.RUN_MAIN !== 'false') {
   // Always clear cache and initialize nonces/clock on startup
-  cleanAllCache(); 
-  
+  cleanAllCache();
+
   initNonces().then(() => {
     syncMrrClock().then(() => {
       syncManager.run(); // Background sync
-      
+
       // Initialize Monitor Loop (Every 1 minute)
       setInterval(() => runRentalMonitor(), 60000);
       // Run once immediately

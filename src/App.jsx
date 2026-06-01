@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import Pools from './components/Pools';
 import Modal from './components/Modal';
 import HashrateCalculator from './components/HashrateCalculator';
 import HashpowerBot from './components/HashpowerBot';
 import NiceHash from './components/NiceHash';
 import MiningRigRental from './components/MiningRigRental';
+import { createApiClient } from './core/apiClient';
 import './App.css';
 
 export default function App() {
@@ -12,7 +13,6 @@ export default function App() {
   const [error, setError] = useState('');
   const [output, setOutput] = useState(null);
   const [lastCall, setLastCall] = useState(null);
-  const [activeSection, setActiveSection] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
   const [calculatorModalOpen, setCalculatorModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
@@ -20,135 +20,55 @@ export default function App() {
   const [market, setMarket] = useState('');
   const [mrrClient, setMrrClient] = useState('BT');
 
-  const scrollToPools = useCallback(() => {
-    const poolsEl = document.querySelector('.pools-section');
-    if (poolsEl) poolsEl.scrollIntoView({ behavior: 'smooth' });
-  }, []);
-
-  const callApi = useCallback(async (path, options = {}) => {
-    const startedAt = performance.now();
-    const method = options.method || 'GET';
-
-    const { query, section, ...fetchOptions } = options;
-    let finalPath = path;
-
-    const enrichedQuery = { ...query };
-    // NiceHash API v2 requires a 'ts' parameter. We also add it to MRR calls to prevent browser caching.
-    if (path.startsWith('/api/v2/')) {
-      enrichedQuery.ts = Date.now();
-    }
-
-    if (Object.keys(enrichedQuery).length > 0) {
-      const params = new URLSearchParams();
-      Object.entries(enrichedQuery).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) params.append(key, String(value));
-      });
-      const qs = params.toString();
-      if (qs) finalPath += (finalPath.includes('?') ? '&' : '?') + qs;
-    }
-
-    if (!options.silent) {
-      setActiveSection(section || null);
-      setLoading(true);
-      setError('');
-    }
-    if (!options.silent) {
-      setLastCall({ method, path: finalPath, status: 'Pending', durationMs: null });
-    }
-
-    const apiBase = window.location.port === '5173'
-      ? `${window.location.protocol}//${window.location.hostname}:3000`
-      : '';
-
-    const headers = { ...fetchOptions.headers };
-    let body = fetchOptions.body;
-
-    // Automatically stringify object bodies and set the default Content-Type
-    if (body && typeof body === 'object' && !(body instanceof FormData)) {
-      body = JSON.stringify(body);
-      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
-    }
-
-    try {
-      const res = await fetch(`${apiBase}${finalPath}`, {
-        ...fetchOptions,
-        method,
-        headers,
-        body,
-        mode: 'cors',
-        credentials: 'omit',
-      });
-
-      let data = null;
-      if (res.status !== 204 && res.status !== 205) {
-        const text = await res.text();
-        try {
-          data = text ? JSON.parse(text) : null;
-        } catch {
-          data = text;
-        }
+  const callApi = useMemo(() => createApiClient({
+    onState: ({ type, payload }) => {
+      if (type === 'request-start') {
+        setLoading(true);
+        setError('');
+        setLastCall({ method: payload.method, path: payload.path, status: 'Pending', durationMs: null });
+        return;
       }
-
-      if (!options.silent) {
-        setLastCall({
-          method,
-          path: finalPath,
-          status: `${res.status} ${res.statusText}`,
-          durationMs: Math.round(performance.now() - startedAt),
-        });
+      if (type === 'request-finish') {
+        setLastCall(payload);
+        return;
       }
-
-      // Improved detection for both JSON errors and plain string errors
-      const isAppError = !res.ok ||
-        (data && typeof data === 'object' && (data.success === false || data.error)) ||
-        (typeof data === 'string' && data.length > 0 && !data.startsWith('{'));
-
-      if (!isAppError && (res.status === 304 || res.ok)) {
-        if (!options.silent) {
-          setError('');
-          if (res.status === 304) {
-            setModalContent({
-              status: res.status,
-              message: res.statusText,
-              note: 'Content not modified. Displaying previously fetched data if available.',
-            });
-          } else {
-            setOutput(data);
-            setModalContent(data || { success: true });
-          }
-          setResponseModalOpen(true);
+      if (type === 'request-success') {
+        setError('');
+        if (payload.status === 304) {
+          setModalContent({
+            status: payload.status,
+            message: payload.statusText,
+            note: 'Content not modified. Displaying previously fetched data if available.',
+          });
+        } else {
+          setOutput(payload.data);
+          setModalContent(payload.data || { success: true });
         }
-      } else if (!options.silent) {
-        const errorMsg =
-          typeof data === 'string'
-            ? data
-            : data?.errors?.[0]?.message || data?.error || data?.message || data?.data?.message || res.statusText;
-
-        setError(errorMsg);
-        if (options.showModal) {
-          setModalContent(data || { error: errorMsg, status: res.status });
+        setResponseModalOpen(true);
+        return;
+      }
+      if (type === 'request-error') {
+        setError(payload.errorMsg);
+        if (payload.showModal) {
+          setModalContent(payload.data || { error: payload.errorMsg, status: payload.status });
           setResponseModalOpen(true);
         } else {
           setOutput(null);
           setModalContent(null);
           setResponseModalOpen(false);
         }
+        return;
       }
-      return data || (res.ok ? { success: true } : null);
-    } catch (err) {
-      if (!options.silent) {
-        setError(err.message || String(err));
-        setLastCall((prev) => ({
-          ...prev,
-          status: 'Failed',
-          durationMs: Math.round(performance.now() - startedAt),
-        }));
+      if (type === 'request-failed') {
+        setError(payload.error);
+        setLastCall(prev => ({ ...(prev || {}), status: 'Failed', durationMs: payload.durationMs }));
+        return;
       }
-      throw err;
-    } finally {
-      if (!options.silent) setLoading(false);
+      if (type === 'request-end') {
+        setLoading(false);
+      }
     }
-  }, []);
+  }), []);
 
   const handleMiningCall = useCallback((path, opts = {}) => {
     return callApi(path, { ...opts, section: 'mining' });

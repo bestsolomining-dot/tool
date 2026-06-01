@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import MrrRigs from './MrrRigs';
 import Modal from './Modal';
 import TelegramManager, { useTelegram, calculateRemainingTime } from './TelegramManager';
+import { toUtcTimestamp } from '../core/time';
 
 /** Safely extracts an array from various MRR API response shapes */
 function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'items', 'data']) {
@@ -18,7 +19,7 @@ function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'ite
   if (Array.isArray(payload.data)) {
     return payload.data;
   }
-  
+
   if (payload.rentals && Array.isArray(payload.rentals)) return payload.rentals;
 
   // If payload.data is an object, recurse once to look for array keys inside the envelope
@@ -71,12 +72,12 @@ export function CountdownTimer({ endTime }) {
 function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
   // MRR API v2 GET /rental returns { "success": true, "data": { "rentals": [...] } }
   // OR sometimes the array is directly at data.data: { "success": true, "data": [...] }
-  
+
   // Detect errors: check for failure flag, explicit error string, or plain error message
-  const isError = !data || 
-                 (typeof data === 'string' && data.length > 0 && !data.startsWith('{')) || 
-                 (typeof data === 'object' && data.success === false) || 
-                 data.error;
+  const isError = !data ||
+    (typeof data === 'string' && data.length > 0 && !data.startsWith('{')) ||
+    (typeof data === 'object' && data.success === false) ||
+    data.error;
 
   if (isError) {
     const errMsg = typeof data === 'string' ? data : (data?.error || data?.message || data?.data?.message || 'Unauthorized or API Error');
@@ -91,7 +92,7 @@ function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
     );
   }
 
-  const rentals = extractArray(data);
+  const rentals = useMemo(() => extractArray(data), [data]);
 
   if (!Array.isArray(rentals) || !rentals.length) return <div style={{ padding: '30px', textAlign: 'center', opacity: 0.5 }}>No active rentals found.</div>;
 
@@ -123,16 +124,16 @@ function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
         <tbody>
           {rentals.map(r => {
             const now = Date.now();
-            const start = new Date(r.start + (String(r.start).endsWith('UTC') ? '' : ' UTC')).getTime();
-            const end = new Date(r.end + (String(r.end).endsWith('UTC') ? '' : ' UTC')).getTime();
+            const start = toUtcTimestamp(r.start);
+            const end = toUtcTimestamp(r.end);
             const ads = getRaw(r.hashrate?.advertised || r.advertised);
             const avg = getRaw(r.hashrate?.average || r.average);
             const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
-            
+
             const totalMs = end - start;
             const elapsedMs = Math.max(0, Math.min(now - start, totalMs));
             const remainingMs = Math.max(0, end - now);
-            
+
             const totalExpectedHashes = ads * (totalMs / 1000);
             const actualHashesDone = avg * (elapsedMs / 1000);
             // Allow deficit to be negative (surplus)
@@ -141,51 +142,52 @@ function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
             const displayTarget = target < 0 ? 0 : target;
 
             return (
-            <tr key={r.id} style={{ borderLeft: avg < ads * 0.9 ? '3px solid #f87171' : 'none' }}>
-              <td style={{ fontFamily: 'monospace', color: '#94a3b8', fontSize: '11px' }}>{r.id}</td>
-              <td style={{ fontWeight: 'bold' }}>
-                {r.rig?.name || r.name || r.rig_name || r.rigName || 'N/A'}
-              </td>
-              <td style={{ color: '#60a5fa' }}>{r.rig?.type || r.algo || r.algorithm || r.miningAlgorithm || 'N/A'}</td>
-              {mrrClient === 'ALL' && (
-                <td><span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>{r.mrrClient || 'N/A'}</span></td>
-              )}
-              <td style={{ fontFamily: 'monospace' }}>
-                {r.hashrate?.advertised?.nice || (typeof r.hashrate === 'object' ? r.hashrate?.advertised : r.hashrate) || '0'} 
-                <small>{!r.hashrate?.advertised?.nice && (r.hashrate?.suffix || '')}</small>
-              </td>
-              <td style={{ fontSize: '10px' }}>
-                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px', whiteSpace: 'nowrap' }} title={r.host}>
-                  {r.host ? `${r.host}:${r.port}` : <span style={{ opacity: 0.4 }}>No Data</span>}
-                </div>
-                <div style={{ opacity: 0.5, fontSize: '9px' }}>{r.user}</div>
-              </td>
-              <td style={{ color: '#fbbf24' }}>
-                <strong style={{ color: target > ads ? '#f87171' : '#34d399' }}>{displayTarget.toFixed(2)}</strong> <small style={{ opacity: 0.5 }}>{suffix}</small>
-              </td>
-              <td style={{ color: '#fbbf24', textAlign: 'right' }}>
-                {typeof r.price === 'object' ? (r.price?.paid || r.price?.advertised || r.price?.price || '0.00') : (r.price || '0.00')} <small style={{ opacity: 0.5 }}>{r.price?.currency || r.currency || 'BTC'}</small>
-              </td>
-              <td>
-                <CountdownTimer endTime={r.end} />
-              </td>
-              <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                <span className={String(r.status?.status || r.status || '').toLowerCase().includes('active') || String(r.status?.status || r.status || '').toLowerCase().includes('rented') ? 'status-success' : 'status-ready'}>
-                  {String(r.status?.status || r.status || '').toUpperCase().includes('ACTIVE') ? 'RENTED' : (r.status?.status || r.status || (r.end ? 'FINISHED' : 'READY'))}
-                </span>
-              </td>
-              <td style={{ textAlign: 'right' }}>
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                  <button className="text-button" onClick={() => onOpenPools?.(r)} style={{ fontSize: '11px' }}>
-                    Pools
-                  </button>
-                  <button className="text-button" onClick={() => onNotice?.(r, target)} style={{ fontSize: '11px', color: '#24A1DE' }}>
-                    Notice
-                  </button>
-                </div>
-              </td>
-            </tr>
-          )})}
+              <tr key={r.id} style={{ borderLeft: avg < ads * 0.9 ? '3px solid #f87171' : 'none' }}>
+                <td style={{ fontFamily: 'monospace', color: '#94a3b8', fontSize: '11px' }}>{r.id}</td>
+                <td style={{ fontWeight: 'bold' }}>
+                  {r.rig?.name || r.name || r.rig_name || r.rigName || 'N/A'}
+                </td>
+                <td style={{ color: '#60a5fa' }}>{r.rig?.type || r.algo || r.algorithm || r.miningAlgorithm || 'N/A'}</td>
+                {mrrClient === 'ALL' && (
+                  <td><span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>{r.mrrClient || 'N/A'}</span></td>
+                )}
+                <td style={{ fontFamily: 'monospace' }}>
+                  {r.hashrate?.advertised?.nice || (typeof r.hashrate === 'object' ? r.hashrate?.advertised : r.hashrate) || '0'}
+                  <small>{!r.hashrate?.advertised?.nice && (r.hashrate?.suffix || '')}</small>
+                </td>
+                <td style={{ fontSize: '10px' }}>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px', whiteSpace: 'nowrap' }} title={r.host}>
+                    {r.host ? `${r.host}:${r.port}` : <span style={{ opacity: 0.4 }}>No Data</span>}
+                  </div>
+                  <div style={{ opacity: 0.5, fontSize: '9px' }}>{r.user}</div>
+                </td>
+                <td style={{ color: '#fbbf24' }}>
+                  <strong style={{ color: target > ads ? '#f87171' : '#34d399' }}>{displayTarget.toFixed(2)}</strong> <small style={{ opacity: 0.5 }}>{suffix}</small>
+                </td>
+                <td style={{ color: '#fbbf24', textAlign: 'right' }}>
+                  {typeof r.price === 'object' ? (r.price?.paid || r.price?.advertised || r.price?.price || '0.00') : (r.price || '0.00')} <small style={{ opacity: 0.5 }}>{r.price?.currency || r.currency || 'BTC'}</small>
+                </td>
+                <td>
+                  <CountdownTimer endTime={r.end} />
+                </td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <span className={String(r.status?.status || r.status || '').toLowerCase().includes('active') || String(r.status?.status || r.status || '').toLowerCase().includes('rented') ? 'status-success' : 'status-ready'}>
+                    {String(r.status?.status || r.status || '').toUpperCase().includes('ACTIVE') ? 'RENTED' : (r.status?.status || r.status || (r.end ? 'FINISHED' : 'READY'))}
+                  </span>
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button className="text-button" onClick={() => onOpenPools?.(r)} style={{ fontSize: '11px' }}>
+                      Pools
+                    </button>
+                    <button className="text-button" onClick={() => onNotice?.(r, target)} style={{ fontSize: '11px', color: '#24A1DE' }}>
+                      Notice
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -214,13 +216,13 @@ export function MrrPoolsTable({ data }) {
   } else {
     // Normalize pool results from various response shapes (lists or flat results)
     const rawResults = extractArray(data, ['pools', 'data', 'result']);
-    
+
     // If the extracted array contains objects that are pools themselves (flat list), wrap them
     results = rawResults.length > 0 && !rawResults[0].pools && (rawResults[0].user || rawResults[0].host || rawResults[0].stratumHost)
       ? [{ id: 'Pools', pools: rawResults }]
       : rawResults;
   }
-  
+
   if (!results.length) return <div style={{ padding: '30px', textAlign: 'center', opacity: 0.5 }}>No pool data found.</div>;
 
   return (
@@ -228,7 +230,7 @@ export function MrrPoolsTable({ data }) {
       {results.map((res, idx) => (
         <div key={res.rigId || res.rigid || res.id || idx} style={{ marginBottom: '25px', borderBottom: '1px solid #333', paddingBottom: '15px' }}>
           <h4 style={{ color: '#ff1cbb', margin: '25px 5px 10px 0' }}>
-            { (res.rigId || res.rigid) ? `Rig ID: ${res.rigId || res.rigid}` : res.id ? `Rental ID: ${res.id}` : 'Target ID: N/A'}
+            {(res.rigId || res.rigid) ? `Rig ID: ${res.rigId || res.rigid}` : res.id ? `Rental ID: ${res.id}` : 'Target ID: N/A'}
           </h4>
           <table className="pro-table">
             <thead>
@@ -242,9 +244,9 @@ export function MrrPoolsTable({ data }) {
                   <td>{p.port || p.stratumPort || 'N/A'}</td>
                   <td style={{ fontWeight: 'bold' }}>{p.user || p.username || 'N/A'}</td>
                   <td>
-                    {p.algo || p.algorithm || p.type || 
-                     res.algo || res.algorithm || res.type || 
-                     res.rentals?.algo || res.rentals?.type || 'N/A'}
+                    {p.algo || p.algorithm || p.type ||
+                      res.algo || res.algorithm || res.type ||
+                      res.rentals?.algo || res.rentals?.type || 'N/A'}
                   </td>
                 </tr>
               ))}
@@ -256,7 +258,7 @@ export function MrrPoolsTable({ data }) {
   );
 }
 
-export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algorithm, showRentalsInline = false, onOpenMrrPools }) {
+export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algorithm, onOpenMrrPools }) {
   const [activeModal, setActiveModal] = useState(null); // 'list', 'pool', 'rental'
   const [modalData, setModalData] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
@@ -265,26 +267,29 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
 
   const [rentals, setRentals] = useState([]);
   const [loadingRentals, setLoadingRentals] = useState(false);
-  
+
   // Notification State
   const [newRentalFound, setNewRentalFound] = useState(null);
   const knownRentalIds = useRef(new Set());
   const notifiedAlerts = useRef(new Set()); // Track stateful alerts (Rule 2, 3) to prevent spam
-  const lastHeartbeatTimes = useRef(new Map()); // Track 10m heartbeats for active rentals
+  const conditionTimers = useRef(new Map()); // rentalId -> { zeroStart, lowStart }
+  const fetchInFlightRef = useRef(false);
 
   const fetchActiveRentals = useCallback(async () => {
-    if (!mrrClient || loadingRentals) {
+    if (!mrrClient) {
       setRentals([]);
       knownRentalIds.current.clear();
       return;
     }
+    if (fetchInFlightRef.current) return;
+    fetchInFlightRef.current = true;
     setLoadingRentals(true);
     try {
       const result = await onCall('/api/v2/mrr/rentals', { query: { client: mrrClient }, silent: true });
       if (result?.success) {
         const newList = extractArray(result);
         const now = Date.now();
-        
+
         // Detect new rentals
         if (knownRentalIds.current.size > 0) {
           const fresh = newList.find(r => !knownRentalIds.current.has(String(r.id)));
@@ -298,68 +303,90 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
             }
           }
         }
-        
+
         // Monitoring Logic for Telegram Alerts
         newList.forEach(r => {
           const rentalId = String(r.id);
           // Normalize start/end times for cross-browser parsing
-          const startTime = new Date(r.start + (String(r.start).endsWith('UTC') ? '' : ' UTC')).getTime();
-          const endTime = new Date(r.end + (String(r.end).endsWith('UTC') ? '' : ' UTC')).getTime();
-          
+          const startTime = toUtcTimestamp(r.start);
+          const endTime = toUtcTimestamp(r.end);
+
           const elapsedMs = now - startTime;
           const remainingMs = endTime - now;
-          
+
           const currentHash = parseFloat(r.hashrate?.average?.hash || r.hashrate?.current || r.hash || 0);
-          // Use 15m avg if available in the rig status sub-object, otherwise fallback to the global average
-          const avg15m = parseFloat(r.rig?.status?.last_15min || r.hashrate?.average?.hash || currentHash || 0);
           const efficiency = parseFloat(r.hashrate?.average?.percent || r.percent || 100);
 
-          // RULE 1: Started 00:00 - 00:02 (elapsed <= 2m), current hashrate is 0
-          // We send this alert every iteration (30s) as requested by not using suppression.
-          if (elapsedMs >= 0 && elapsedMs <= 120000 && currentHash === 0) {
-            tg.notifyZeroHashrate(r, elapsedMs).catch(() => {});
+          let timers = conditionTimers.current.get(rentalId) || { zeroStart: 0, lowStart: 0 };
+
+          // RULE: Notice if rented hashrate < 50% in 15 mins
+          const lowPerfKey = `${rentalId}_low_50`;
+          if (efficiency < 50 && efficiency > 0) {
+            if (timers.lowStart === 0) timers.lowStart = now;
+            if (now - timers.lowStart >= 900000) { // 15 mins
+              if (!notifiedAlerts.current.has(lowPerfKey)) {
+                tg.notifyLowEfficiency(r, remainingMs, efficiency).then(() => {
+                  notifiedAlerts.current.add(lowPerfKey);
+                }).catch(() => { });
+              }
+            }
+          } else {
+            timers.lowStart = 0;
+            notifiedAlerts.current.delete(lowPerfKey);
           }
 
-          // RULE 2: 15m AVG hashrate is 0
-          // Note: We only check this after 15m elapsed to ensure the data has had time to populate.
-          const rule2Key = `${rentalId}_zero_15m`;
-          if (avg15m === 0 && elapsedMs > 900000) { 
-            if (!notifiedAlerts.current.has(rule2Key)) {
-              tg.notifyHashrateDrop(r).then(() => {
-                notifiedAlerts.current.add(rule2Key);
-              }).catch(() => {});
+          // RULE: Notice new rented; 5 mins 0 hashrate
+          const zeroHashKey = `${rentalId}_zero_5m`;
+          if (currentHash === 0) {
+            if (timers.zeroStart === 0) timers.zeroStart = now;
+            if (now - timers.zeroStart >= 300000) { // 5 mins
+              if (!notifiedAlerts.current.has(zeroHashKey)) {
+                tg.notifyZeroHashrate(r, now - timers.zeroStart).then(() => {
+                  notifiedAlerts.current.add(zeroHashKey);
+                }).catch(() => { });
+              }
             }
-          } else if (avg15m > 0) {
-            notifiedAlerts.current.delete(rule2Key); // Reset when hashrate returns
+          } else {
+            timers.zeroStart = 0;
+            notifiedAlerts.current.delete(zeroHashKey);
           }
 
-          // RULE 3: Remaining time < 1h, Efficiency < 80%
-          const rule3Key = `${rentalId}_low_eff`;
-          if (remainingMs > 0 && remainingMs < 3600000 && efficiency < 80) {
-            if (!notifiedAlerts.current.has(rule3Key)) {
-              tg.notifyLowEfficiency(r, remainingMs, efficiency).then(() => {
-                notifiedAlerts.current.add(rule3Key);
-              }).catch(() => {});
+          // RULE: Notice if newly rented (< 1h completed) and efficiency < 70%
+          const startupKey = `${rentalId}_startup_70`;
+          if (elapsedMs > 0 && elapsedMs < 3600000 && efficiency < 70 && efficiency > 0) {
+            if (!notifiedAlerts.current.has(startupKey)) {
+              tg.notifyStartupEfficiencyAlert(r, efficiency).then(() => {
+                notifiedAlerts.current.add(startupKey);
+              }).catch(() => { });
             }
-          } else if (efficiency >= 80) {
-            notifiedAlerts.current.delete(rule3Key); // Reset when efficiency recovers
+          } else if (efficiency >= 70 || elapsedMs >= 3600000) {
+            notifiedAlerts.current.delete(startupKey);
           }
+
+          // RULE: Notice if ending soon (< 1h remaining) and efficiency < 70%
+          const completionKey = `${rentalId}_completion_70`;
+          if (remainingMs > 0 && remainingMs < 3600000 && efficiency < 70 && efficiency > 0) {
+            if (!notifiedAlerts.current.has(completionKey)) {
+              tg.notifyCompletionEfficiencyAlert(r, efficiency).then(() => {
+                notifiedAlerts.current.add(completionKey);
+              }).catch(() => { });
+            }
+          } else if (efficiency >= 70 || remainingMs >= 3600000 || remainingMs <= 0) {
+            notifiedAlerts.current.delete(completionKey);
+          }
+
+          conditionTimers.current.set(rentalId, timers);
         });
 
         // Update known IDs
         newList.forEach(r => knownRentalIds.current.add(String(r.id)));
-
-        // Cleanup heartbeat map for finished rentals to prevent memory leaks
-        const currentIds = new Set(newList.map(r => String(r.id)));
-        for (const id of lastHeartbeatTimes.current.keys()) {
-          if (!currentIds.has(id)) lastHeartbeatTimes.current.delete(id);
-        }
 
         setRentals(newList);
       }
     } catch (err) {
       console.error("Auto Fetch Rentals Error:", err);
     } finally {
+      fetchInFlightRef.current = false;
       setLoadingRentals(false);
     }
   }, [mrrClient, onCall, tg]);
@@ -375,7 +402,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
     return () => clearInterval(interval);
   }, [fetchActiveRentals]);
 
-  const openManagementModal = async (type, id = null) => { // id is for specific rig actions
+  const openManagementModal = async (type) => {
     setActiveModal(type);
     if (type === 'list') return; // MrrRigs fetches its own data
 
@@ -400,7 +427,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
       } else if (type === 'mrr_nh_compare') {
         path = '/api/v2/mrr/compare';
       }
-      
+
       const result = await onCall(path, { query: { client: clientToUse }, silent: true });
       setModalData(result);
     } catch (err) {
@@ -413,7 +440,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
 
   return (
     <div className="rig-section nh-theme" style={{ marginLeft: '5px', marginRight: '5px', marginTop: '5px', paddingTop: '5px', paddingBottom: '5px' }}>
-      <h2 className="section-title" style={{paddingBottom: '10px' }}>Mining Rig Rentals</h2>
+      <h2 className="section-title" style={{ paddingBottom: '10px' }}>Mining Rig Rentals</h2>
       {/* Client Selector */}
       <div className="market-inputs">
         <small style={{ opacity: 0.5, fontSize: '10px', marginLeft: '2px', display: 'block', marginBottom: '4px' }}>ACTIVE MRR CLIENT</small>
@@ -421,7 +448,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           <option value="BT">MRR Client: BT</option>
           <option value="SL">MRR Client: SL</option>
           <option value="LN">MRR Client: LN</option>
-          <option value="VN">MRR Client: VN (Aggregated)</option>
+          <option value="VN">MRR Client: VN (all MRR clients)</option>
         </select>
       </div>
 
@@ -441,16 +468,16 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
       </div>
 
       {/* New Rental Notification Modal */}
-      <Modal 
-        isOpen={!!newRentalFound} 
-        onClose={() => setNewRentalFound(null)} 
-        title="🚀 New Rig Rented!" 
+      <Modal
+        isOpen={!!newRentalFound}
+        onClose={() => setNewRentalFound(null)}
+        title="🚀 New Rig Rented!"
         maxWidth="500px"
       >
         <div style={{ textAlign: 'center', padding: '20px' }}>
-          <div style={{ 
-            width: '60px', height: '60px', background: 'rgba(16, 185, 129, 0.2)', 
-            borderRadius: '50%', display: 'flex', alignItems: 'center', 
+          <div style={{
+            width: '60px', height: '60px', background: 'rgba(16, 185, 129, 0.2)',
+            borderRadius: '50%', display: 'flex', alignItems: 'center',
             justifyContent: 'center', margin: '0 auto 20px', color: '#10b981', fontSize: '24px'
           }}>
             ✔
@@ -466,9 +493,9 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
               <div style={{ fontWeight: 'bold', color: '#fbbf24' }}>{newRentalFound?.hours} Hours</div>
             </div>
           </div>
-          <div style={{ 
-            background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', 
-            padding: '12px', borderRadius: '6px', color: '#34d399', fontSize: '13px', marginBottom: '20px' 
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)',
+            padding: '12px', borderRadius: '6px', color: '#34d399', fontSize: '13px', marginBottom: '20px'
           }}>
             This rig has been successfully added to your active rentals.
           </div>
@@ -484,8 +511,8 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
 
       {/* Inline Quick View */}
       <div style={{ marginTop: '24px' }}>
-        <MrrRigs 
-          mrrClient={mrrClient} 
+        <MrrRigs
+          mrrClient={mrrClient}
           algo={algorithm}
           onOpenPool={onOpenMrrPools}
           onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
@@ -493,35 +520,35 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
       </div>
 
       {/* Dedicated Management Modals */}
-      <Modal 
-        isOpen={!!activeModal} 
-        onClose={() => setActiveModal(null)} 
+      <Modal
+        isOpen={!!activeModal}
+        onClose={() => setActiveModal(null)}
         title={
           activeModal === 'list' ? 'Rigs Manager' :
-          activeModal === 'mrr_nh_compare' ? 'MRR Rigs vs NiceHash Market Price' :
-          // activeModal === 'list_all_rigs' ? 'All Available Rigs' :
-          activeModal === 'rental_history' ? 'Rental History' : 'Active Rentals'
+            activeModal === 'mrr_nh_compare' ? 'MRR Rigs vs NiceHash Market Price' :
+              // activeModal === 'list_all_rigs' ? 'All Available Rigs' :
+              activeModal === 'rental_history' ? 'Rental History' : 'Active Rentals'
         }
         maxWidth="1000px"
         maxHeight="400px"
       >
         <div style={{ padding: '2px' }}> {/* Removed maxHeight and overflowY: 'auto' from here */}
           {activeModal === 'list' && (
-            <MrrRigs 
-              mrrClient={mrrClient} 
+            <MrrRigs
+              mrrClient={mrrClient}
               algo={algorithm}
               onOpenPool={onOpenMrrPools}
               onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
             />
           )}
-          
+
           {activeModal === 'list_all_rigs' && (
-            <MrrRigs 
-              mrrClient={mrrClient} 
-              endpoint="/rig" 
-              algo={algorithm} 
+            <MrrRigs
+              mrrClient={mrrClient}
+              endpoint="/rig"
+              algo={algorithm}
               onOpenPool={onOpenMrrPools}
-              onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })} 
+              onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
             />
           )}
 
@@ -552,13 +579,13 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
                               <td>{item.mrrRig.price} {item.mrrRig.currency}</td>
                               <td>{nhData?.algorithm || 'N/A'}</td>
                               <td>
-                                {nhData?.fixedPrice ? 
-                                  `${nhData.fixedPrice} ${nhData.currency}/${nhData.speedUnit}` : 
+                                {nhData?.fixedPrice ?
+                                  `${nhData.fixedPrice} ${nhData.currency}/${nhData.speedUnit}` :
                                   'N/A'}
                               </td>
                               <td>
-                                {nhData?.standardPrice?.fast ? 
-                                  `${nhData.standardPrice.fast} ${nhData.currency}/${nhData.speedUnit}` : 
+                                {nhData?.standardPrice?.fast ?
+                                  `${nhData.standardPrice.fast} ${nhData.currency}/${nhData.speedUnit}` :
                                   'N/A'}
                               </td>
                             </tr>
@@ -577,20 +604,18 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           )}
 
           {modalLoading && <div style={{ textAlign: 'center', padding: '40px' }}>Loading data from MiningRigRentals...</div>}
-          
+
           {!modalLoading && (activeModal === 'rental' || activeModal === 'rental_history') && (
-            <div style={{ 
-              maxHeight: '75vh', 
-              overflowY: 'auto', 
+            <div style={{
+              maxHeight: '75vh',
+              overflowY: 'auto',
               scrollbarWidth: 'thin',
               scrollbarColor: 'rgba(255,255,255,0.2) transparent'
             }}>
               <MrrRentalsTable data={modalData} onOpenPools={onOpenMrrPools} onNotice={tg.sendManualNotice} mrrClient={mrrClient} />
             </div>
           )}
-
         </div>
-        
         <div className="modal-actions" style={{ marginTop: '20px', textAlign: 'right' }}>
           <button className="btn-pro secondary" onClick={() => setActiveModal(null)}>Close</button>
         </div>

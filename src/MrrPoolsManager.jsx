@@ -119,7 +119,7 @@ const MrrPoolsManager = ({ defaultClient = 'ALL' }) => {
             {rigs.map((rig) => (
               <tr key={`${rig.mrrClient}-${rig.id}`}>
                 <td>{rig.id}</td>
-                <td>{rig.name} <br/><small>({rig.mrrClient})</small></td>
+                <td>{rig.name} <br /><small>({rig.mrrClient})</small></td>
                 <td>{rig.type}</td>
                 <td>{rig.host ? `${rig.host}:${rig.port}` : 'No Pool Configured'}</td>
                 <td>{rig.user || '-'}</td>
@@ -135,7 +135,7 @@ const MrrPoolsManager = ({ defaultClient = 'ALL' }) => {
       {/* Modal / Inline Editor for Single Rig Pool */}
       {editingRig && (
         <div className="modal-overlay" style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center'
         }}>
           <div className="modal-content" style={{ background: 'white', padding: '2rem', borderRadius: '8px', minWidth: '400px' }}>
@@ -143,23 +143,23 @@ const MrrPoolsManager = ({ defaultClient = 'ALL' }) => {
             <form onSubmit={handleUpdatePool} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <label>
                 Stratum Host:
-                <input type="text" fullWidth value={editingRig.host} 
-                  onChange={e => setEditingRig({...editingRig, host: e.target.value})} required />
+                <input type="text" fullWidth value={editingRig.host}
+                  onChange={e => setEditingRig({ ...editingRig, host: e.target.value })} required />
               </label>
               <label>
                 Port:
-                <input type="number" value={editingRig.port} 
-                  onChange={e => setEditingRig({...editingRig, port: e.target.value})} required />
+                <input type="number" value={editingRig.port}
+                  onChange={e => setEditingRig({ ...editingRig, port: e.target.value })} required />
               </label>
               <label>
                 Worker/User:
-                <input type="text" value={editingRig.user} 
-                  onChange={e => setEditingRig({...editingRig, user: e.target.value})} required />
+                <input type="text" value={editingRig.user}
+                  onChange={e => setEditingRig({ ...editingRig, user: e.target.value })} required />
               </label>
               <label>
                 Password:
-                <input type="text" value={editingRig.pass} 
-                  onChange={e => setEditingRig({...editingRig, pass: e.target.value})} />
+                <input type="text" value={editingRig.pass}
+                  onChange={e => setEditingRig({ ...editingRig, pass: e.target.value })} />
               </label>
 
               {updateStatus && (

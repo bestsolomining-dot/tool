@@ -12,16 +12,16 @@ async function runTests() {
     const tgRes = await request(`${BASE_URL}/notify/telegram`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        message: ` <b>[Test] Notice Data Structure</b>\n\n` +
-                 `<b>Rig:</b> Test-Rig-01\n` +
+      body: JSON.stringify({
+        message: `🚀 <b>[New Rental] (Test)</b>\n\n` +
+                 `<b>Rig:</b> Test-Rig-99\n` +
                  `<b>Algo:</b> SHA256\n` +
                  `<b>Current Avg:</b> 500.00 MH/s\n` +
                  `<b>Efficiency:</b> 98.5%\n` +
-                 `<b>Remaining:</b> 2h 15m\n` +
+                 `<b>Paid:</b> 0.00123456 BTC\n` +
+                 `<b>Remaining:</b> 2.50h\n` +
                  `<b>Target to 100%:</b> 512.45 MH/s\n` +
-                 `<b>Account:</b> BT\n\n` +
-                 `<i>Sent via Integration Script at ${new Date().toLocaleTimeString()}</i>`
+                 `<b>Account:</b> BT`
       })
     });
 

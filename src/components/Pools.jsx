@@ -579,8 +579,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         <small style={{ opacity: 0.8, fontSize: '13px', marginLeft: '10px' }}>ACTIVE NICEHASH CLIENT</small>
         <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
           <option value="BT">NiceHash Client: BT</option>
-          <option value="PH">NiceHash Client: PH</option>
-          <option value="ALL">NiceHash Client: ALL</option>
+          <option value="LN">NiceHash Client: LN</option>
+          <option value="VN">NiceHash Client: VN (Aggregated)</option>
         </select>
 
         {/* <div className="pool-actions-toolbar" style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem', flexWrap: 'wrap', marginLeft: 'auto' }}>

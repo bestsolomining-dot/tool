@@ -290,8 +290,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           const fresh = newList.find(r => !knownRentalIds.current.has(String(r.id)));
           if (fresh) {
             setNewRentalFound(fresh);
-            
-            tg.notifyNewRental(fresh).catch(err => console.error('[telegram] Notification failed:', err));
+            // Telegram notification is now handled by the backend heartbeat monitor
 
             // Optionally trigger a system notification
             if (Notification.permission === 'granted') {
@@ -417,10 +416,12 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
       <h2 className="section-title" style={{paddingBottom: '10px' }}>Mining Rig Rentals</h2>
       {/* Client Selector */}
       <div className="market-inputs">
+        <small style={{ opacity: 0.5, fontSize: '10px', marginLeft: '2px', display: 'block', marginBottom: '4px' }}>ACTIVE MRR CLIENT</small>
         <select className="select-pro" value={mrrClient || 'BT'} onChange={(e) => setMrrClient(e.target.value)}>
-          <option value="BT">Client: BT</option>
-          <option value="SL">Client: SL</option>
-          <option value="ALL">Client: ALL</option>
+          <option value="BT">MRR Client: BT</option>
+          <option value="SL">MRR Client: SL</option>
+          <option value="LN">MRR Client: LN</option>
+          <option value="VN">MRR Client: VN (Aggregated)</option>
         </select>
       </div>
 

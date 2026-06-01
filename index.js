@@ -8,6 +8,7 @@ import { request } from 'undici';
 import { NiceHashClient } from './NiceHashClient.js';
 import { mapNiceHashToMRR, normalizeAlgoForNiceHash } from './src/core/algoMapping.js';
 import sqlite3 from 'sqlite3';
+import { SyncManager } from './SyncManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +31,16 @@ db.serialize(() => {
   )`);
 });
 
+/** 
+ * Aggregate client identifier. In this setup, 'VN' represents the 
+ * aggregated view of all configured clients.
+ */
+const AGGREGATE_CLIENT = 'VN';
+const isAggregate = (c) => {
+  const uc = String(c || '').trim().toUpperCase();
+  return uc === 'ALL' || uc === AGGREGATE_CLIENT;
+};
+
 const app = express();
 app.set('etag', false); // Disable ETags to prevent 304 caching on API errors
 app.use(express.json());
@@ -42,16 +53,25 @@ let mrrClockOffset = 0n;
 let mrrClockSynced = false;
 
 // Initialize nonces from DB on startup
-db.all("SELECT client, last_nonce FROM mrr_nonces", [], (err, rows) => {
-  if (!err && rows) {
-    rows.forEach(row => {
-      try {
-        mrrLastNonceByClient.set(row.client, BigInt(row.last_nonce));
-        console.log(`[mrr:init] Loaded last nonce baseline for ${row.client}: ${row.last_nonce}`);
-      } catch (e) {}
+/** 
+ * Loads nonces from DB and returns a promise to ensure initialization 
+ * finishes before API calls start.
+ */
+async function initNonces() {
+  return new Promise((resolve) => {
+    db.all("SELECT client, last_nonce FROM mrr_nonces", [], (err, rows) => {
+      if (!err && rows) {
+        rows.forEach(row => {
+          try {
+            mrrLastNonceByClient.set(row.client, BigInt(row.last_nonce));
+            console.log(`[mrr:init] Loaded last nonce baseline for ${row.client}: ${row.last_nonce}`);
+          } catch (e) {}
+        });
+      }
+      resolve();
     });
-  }
-});
+  });
+}
 
 let mrrSyncPromise = null;
 
@@ -145,7 +165,7 @@ const nhConfigs = {
     orgId: normalizeCredential(process.env.NICEHASH_ORG_ID_PH),
     environment: normalizeCredential(process.env.NICEHASH_ENVIRONMENT_PH || process.env.NICEHASH_ENVIRONMENT || 'production')
   },
-  ALL: {
+  VN: {
     apiKey: normalizeCredential(process.env.NICEHASH_API_KEY_VN),
     apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET_VN),
     orgId: normalizeCredential(process.env.NICEHASH_ORG_ID_VN),
@@ -162,6 +182,11 @@ const mrrConfigs = {
     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_SL),
     apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_SL),
   },
+  
+  LN: {
+    apiKey: normalizeCredential(process.env.MRR_KEY_RIG_LN),
+    apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_LN),
+  },
   VN: {
     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_VN),
     apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_VN),
@@ -174,13 +199,15 @@ const defaultMrrClient = (function () {
   // Fallback logic
   if (defaultMrrClientRaw === 'SL') return 'SL';
   if (defaultMrrClientRaw === 'VN') return 'VN';
+  if (defaultMrrClientRaw === 'LN') return 'LN';
   return 'BT';
 })();
 
 const nhInstances = new Map();
 
 function resolveNhClient(clientNameRaw) {
-  const clientName = String(clientNameRaw || 'BT').trim().toUpperCase();
+  const clientName = isAggregate(clientNameRaw) ? AGGREGATE_CLIENT : String(clientNameRaw || 'BT').trim().toUpperCase();
+
   const targetName = nhConfigs[clientName] ? clientName : 'BT';
 
   if (!nhInstances.has(targetName)) {
@@ -196,7 +223,7 @@ function resolveNhClient(clientNameRaw) {
       }
     }
     
-    // If target (like PH) isn't configured or client creation failed, fallback to BT and warn
+    // If target (like LN) isn't configured or client creation failed, fallback to BT and warn
     const btClient = nhInstances.get('BT');
     if (targetName !== 'BT') console.warn(`[api:warn] Client "${targetName}" is not fully configured in .env. Falling back to BT.`);
     return { client: btClient, clientName: 'BT' };
@@ -333,103 +360,9 @@ const getNiceHashApp = (client) => ({
  */
 const DB_FILE = path.join(process.cwd(), 'database.json');
 
-async function saveToDb(data) {
-  try {
-    await fs.writeFile(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    console.info(`[db] Pool database updated at: ${DB_FILE}`);
-  } catch (err) {
-    console.error(`[db] Failed to save database: ${err.message}`);
-  }
-}
-
-async function syncAllPools() {
-  // Ensure clock is synced for MRR signatures
-  if (!mrrClockSynced) await syncMrrClock();
-
-  console.info('[sync] Initializing pool and rig synchronization...');
-  const db = {
-    nhPools: [],
-    mrrPools: [], // Store raw MRR pool configs too
-    mrrRigs: [],
-    matches: [],
-    lastSync: new Date().toISOString()
-  };
-
-  // 1. Fetch NiceHash Pools (All accounts)
-  const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
-  const processedClients = new Set();
-  for (const acct of nhAccounts) {
-    try {
-      const { client, clientName } = resolveNhClient(acct);
-      if (!client || (acct === 'PH' && clientName === 'BT')) continue; // Skip if PH is not configured
-      if (!client || processedClients.has(clientName)) continue;
-      processedClients.add(clientName);
-      
-      const result = await getNiceHashApp(client).pools.getPools();
-      if (result?.list) {
-        db.nhPools.push(...result.list.map(p => ({
-          id: p.id || p.poolId,
-          name: p.name,
-          username: p.username,
-          algorithm: p.algorithm,
-          client: clientName
-        })));
-      }
-    } catch (e) {
-      console.warn(`[sync:nh] Could not fetch pools for ${acct}: ${e.message}`);
-    }
-  }
-
-  // 2. Fetch MRR Rigs and their associated pools
-  const mrrAccts = Object.keys(mrrConfigs).filter(k => mrrConfigs[k].apiKey && mrrConfigs[k].apiSecret);
-  for (const acct of mrrAccts) {
-    try {
-      const { data: rigsData } = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: acct });
-      const rigs = Array.isArray(rigsData?.data) ? rigsData.data : (rigsData?.data?.rigs || []);
-      
-      if (rigs.length > 0) {
-        const rigIds = rigs.map(r => r.id).join(';');
-        const { data: poolsData } = await mrrApiCall({ endpoint: `/rig/${rigIds}/pool`, clientNameRaw: acct });
-        
-        if (poolsData?.success) {
-          const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (poolsData.data?.result || []);
-          db.mrrPools.push(...poolItems);
-          
-          const poolMap = new Map(poolItems.map(item => [String(item.rigId || item.rigid || item.id), item.pools]));
-          
-          rigs.forEach(rig => {
-            const pools = poolMap.get(String(rig.id)) || [];
-            db.mrrRigs.push({ id: rig.id, name: rig.name, client: acct, pools });
-
-            // 3. Scan for username matches between MRR and NiceHash
-            pools.forEach(p => {
-              const mrrUser = String(p.user || p.username || '').trim();
-              if (!mrrUser) return;
-
-              // Match MRR rig username to NiceHash pool username
-              const nhMatch = db.nhPools.find(nhp => String(nhp.username || '').trim() === mrrUser);
-              if (nhMatch) {
-                db.matches.push({ 
-                  mrrRigId: rig.id, 
-                  mrrRigName: rig.name, 
-                  mrrClient: acct, 
-                  nhPoolName: nhMatch.name, 
-                  username: mrrUser, 
-                  nhClient: nhMatch.client 
-                });
-              }
-            });
-          });
-        }
-      }
-    } catch (e) {
-      console.warn(`[sync:mrr] Could not fetch rigs for ${acct}: ${e.message}`);
-    }
-  }
-
-  await saveToDb(db);
-  console.info(`[sync] Finished. Found ${db.nhPools.length} NH pools, ${db.mrrRigs.length} MRR rigs, and ${db.matches.length} matches.`);
-}
+const syncManager = new SyncManager({
+  db, nhConfigs, mrrConfigs, mrrApiCall, resolveNhClient, getNiceHashApp
+});
 
 /**
  * Express API Endpoints
@@ -517,7 +450,7 @@ app.get('/api/v2/algos/mapping', asyncHandler(async (req, res) => {
 // Accounting
 app.get('/api/v2/accounting/balances', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || 'BT').toUpperCase();
-  if (clientParam === 'ALL') {
+  if (isAggregate(clientParam)) {
     const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
     const results = [];
     const processedClients = new Set();
@@ -561,7 +494,7 @@ app.get('/api/v2/mining/address', asyncHandler(async (req, res) => res.json(awai
 // Mining
 app.get('/api/v2/mining/rigs2', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || 'BT').toUpperCase();
-  if (clientParam === 'ALL') {
+  if (isAggregate(clientParam)) {
     const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
     const allRigs = [];
     const processedClients = new Set();
@@ -593,7 +526,7 @@ app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
   if (!query.ts) query.ts = Date.now().toString();
 
   let data;
-  if (clientParam === 'ALL') {
+  if (isAggregate(clientParam)) {
     const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
     const allOrders = [];
     const processedClients = new Set();
@@ -647,9 +580,50 @@ app.get('/api/v2/hashpower/myOrders', asyncHandler(async (req, res) => {
   }
   res.json(data);
 }));
+
+/**
+ * Fetches total paid amount for ACTIVE (rented) hashpower orders where price < threshold.
+ */
+app.get('/api/v2/hashpower/rented-summary', asyncHandler(async (req, res) => {
+  const maxPrice = parseFloat(req.query.price);
+  if (isNaN(maxPrice)) {
+    return res.status(400).json({ error: 'Valid "price" query parameter is required (e.g. ?price=0.007)' });
+  }
+
+  const clientParam = String(req.query.client || 'ALL').toUpperCase();
+  const nhAccounts = isAggregate(clientParam)
+    ? Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret)
+    : [clientParam];
+
+  let totalPaid = 0;
+  const matchingOrders = [];
+
+  for (const acct of nhAccounts) {
+    const { client, clientName } = resolveNhClient(acct);
+    if (!client || (acct !== 'BT' && clientName === 'BT' && acct !== 'LN')) continue;
+    
+    try {
+      const result = await getNiceHashApp(client).hashpower.getMyOrders({ limit: 1000 });
+      const list = result?.list || [];
+      
+      list.forEach(o => {
+        const status = typeof o.status === 'object' ? o.status.code : o.status;
+        const price = parseFloat(o.price);
+        if (status === 'ACTIVE' && price < maxPrice) {
+          const paid = parseFloat(o.payedAmount || 0);
+          totalPaid += paid;
+          matchingOrders.push({ id: o.id, account: clientName, price: o.price, paid: o.payedAmount });
+        }
+      });
+    } catch (e) {}
+  }
+
+  res.json({ success: true, maxPrice, totalPaid: totalPaid.toFixed(8), count: matchingOrders.length, orders: matchingOrders });
+}));
+
 app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || 'BT').toUpperCase();
-  if (clientParam === 'ALL') {
+  if (isAggregate(clientParam)) {
     const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
     const processedClients = new Set();
     for (const acct of nhAccounts) {
@@ -677,7 +651,7 @@ app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res
 // Pools
 app.get('/api/v2/pools', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || 'BT').toUpperCase();
-  if (clientParam === 'ALL') {
+  if (isAggregate(clientParam)) {
     const allPools = [];
     const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
     const processedClients = new Set();
@@ -718,7 +692,7 @@ async function nextMrrNonce(clientName) {
 
   let nonce;
   // Use 19 digits for high-precision accounts or if the baseline is already high (> 100 trillion)
-  if (['BT', 'ALL', 'VN'].includes(cleanName) || lastNonce > 100000000000000n) {
+  if (cleanName === 'BT' || isAggregate(cleanName) || lastNonce > 100000000000000n) {
     const now19 = nowMs * 1000000n; // 19 digits (approx nanoseconds)
     nonce = now19 > lastNonce ? now19 : lastNonce + 1n;
   } else {
@@ -739,13 +713,11 @@ async function nextMrrNonce(clientName) {
 }
 
 function resolveMrrClient(clientNameRaw) {
-  const clientName = String(clientNameRaw || defaultMrrClient).trim().toUpperCase(); // Use default if not provided
+  const clientName = isAggregate(clientNameRaw) ? AGGREGATE_CLIENT : String(clientNameRaw || defaultMrrClient).trim().toUpperCase();
+  const lookupSuffix = clientName;
 
   if (!mrrInstances.has(clientName)) {
     let config = mrrConfigs[clientName];
-    
-    // Map 'ALL' to 'VN' for consistent environment variable lookup
-    const lookupSuffix = clientName === 'ALL' ? 'VN' : clientName;
 
     const envKey = process.env[`MRR_KEY_RIG_${lookupSuffix}`] || 
                    process.env[`MRR_API_KEY_${lookupSuffix}`];
@@ -975,8 +947,7 @@ async function mrrRequest(endpoint, req, res, method = 'GET', body = undefined) 
   // Destructure to remove tool-internal parameters (client, endpoint, ts) from the forwarding query
   const { client: clientQuery, endpoint: _internalPath, ts: _ts, ...forwardQuery } = req.query || {};
   
-  // Default to primary client if 'ALL' is passed to a non-supporting endpoint
-  const targetClient = String(clientQuery || '').toUpperCase() === 'ALL' ? defaultMrrClient : clientQuery;
+  const targetClient = isAggregate(clientQuery) ? defaultMrrClient : clientQuery;
 
   const { statusCode, data, clientName } = await mrrApiCall({
     endpoint,
@@ -1044,12 +1015,20 @@ async function runRentalMonitor(forceNotify = false) {
 
         if (shouldNotify) {
           const remHours = Math.max(0, remainingMs / 3600000).toFixed(2);
-          const hbType = forceNotify ? 'Forced Monitor' : 'Heartbeat';
-          const msg = `💓 <b>[${hbType}]</b>\n\n` +
+          
+          let hbType = forceNotify ? 'Forced Monitor' : 'Heartbeat';
+          let icon = '💓';
+          if (lastNotified === 0 && !forceNotify) {
+            hbType = 'New Rental';
+            icon = '🚀';
+          }
+
+          const msg = `${icon} <b>[${hbType}]</b>\n\n` +
                       `<b>Rig:</b> ${r.name || r.id}\n` +
                       `<b>Algo:</b> ${info.algo}\n` +
                       `<b>Current Avg:</b> ${info.niceAverageHashrate}\n` +
                       `<b>Efficiency:</b> ${info.percent}%\n` +
+                      `<b>Paid:</b> ${info.price.paid} ${info.price.currency}\n` +
                       `<b>Remaining:</b> ${remHours}h\n` +
                       `<b>Target to 100%:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}\n` +
                       `<b>Account:</b> ${acct}`;
@@ -1112,6 +1091,9 @@ function extractRentalInfo(rental) {
   const percent = rental.hashrate?.average?.percent || rental.rig?.hashrate?.average?.percent || '0';
   const endTime = rental.end || rental.rig?.status?.end || '';
 
+  const priceObj = rental.price || rental.rig?.price || {};
+  const currency = priceObj.currency || rental.currency || rental.price_unit || 'BTC';
+
   let currentHash = 0;
   let advertisedHash = 0;
   let averageHash = 0;
@@ -1166,6 +1148,11 @@ function extractRentalInfo(rental) {
     endTime,
     percent,
     hashrate: { current: currentHash, advertised: advertisedHash, average: averageHash, suffix: hashrateSuffix },
+    price: {
+      paid: priceObj.paid || '0.00',
+      advertised: priceObj.advertised || '0.00',
+      currency: currency
+    },
     niceHashrate: niceHashrate,
     niceAverageHashrate: niceAverageHashrate,
   };
@@ -1216,7 +1203,7 @@ app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
   const targetEndpoint = req.query.endpoint || '/rig/mine';
 
-  if (clientParam === 'ALL') {
+  if (isAggregate(clientParam)) {
     const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
     const allRigs = [];
     const errors = [];
@@ -1297,7 +1284,7 @@ app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
 app.get('/api/v2/mrr/rigs/pools', asyncHandler(async (req, res) => {
   const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
 
-  if (clientParam === 'ALL') {
+  if (isAggregate(clientParam)) {
     const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
     const allResults = [];
     const errors = [];
@@ -1396,7 +1383,7 @@ app.get('/api/v2/mrr/compare', asyncHandler(async (req, res) => {
 
 /** Reusable logic for fetching rentals (current or history) with merged pool info */
 async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
-  const isAll = clientParam === 'ALL';
+  const isAll = isAggregate(clientParam);
   const allClientNames = isAll 
     ? Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret)
     : [clientParam];
@@ -1524,7 +1511,7 @@ app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
     return { statusCode, data };
   }
 
-  if (clientParam === 'ALL') {
+  if (isAggregate(clientParam)) {
     const clients = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret);
     for (const clientName of clients) {
       const { statusCode, data } = await fetchAggressiveRental(clientName);
@@ -1722,12 +1709,15 @@ if (process.env.RUN_MAIN === 'true') {
     if (client) {
       getNiceHashApp(client).public.getTime().then(async (t) => {
         console.log('✅ Connection verified. Server Time:', new Date(t).toLocaleString());
-        await cleanAllCache(); // Reset state on startup to prevent stale monitoring data
-        await syncMrrClock(); // Pre-sync clock on startup
-        await syncAllPools(); // Synchronize pool data and perform username scan
+        cleanAllCache(); // Clean in background
+        initNonces().then(() => {
+          syncMrrClock().then(() => {
+            syncManager.run(); // Background sync
+          });
+        });
 
-        // Initialize Monitor Loop (Every 5 minutes)
-        setInterval(() => runRentalMonitor(), 300000);
+        // Initialize Monitor Loop (Every 1 minute)
+        setInterval(() => runRentalMonitor(), 60000);
       });
     }
   } catch (error) {

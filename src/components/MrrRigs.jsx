@@ -3,11 +3,11 @@ import { poolApi } from '../core/poolUtils';
 import { CountdownTimer } from './MiningRigRental';
 import { normalizeAlgoForNiceHash } from '../core/algoMapping';
 
-/** Power factor mapping for normalization (H/s base) */
+/** Power factor mapping for normalization (EH/s base) */
 const UNIT_TO_POWER = { 
-  'EH': 18, 'PH': 15, 'TH': 12, 'GH': 9, 'MH': 6, 'KH': 3, 'H': 0,
-  'E': 18, 'P': 15, 'T': 12, 'G': 9, 'M': 6, 'K': 3,
-  'EHS': 18, 'PHS': 15, 'THS': 12, 'GHS': 9, 'MHS': 6, 'KHS': 3
+  'EH': 0, 'LN': -3, 'TH': -6, 'GH': -9, 'MH': -12,
+  'E': 0, 'P': -3, 'T': -6, 'G': -9, 'M': -12,
+  'EHS': 0, 'PHS': -3, 'THS': -6, 'GHS': -9, 'MHS': -12
 };
 
 /**
@@ -21,20 +21,20 @@ export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
 
   // Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH')
   const clean = (u) => {
-    const m = String(u || '').toUpperCase().match(/(EH|PH|TH|GH|MH|KH|H|E|P|T|G|M|K)/);
+    const m = String(u || '').toUpperCase().match(/(EH|LN|TH|GH|MH|KH|H|E|P|T|G|M|K)/);
     if (!m) return 'TH';
     let unit = m[0];
     // Normalize single letters to standard 2-letter codes for mapping
-    const singleMap = { 'E': 'EH', 'P': 'PH', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };
+    const singleMap = { 'E': 'EH', 'P': 'LN', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };
     return singleMap[unit] || unit;
   };
 
   const mrrUnitClean = clean(mrrUnit) || 'TH';
   const nhUnitClean = clean(nhUnit) || 'TH';
 
-  // Get power factors (10^n), defaulting to TeraHash (12)
-  const mrrP = UNIT_TO_POWER[mrrUnitClean] ?? 12;
-  const nhP = UNIT_TO_POWER[nhUnitClean] ?? 12;
+  // Get power factors (10^n), defaulting to TeraHash (-6 relative to EH)
+  const mrrP = UNIT_TO_POWER[mrrUnitClean] ?? -6;
+  const nhP = UNIT_TO_POWER[nhUnitClean] ?? -6;
 
   // Normalize to base unit (H/s equivalent) for fair comparison
   const mrrPriceNorm = mrrPriceNum / Math.pow(10, mrrP);
@@ -288,7 +288,9 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
               username: p.user || p.username || rental.rig?.username || rental.rig?.user || 'N/A',
             })),
             isRental: true,
-            nicehashPrice: nhPriceData
+            nicehashPrice: nhPriceData,
+            price: rental.price, // Add rental price from the API response
+            currency: rental.currency || '' // Add rental currency from the API response
           };
         } else {
           // For rig info, the data is already structured correctly by the backend's extractRigInfo
@@ -471,7 +473,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                     {idLabel}: #{displayId} 
                   </span>
                   {rig.mrrClient && (
-                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: rig.mrrClient === 'SL' ? '#3b82f6' : rig.mrrClient === 'BT' ? '#fbbf24' : '#f87171' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: rig.mrrClient === 'SL' ? '#3b82f6' : rig.mrrClient === 'BT' ? '#fbbf24' : rig.mrrClient === 'LN' ? '#10b981' : '#f87171' }}>
                       {rig.mrrClient}
                     </span>
                   )}
@@ -553,6 +555,11 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                       return p || '0.00';
                     })()}
                     <small style={{ opacity: 0.5, marginLeft: '2px' }}>{rig.price_unit || 'BTC'}</small>
+                  {isRented && info?.price?.paid && (
+                    <div style={{ fontSize: '9px', color: '#10b981', marginTop: '1px' }}>
+                      Paid: <strong>{info.price.paid}</strong> <small style={{ opacity: 0.7 }}>{info.price.currency || 'BTC'}</small>
+                    </div>
+                  )}
                   </div>
                   {hasNhPrice && (
                     <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
@@ -568,8 +575,8 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                       )}</span>
                     </div>
                   )}
-                  {!hasNhPrice && !loading && (
-                    <div style={{ fontSize: '8px', color: '#f87171', opacity: 0.6, marginTop: '2px' }}>
+                  {!hasNhPrice && !loading && !loadingInfoIds.has(rig.id) && (
+                    <div style={{ fontSize: '8px', color: '#d18d8d', opacity: 0.6, marginTop: '2px' }}>
                       NH price unavailable
                     </div>
                   )}
@@ -626,7 +633,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                           <div style={{ fontSize: '9px', marginTop: '2px' }}>
                             <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
                             {targetDiff !== null && (
-                              <span style={{ color: isBehind ? '#f87171' : '#34d399', marginLeft: '4px', fontWeight: 'bold' }}>
+                              <span style={{ color: isBehind ? '#71f89a' : '#d33434', marginLeft: '4px', fontWeight: 'bold' }}>
                                 ({targetDiff > 0 ? '+' : ''}{targetDiff}%)
                               </span>
                             )}

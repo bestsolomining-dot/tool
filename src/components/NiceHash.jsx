@@ -122,7 +122,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
         <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
           <option value="BT">BT Account</option>
           <option value="PH">PH Account</option>
-          <option value="ALL">ALL Accounts</option>
+          <option value="VN">VN (Aggregated)</option>
         </select>
         <small style={{ opacity: 0.5, fontSize: '10px', marginLeft: '10px' }}>ACTIVE CLIENT</small>
       </div>

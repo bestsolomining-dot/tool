@@ -138,12 +138,13 @@ function maskSensitive(value) {
 app.use((req, res, next) => {
   const start = Date.now();
   const requestId = Math.random().toString(36).slice(2, 8);
+  const time = new Date().toLocaleTimeString();
   const body = req.method === 'GET' ? '' : ` body=${JSON.stringify(maskSensitive(req.body || {}))}`;
 
-  console.info(`[api:${requestId}] -> ${req.method} ${req.originalUrl}${body}`);
+  console.info(`[${time}] [api:${requestId}] -> ${req.method} ${req.originalUrl}${body}`);
 
   res.on('finish', () => {
-    console.info(`[api:${requestId}] <- ${res.statusCode} ${req.method} ${req.originalUrl} ${Date.now() - start}ms`);
+    console.info(`[${time}] [api:${requestId}] <- ${res.statusCode} ${req.method} ${req.originalUrl} ${Date.now() - start}ms`);
   });
 
   next();
@@ -937,7 +938,8 @@ async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw
       finalStatus = 401;
     }
 
-    console.log(`[mrr:${clientName}] endpoint=${normalizedEndpoint} nonce=${currentNonce} status=${finalStatus} msg=${authMessage || 'OK'}`);
+    const logTime = new Date().toLocaleTimeString();
+    console.log(`[${logTime}] [mrr:${clientName}] endpoint=${normalizedEndpoint} nonce=${currentNonce} status=${finalStatus} msg=${authMessage || 'OK'}`);
 
     return { statusCode: finalStatus, data, clientName };
   });
@@ -966,12 +968,32 @@ async function mrrRequest(endpoint, req, res, method = 'GET', body = undefined) 
  * Returns a summary of actions taken.
  */
 async function runRentalMonitor(forceNotify = false) {
+  const monitorTime = new Date().toLocaleTimeString();
   const mrrAccts = Object.keys(mrrConfigs).filter(k => mrrConfigs[k].apiKey && mrrConfigs[k].apiSecret);
   const now = Date.now();
   const notifications = [];
 
+  console.log(`[${monitorTime}] [monitor] Starting check for ${mrrAccts.length} accounts...`);
+
   for (const acct of mrrAccts) {
     try {
+      // If triggered manually, fetch and send a summary of all rigs for this account
+      if (forceNotify) {
+        const rigsRes = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: acct });
+        if (rigsRes.data?.success) {
+          const rigList = Array.isArray(rigsRes.data.data) ? rigsRes.data.data : (rigsRes.data.data?.rigs || []);
+          const total = rigList.length;
+          const available = rigList.filter(r => String(r.status || '').toLowerCase().includes('available')).length;
+          const rentedCount = rigList.filter(r => String(r.status || '').toLowerCase().includes('rented')).length;
+
+          const summaryMsg = `📊 <b>[Account Summary: ${acct}]</b>\n\n` +
+                            `<b>Total Rigs:</b> ${total}\n` +
+                            `<b>Available:</b> ${available}\n` +
+                            `<b>Rented:</b> ${rentedCount}`;
+          await sendTelegramInternal(summaryMsg);
+        }
+      }
+
       const { data } = await mrrApiCall({ endpoint: '/rental', clientNameRaw: acct });
       if (!data?.success) continue;
 
@@ -1034,6 +1056,7 @@ async function runRentalMonitor(forceNotify = false) {
                       `<b>Account:</b> ${acct}`;
 
           try {
+            console.log(`[${monitorTime}] [monitor] Sending Telegram alert: ${hbType} for Rig ${r.id}`);
             const tgRes = await sendTelegramInternal(msg);
             await new Promise(res => db.run(`UPDATE rentals SET last_notified = ? WHERE id = ?`, [now, String(r.id)], () => res()));
             notifications.push({ id: r.id, status: 'Sent', telegram: tgRes });
@@ -1703,26 +1726,29 @@ async function cleanAllCache() {
  * Keep logic for local execution if needed
  */
 if (process.env.RUN_MAIN === 'true') {
+  // Always clear cache and initialize nonces/clock on startup
+  cleanAllCache(); 
+  
+  initNonces().then(() => {
+    syncMrrClock().then(() => {
+      syncManager.run(); // Background sync
+      
+      // Initialize Monitor Loop (Every 1 minute)
+      setInterval(() => runRentalMonitor(), 60000);
+      // Run once immediately
+      runRentalMonitor();
+    });
+  });
+
+  // Separate Connectivity check for NiceHash (wont block monitor)
   try {
-    // Connectivity check on startup
     const { client } = resolveNhClient('BT');
     if (client) {
-      getNiceHashApp(client).public.getTime().then(async (t) => {
+      getNiceHashApp(client).public.getTime().then((t) => {
         console.log('✅ Connection verified. Server Time:', new Date(t).toLocaleString());
-        cleanAllCache(); // Clean in background
-        initNonces().then(() => {
-          syncMrrClock().then(() => {
-            syncManager.run(); // Background sync
-          });
-        });
-
-        // Initialize Monitor Loop (Every 1 minute)
-        setInterval(() => runRentalMonitor(), 60000);
-      });
+      }).catch(e => console.warn('⚠️ NiceHash connectivity check failed on start:', e.message));
     }
-  } catch (error) {
-    console.error('❌ Connectivity Error:', error.message);
-  }
+  } catch (error) { console.error('❌ Initialization Error:', error.message); }
 }
 function normalizeCredential(value) {
   const raw = String(value ?? '').trim();

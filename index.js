@@ -58,7 +58,7 @@ app.use((req, res, next) => {
  * NiceHashApp organizes API calls into logical domains.
  */
 const nhConfigs = {
-  DEFAULT: {
+  BT: {
     apiKey: normalizeCredential(process.env.NICEHASH_API_KEY),
     apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET),
     orgId: normalizeCredential(process.env.NICEHASH_ORG_ID),
@@ -73,7 +73,9 @@ const nhConfigs = {
 const nhInstances = new Map();
 
 function resolveNhClient(clientNameRaw) {
-  const clientName = String(clientNameRaw || 'DEFAULT').toUpperCase();
+  let clientName = String(clientNameRaw || 'BT').toUpperCase();
+  if (clientName === 'DEFAULT') clientName = 'BT';
+
   if (nhInstances.has(clientName)) return nhInstances.get(clientName);
 
   const conf = nhConfigs[clientName];
@@ -91,6 +93,28 @@ function resolveNhClient(clientNameRaw) {
   return instance;
 }
 
+// const mrrConfigs = {
+//   BT: {
+//     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_BT),
+//     apiSecret: normalizeCredential(process.env.RIG_API_SECRET_BT),
+//   },
+//   SL: {
+//     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_SL),
+//     apiSecret: normalizeCredential(process.env.RIG_API_SECRET_SL),
+//   },
+//   VN: {
+//     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_VN),
+//     apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_VN),
+//   },
+// };
+// const defaultMrrClientRaw = String(process.env.MRR_DEFAULT_CLIENT || 'BT').trim().toUpperCase();
+// const defaultMrrClient = (function () {
+//   if (mrrConfigs[defaultMrrClientRaw]) return defaultMrrClientRaw;
+//   // Fallback logic
+//   if (defaultMrrClientRaw === 'SL') return 'SL';
+//   if (defaultMrrClientRaw === 'VN') return 'VN';
+//   return 'BT';
+// })();
 const mrrConfigs = {
   BT: {
     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_BT),

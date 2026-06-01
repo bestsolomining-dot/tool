@@ -3,7 +3,7 @@ import PoolEditorPopup from './PoolEditorPopup' // Use the new wrapper
 import Modal from './Modal' // Import the new Modal component
 import { poolHelpers as ph, poolApi } from './poolUtils'
 
-export default function Pools() {
+export default function Pools({ onCall, nhClient, setNhClient }) {
   const [pools, setPools] = useState([])
   const [selected, setSelected] = useState(null)
   const [selectedId, setSelectedId] = useState('')
@@ -28,7 +28,6 @@ export default function Pools() {
   const [currentRunStartTime, setCurrentRunStartTime] = useState(null)
   const [currentRunElapsed, setCurrentRunElapsed] = useState(0)
 
-  const [selectedClient, setSelectedClient] = useState('DEFAULT') // Support DEFAULT or PH
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false) // State for Pool Selection Modal
   const [enableVerifyAllButton, setEnableVerifyAllButton] = useState(true)
@@ -64,7 +63,7 @@ export default function Pools() {
 
   async function loadPools() {
     try {
-      const result = await poolApi.list({ size: 1000, client: selectedClient });
+      const result = await poolApi.list({ size: 1000, client: nhClient });
       const normalized = ph.normalizeList(result.data);
       setPools(normalized);
       return normalized;
@@ -81,7 +80,7 @@ export default function Pools() {
       setSelectedId('')
       setVerifyResults([])
     })
-  }, [selectedClient])
+  }, [nhClient])
 
   useEffect(() => {
     poolsRef.current = pools
@@ -91,7 +90,7 @@ export default function Pools() {
     setLoading(true);
     setMrrRigs(null);
     try {
-      const result = await poolApi.mrrRigs({ client: selectedClient });
+      const result = await poolApi.mrrRigs({ client: nhClient });
       if (result.ok) setMrrRigs(result.data);
       else throw new Error(result.data?.error || 'Failed to fetch MRR rigs');
     } catch (err) {
@@ -141,7 +140,7 @@ export default function Pools() {
 
     setDetailsLoading(true)
     try {
-      const result = await poolApi.get(poolId, { client: selectedClient });
+      const result = await poolApi.get(poolId, { client: nhClient });
 
       if (!result.ok) {
         const message = typeof result.data === 'string'
@@ -177,9 +176,9 @@ export default function Pools() {
       const poolId = ph.getId(selected);
       if (poolId) {
         try {
-          const details = (await poolApi.get(poolId, { client: selectedClient })).data;
+          const details = (await poolApi.get(poolId, { client: nhClient })).data;
           const fullPayload = ph.buildVerifyBody(details)
-          return await performVerification(fullPayload, details, { client: selectedClient })
+          return await performVerification(fullPayload, details, { client: nhClient })
         } catch (e) {
           setError(`Details Error: ${e.message}`);
           setLoading(false);
@@ -190,7 +189,7 @@ export default function Pools() {
       setLoading(false)
       return
     }
-    await performVerification(payload, selected, { client: selectedClient })
+    await performVerification(payload, selected, { client: nhClient })
   }
 
   async function performVerification(payload, poolDetails, params) {
@@ -275,13 +274,13 @@ export default function Pools() {
         try {
           let details = pool
           if (poolId) {
-          let resDetails = await poolApi.get(poolId, { client: selectedClient });
+          let resDetails = await poolApi.get(poolId, { client: nhClient });
             if (resDetails.status === 429) {
               const seconds = parseInt(resDetails.headers?.get('Retry-After') || resDetails.data?.headers?.['retry-after'], 10) || 10;
               setRateLimitStatus(`Rate limit hit on details. Waiting ${seconds}s...`);
               try {
                 await new Promise(r => setTimeout(r, seconds * 1000));
-              resDetails = await poolApi.get(poolId, { client: selectedClient });
+              resDetails = await poolApi.get(poolId, { client: nhClient });
               } finally {
                 setRateLimitStatus(null);
               }
@@ -290,7 +289,7 @@ export default function Pools() {
           }
 
           const bodyToSend = typeof details === 'string' ? JSON.parse(details) : details
-          result = await verifyPoolBody(bodyToSend, { client: selectedClient }, controller.signal)
+          result = await verifyPoolBody(bodyToSend, { client: nhClient }, controller.signal)
 
           if (result.status === 429) {
             const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
@@ -299,7 +298,7 @@ export default function Pools() {
             try {
               await new Promise(r => setTimeout(r, seconds * 1000));
               // Retry once for this pool
-              result = await verifyPoolBody(bodyToSend, { client: selectedClient }, controller.signal);
+              result = await verifyPoolBody(bodyToSend, { client: nhClient }, controller.signal);
             } finally {
               setRateLimitStatus(null);
             }
@@ -581,16 +580,16 @@ export default function Pools() {
         <label style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>NiceHash Account:</label>
         <select 
           className="input-pro" 
-          value={selectedClient} 
-          onChange={(e) => setSelectedClient(e.target.value)}
+          value={nhClient} 
+          onChange={(e) => setNhClient(e.target.value)}
           style={{ width: '150px' }}
           disabled={playing || running}
         >
-          <option value="DEFAULT">Primary (Default)</option>
+          <option value="BT">BT Account</option>
           <option value="PH">PH Account</option>
         </select>
         <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-          {selectedClient === 'PH' ? 'Using Org: 806de471...' : 'Using Default Credentials'}
+          {nhClient === 'PH' ? 'Using Org: 806de471...' : 'Using BT Credentials'}
         </span>
       </div>
 
@@ -883,7 +882,7 @@ export default function Pools() {
         <PoolEditorPopup
           key={editor.key}
           editor={editor}
-          selectedClient={selectedClient}
+          selectedClient={nhClient}
           onClose={() => closePoolEditor(editor.key)}
           onSaveSuccess={handleEditorSaveSuccess}
           onVerifySuccess={handleEditorVerifySuccess}

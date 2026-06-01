@@ -3,3 +3,4 @@ node_modules/
 wrangler.generated.toml
 .DS_Store
 dist/
+/node_modules

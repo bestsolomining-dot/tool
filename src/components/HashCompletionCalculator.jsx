@@ -8,6 +8,7 @@ export default function HashCompletionCalculator() {
   const [unit, setUnit] = useState(1e12); // Default TH/s
 
   const units = [
+    { label: 'EH/s', value: 1e18 },
     { label: 'PH/s', value: 1e15 },
     { label: 'TH/s', value: 1e12 },
     { label: 'GH/s', value: 1e9 },

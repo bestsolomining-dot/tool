@@ -398,6 +398,8 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         path = '/api/v2/mrr/rentals';
       } else if (type === 'rental_history') {
         path = '/api/v2/mrr/rental/history';
+      } else if (type === 'mrr_nh_compare') {
+        path = '/api/v2/mrr/compare';
       }
       
       const result = await onCall(path, { query: { client: clientToUse }, silent: true });
@@ -424,14 +426,15 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
 
       {/* Dashboard Actions */}
       <div className="button-group" style={{ marginTop: '10px' }}>
-        <button className="btn-pro primary" onClick={() => openManagementModal('list_all_rigs')}>
+        {/* <button className="btn-pro primary" onClick={() => openManagementModal('list_all_rigs')}>
           Browse Marketplace
-        </button>
-        <button className="btn-pro secondary" onClick={() => openManagementModal('list')}>My Rigs Manager</button>
-        <button className="btn-pro secondary" onClick={() => openManagementModal('rental')}>
+        </button> */}
+        <button className="btn-pro secondary" onClick={() => openManagementModal('list')}>Rigs Manager</button>
+        <button className="btn-pro secondary" onClick={() => openManagementModal('rentals')}>
           Rentals {rentals.length > 0 && `(${rentals.length})`}
         </button>
         <button className="btn-pro secondary" onClick={() => openManagementModal('rental_history')}>Rental History</button>
+        <button className="btn-pro secondary" onClick={() => openManagementModal('mrr_nh_compare')}>MRR vs NiceHash</button>
         <button className="btn-pro secondary" onClick={() => onCall('/api/v2/mrr/balance', { query: { client: mrrClient }, showModal: true })}>Balance</button>
         <TelegramManager onCall={onCall} mrrClient={mrrClient} />
       </div>
@@ -493,13 +496,15 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         isOpen={!!activeModal} 
         onClose={() => setActiveModal(null)} 
         title={
-          activeModal === 'list' ? 'Rigs Manager' : 
+          activeModal === 'list' ? 'Rigs Manager' :
+          activeModal === 'mrr_nh_compare' ? 'MRR Rigs vs NiceHash Market Price' :
           // activeModal === 'list_all_rigs' ? 'All Available Rigs' :
           activeModal === 'rental_history' ? 'Rental History' : 'Active Rentals'
         }
-        maxWidth="1200px"
+        maxWidth="1000px"
+        maxHeight="400px"
       >
-        <div style={{ padding: '5px' }}> {/* Removed maxHeight and overflowY: 'auto' from here */}
+        <div style={{ padding: '2px' }}> {/* Removed maxHeight and overflowY: 'auto' from here */}
           {activeModal === 'list' && (
             <MrrRigs 
               mrrClient={mrrClient} 
@@ -517,6 +522,57 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
               onOpenPool={onOpenMrrPools}
               onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })} 
             />
+          )}
+
+          {activeModal === 'mrr_nh_compare' && (
+            <>
+              {modalLoading && <div style={{ textAlign: 'center', padding: '40px' }}>Fetching MRR rigs and NiceHash prices...</div>}
+              {!modalLoading && modalData && (
+                <div style={{ maxHeight: '75vh', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.2) transparent' }}>
+                  {modalData.data && modalData.data.length > 0 ? (
+                    <table className="pro-table">
+                      <thead>
+                        <tr>
+                          <th>MRR Rig Name</th>
+                          <th>MRR Algo</th>
+                          <th>MRR Price (BTC/{modalData.data[0]?.mrrRig?.hashrate_unit || 'N/A'})</th>
+                          <th>NiceHash Algo</th>
+                          <th>NiceHash Fixed Price (BTC/TH)</th>
+                          <th>NiceHash Standard Price (BTC/TH)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {modalData.data.map((item, index) => {
+                          const nhData = item.nicehashPrice?.price || item.nicehashPrice;
+                          return (
+                            <tr key={item.mrrRig.id || index}>
+                              <td>{item.mrrRig.name}</td>
+                              <td>{item.mrrRig.algo}</td>
+                              <td>{item.mrrRig.price} {item.mrrRig.currency}</td>
+                              <td>{nhData?.algorithm || 'N/A'}</td>
+                              <td>
+                                {nhData?.fixedPrice ? 
+                                  `${nhData.fixedPrice} ${nhData.currency}/${nhData.speedUnit}` : 
+                                  'N/A'}
+                              </td>
+                              <td>
+                                {nhData?.standardPrice?.fast ? 
+                                  `${nhData.standardPrice.fast} ${nhData.currency}/${nhData.speedUnit}` : 
+                                  'N/A'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div style={{ padding: '30px', textAlign: 'center', opacity: 0.5 }}>
+                      No MRR rigs found for comparison or failed to fetch data.
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           {modalLoading && <div style={{ textAlign: 'center', padding: '40px' }}>Loading data from MiningRigRentals...</div>}

@@ -1,6 +1,47 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { poolApi } from '../core/poolUtils';
 import { CountdownTimer } from './MiningRigRental';
+import { normalizeAlgoForNiceHash } from '../core/algoMapping';
+
+/** Power factor mapping for normalization (H/s base) */
+const UNIT_TO_POWER = { 
+  'EH': 18, 'PH': 15, 'TH': 12, 'GH': 9, 'MH': 6, 'KH': 3, 'H': 0,
+  'E': 18, 'P': 15, 'T': 12, 'G': 9, 'M': 6, 'K': 3,
+  'EHS': 18, 'PHS': 15, 'THS': 12, 'GHS': 9, 'MHS': 6, 'KHS': 3
+};
+
+/**
+ * Reusable logic to calculate the price difference percentage between MRR and NiceHash.
+ */
+export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
+  const nhPriceNum = Number.parseFloat(nhPrice || 0);
+  const mrrPriceNum = Number.parseFloat(mrrPrice || 0);
+  
+  if (nhPriceNum <= 0 || mrrPriceNum <= 0) return null;
+
+  // Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH')
+  const clean = (u) => {
+    const m = String(u || '').toUpperCase().match(/(EH|PH|TH|GH|MH|KH|H|E|P|T|G|M|K)/);
+    if (!m) return 'TH';
+    let unit = m[0];
+    // Normalize single letters to standard 2-letter codes for mapping
+    const singleMap = { 'E': 'EH', 'P': 'PH', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };
+    return singleMap[unit] || unit;
+  };
+
+  const mrrUnitClean = clean(mrrUnit) || 'TH';
+  const nhUnitClean = clean(nhUnit) || 'TH';
+
+  // Get power factors (10^n), defaulting to TeraHash (12)
+  const mrrP = UNIT_TO_POWER[mrrUnitClean] ?? 12;
+  const nhP = UNIT_TO_POWER[nhUnitClean] ?? 12;
+
+  // Normalize to base unit (H/s equivalent) for fair comparison
+  const mrrPriceNorm = mrrPriceNum / Math.pow(10, mrrP);
+  const nhPriceNorm = nhPriceNum / Math.pow(10, nhP);
+
+  return ((mrrPriceNorm - nhPriceNorm) / nhPriceNorm * 100).toFixed(1);
+}
 
 /** Deeply searches for a rig array in the MRR response */
 function findRigArray(obj) {
@@ -86,6 +127,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
   const [error, setError] = useState('');
   const [enrichedInfo, setEnrichedInfo] = useState({}); // rigId -> details object
   const [loadingInfoIds, setLoadingInfoIds] = useState(new Set());
+  const [algoMarketPrices, setAlgoMarketPrices] = useState({}); // algoName -> priceData
 
   const [expandedAlgos, setExpandedAlgos] = useState({}); // algoKey -> boolean
   // More granular status filtering: 'available', 'rented', or 'all'
@@ -120,6 +162,31 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
     });
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [filteredRigs, enrichedInfo]);
+
+  // Automatically fetch NiceHash market prices for displayed algorithms
+  useEffect(() => {
+    const uniqueAlgos = [...new Set(filteredRigs.map(r => (r.algo || r.algorithm || r.type || 'N/A').toUpperCase()))];
+    uniqueAlgos.forEach(async (algo) => {
+      // Ensure we only fetch if we don't have it and it's a valid string
+      if (algo && algo !== 'N/A' && !algoMarketPrices[algo]) {
+        try {
+          // Use shared provider logic for normalization
+          const nhAlgo = normalizeAlgoForNiceHash(algo);
+
+          const res = await fetch(`/api/v2/hashpower/order/price?algorithm=${nhAlgo}&market=USA&client=${mrrClient}&ts=${Date.now()}`);
+          const data = await res.json();
+          
+          // Handle wrapped response: { price: { ... } }
+          const nhPriceData = data?.price || data;
+          if (nhPriceData && !data.error && (nhPriceData.fixedPrice || nhPriceData.standardPrice)) {
+            setAlgoMarketPrices(prev => ({ ...prev, [algo]: nhPriceData }));
+          }
+        } catch (e) {
+          console.warn(`[nh:price] Failed to fetch for ${algo}`, e);
+        }
+      }
+    });
+  }, [filteredRigs, mrrClient, algoMarketPrices]);
 
   const toggleAlgoGroup = (algo) => {
     setExpandedAlgos(prev => ({
@@ -199,6 +266,10 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
           const rental = data.data || data;
           const pools = rental.pools || [];
           const firstPool = pools[0];
+          
+          // Normalize NH data if present in rental info
+          const nhPriceData = rental.nicehashPrice?.price || rental.nicehashPrice;
+
           infoBoxData = {
             stratumHost: firstPool?.host || firstPool?.stratumHost || firstPool?.stratumHostname || rental.rig?.stratumHost || rental.rig?.host || rental.rig?.stratumHostname || 'N/A',
             stratumPort: firstPool?.port || firstPool?.stratumPort || rental.rig?.stratumPort || rental.rig?.port || '',
@@ -217,6 +288,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
               username: p.user || p.username || rental.rig?.username || rental.rig?.user || 'N/A',
             })),
             isRental: true,
+            nicehashPrice: nhPriceData
           };
         } else {
           // For rig info, the data is already structured correctly by the backend's extractRigInfo
@@ -271,16 +343,6 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
           </small>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <select 
-            className="select-pro" 
-            style={{ fontSize: '11px', padding: '4px' }}
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="available">Status: Available</option>
-            <option value="rented">Status: Rented</option>
-            <option value="all">Status: All</option>
-          </select>
           <button className="btn-pro secondary" onClick={fetchRigs} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -368,21 +430,52 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
             const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id;
             const displayId = (isRented && rentalId) ? rentalId : rig.id;
             const idLabel = (isRented && rentalId) ? 'Rental' : 'Rig';
+            
+            const rawNhData = algoMarketPrices[algoName.toUpperCase()] || info?.nicehashPrice;
+            // Support both direct results and results wrapped in a 'price' property
+            const nhBase = Array.isArray(rawNhData) ? rawNhData[0] : rawNhData;
+            const nhData = nhBase?.price || nhBase;
+            
+            const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised);
+
+            const hasNhPrice = nhData && (parseFloat(nhData.fixedPrice) > 0 || parseFloat(nhData.standardPrice?.fast || nhData.standardPrice) > 0);
+
+            // Calculate percentage difference
+            const mrrPriceNum = (() => {
+              let p = rig.price;
+              if (typeof p === 'object' && p !== null) {
+                const unit = rig.price_converted || 'BTC';
+                p = p[unit]?.price ?? p[unit] ?? '0';
+              }
+              const val = parseFloat(p || 0);
+              if (isRented) {
+                const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
+                if (hours > 0 && adsVal > 0) {
+                  return val / (hours / 24) / adsVal;
+                }
+              }
+              return val;
+            })();
+            
+            const diffPercent = calculatePriceComparison(
+              mrrPriceNum, 
+              rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH',
+              nhData?.fixedPrice || nhData?.standardPrice?.fast || nhData?.standardPrice || 0,
+              nhData?.speedUnit || 'TH'
+            );
 
             return (
               <div key={rig.id} style={{padding: '0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {isMine ? (
-                  <div style={{ padding: '0 2px' }}>
-                    <span style={{ background: '#5c005f', color: 'white', fontSize: '8px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', display: 'inline-block' }}>
-                      {idLabel}: #{displayId} 
-                      {rig.mrrClient && (
-                        <span style={{ padding: '3px 3px 3px 3px', marginTop: '-10px', fontSize: '13px', opacity: 1.5, marginTop: '3px', marginLeft: '3px', color: rig.mrrClient === 'SL' ? '#3b82f6' : rig.mrrClient === 'BT' ? '#fbbf24' : rig.mrrClient === 'ALL' ? '#ef4444' : 'inherit' }}>
-                          [{rig.mrrClient}]
-                        </span>
-                      )}
+                <div style={{ padding: '0 2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ background: isMine ? '#5c005f' : 'rgba(255,255,255,0.05)', color: 'white', fontSize: '8px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                    {idLabel}: #{displayId} 
+                  </span>
+                  {rig.mrrClient && (
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', color: rig.mrrClient === 'SL' ? '#3b82f6' : rig.mrrClient === 'BT' ? '#fbbf24' : '#f87171' }}>
+                      {rig.mrrClient}
                     </span>
-                  </div>
-                ) : null}
+                  )}
+                </div>
                 <div className="rig-card" style={{ 
                   background: isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)', 
                   border: isMine ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)', 
@@ -461,6 +554,25 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                     })()}
                     <small style={{ opacity: 0.5, marginLeft: '2px' }}>{rig.price_unit || 'BTC'}</small>
                   </div>
+                  {hasNhPrice && (
+                    <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>
+                        NH: <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>
+                          {parseFloat(nhData.fixedPrice || nhData.standardPrice?.fast || nhData.standardPrice || 0).toFixed(4)}
+                        </span> 
+                        <small style={{ marginLeft: '2px', opacity: 0.7 }}>{nhData.fixedPrice ? 'Fix' : 'Std'}</small>
+                        {diffPercent !== null && (
+                        <span style={{ color: parseFloat(diffPercent) < 0 ? '#34d399' : '#f87171', fontWeight: 'bold', marginLeft: '5px' }}>
+                          ({parseFloat(diffPercent) < 0 ? '' : '+'}{diffPercent}%)
+                        </span>
+                      )}</span>
+                    </div>
+                  )}
+                  {!hasNhPrice && !loading && (
+                    <div style={{ fontSize: '8px', color: '#f87171', opacity: 0.6, marginTop: '2px' }}>
+                      NH price unavailable
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>Start Time</div>
@@ -489,7 +601,6 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                         const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)).endsWith('UTC') ? '' : ' UTC')).getTime();
                         
                         // Fix: Always use raw numbers for math to prevent unit mismatch errors
-                        const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised);
                         const avgVal = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash);
                         
                         const hSuffix = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || '';
@@ -504,6 +615,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                         // Removing the Math.max(0, ...) clamp to allow showing surplus
                         const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
                         const targetHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
+                        const targetDiff = adsVal > 0 ? ((targetHashrate - adsVal) / adsVal * 100).toFixed(1) : null;
                         const isBehind = targetHashrate > adsVal;
                         // A truly negative target means you've already delivered 100% of the work for the WHOLE rental
                         const displayTarget = targetHashrate < 0 ? 0 : targetHashrate;
@@ -513,6 +625,11 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                           <span style={{ color: parseFloat(eff) < 100 ? '#f87171' : '#34d399', marginLeft: '4px' }}>{eff}%</span></div>
                           <div style={{ fontSize: '9px', marginTop: '2px' }}>
                             <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
+                            {targetDiff !== null && (
+                              <span style={{ color: isBehind ? '#f87171' : '#34d399', marginLeft: '4px', fontWeight: 'bold' }}>
+                                ({targetDiff > 0 ? '+' : ''}{targetDiff}%)
+                              </span>
+                            )}
                           </div>
                         </div>;
                       })()}

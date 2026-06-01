@@ -27,6 +27,12 @@
 		"MRR_SECRET_RIG_BT": "",
 		"MRR_KEY_RIG_SL": "",
 		"MRR_SECRET_RIG_SL": ""
-	}
-	
+	},
+	"kv_namespaces": [
+		{
+			"binding": "KV",
+			"id": "c5111bcaf291482887368894e523525a",
+			"preview_id": "<ID_OF_PREVIEW_KV_NAMESPACE_FOR_LOCAL_DEVELOPMENT>"
+		}
+	]
 }

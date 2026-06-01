@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { createHash, createHmac } from 'crypto';
 import { request } from 'undici';
 import { NiceHashClient } from './NiceHashClient.js';
-import { mapNiceHashToMRR } from './src/core/algoMapping.js';
+import { mapNiceHashToMRR, normalizeAlgoForNiceHash } from './src/core/algoMapping.js';
 import sqlite3 from 'sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -669,6 +669,7 @@ app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => {
 }));
 app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.createOrder(req.body))));
 app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderBook(req.query))));
+app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderPrice(req.query))));
 app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.cancelOrder(req.params.orderId))));
 app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.refillOrder(req.params.orderId, req.body))));
 app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.updatePriceLimit(req.params.orderId, req.body))));
@@ -1349,6 +1350,50 @@ app.get('/api/v2/mrr/balance', asyncHandler(async (req, res) => mrrRequest('/acc
 app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => mrrRequest('/info/algos', req, res)));
 app.get('/api/v2/mrr/profiles', asyncHandler(async (req, res) => mrrRequest('/profile', req, res)));
 
+/**
+ * Price comparison endpoint between MRR marketplace and NiceHash.
+ * Fetches available rigs and enriches them with NiceHash market prices.
+ */
+app.get('/api/v2/mrr/compare', asyncHandler(async (req, res) => {
+  const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
+  const algoParam = req.query.algorithm || req.query.algo;
+  
+  const { data: mrrData } = await mrrApiCall({ 
+    endpoint: '/rig', 
+    query: { algo: algoParam }, 
+    clientNameRaw: clientParam 
+  });
+  
+  const rigs = Array.isArray(mrrData?.data?.rigs) ? mrrData.data.rigs : 
+               Array.isArray(mrrData?.data) ? mrrData.data : [];
+
+  if (rigs.length === 0) return res.json({ success: true, data: [] });
+
+  const uniqueAlgos = [...new Set(rigs.map(r => String(r.algo || r.type || 'SHA256').toUpperCase()))];
+  const { client: nhClient } = resolveNhClient(clientParam);
+  const nhApp = getNiceHashApp(nhClient);
+  
+  const priceMap = new Map();
+  for (const a of uniqueAlgos) {
+    try {
+      priceMap.set(a, await nhApp.hashpower.getOrderPrice({ algorithm: a, market: 'USA' }));
+    } catch (e) {}
+  }
+
+  const comparison = rigs.map(r => {
+    const a = String(r.algo || r.type || 'SHA256').toUpperCase();
+    return {
+      mrrRig: {
+        id: r.id, name: r.name, algo: r.algo || r.type,
+        price: r.price || r.min_price || '0', currency: r.price_unit || 'BTC',
+        hashrate_unit: r.hashrate_unit || 'TH'
+      },
+      nicehashPrice: priceMap.get(a) || null
+    };
+  });
+  res.json({ success: true, data: comparison });
+}));
+
 /** Reusable logic for fetching rentals (current or history) with merged pool info */
 async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
   const isAll = clientParam === 'ALL';
@@ -1462,6 +1507,17 @@ app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
       
       // Attach a normalized object for the UI to consume easily
       const normalized = extractRentalInfo(rental);
+
+      // Enrich with NiceHash Market Price comparison
+      const nhAlgo = normalizeAlgoForNiceHash(normalized.algo);
+
+      if (nhAlgo && nhAlgo !== 'UNKNOWN' && nhAlgo !== 'N/A' && nhAlgo !== '') {
+        try {
+          const { client: nhClient } = resolveNhClient(clientParam);
+          rental.nicehashPrice = await getNiceHashApp(nhClient).hashpower.getOrderPrice({ algorithm: nhAlgo, market: 'USA' });
+        } catch (e) {}
+      }
+
       if (data.data) data.data = { ...rental, normalized };
       else Object.assign(data, { ...rental, normalized });
     }
@@ -1514,6 +1570,17 @@ app.get('/api/v2/mrr/rig/:rigIds/info', asyncHandler(async (req, res) => {
         const rigRes = await mrrApiCall({ endpoint: `/rig/${id}`, clientNameRaw: req.query.client });
         info = extractRigInfo(rigRes.data);
       }
+
+      // Enrich with NiceHash Market Price comparison
+      const nhAlgo = normalizeAlgoForNiceHash(info.miningAlgorithm);
+
+      if (nhAlgo && nhAlgo !== 'N/A' && nhAlgo !== '' && nhAlgo !== 'UNKNOWN') {
+        try {
+          const { client: nhClient } = resolveNhClient(req.query.client);
+          info.nicehashPrice = await getNiceHashApp(nhClient).hashpower.getOrderPrice({ algorithm: nhAlgo, market: 'USA' });
+        } catch (e) {}
+      }
+
       return { rigId: id, success: true, ...info };
     } catch (err) {
       return { rigId: id, success: false, message: err.message };

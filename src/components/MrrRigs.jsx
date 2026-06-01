@@ -74,6 +74,36 @@ function getRawHashrate(rate) {
   return parseFloat(rate.hash ?? rate.hashrate ?? rate.advertised ?? 0);
 }
 
+function extractPriceValue(price) {
+  if (price === undefined || price === null) return 0;
+  if (typeof price === 'number') return price;
+  if (typeof price === 'string') return parseFloat(price.replace(/,/g, '')) || 0;
+  if (typeof price === 'object') {
+    const candidate = price.paid ?? price.price ?? price.advertised ?? price.amount ?? price.total;
+    if (candidate !== undefined) return extractPriceValue(candidate);
+    const nested = Object.values(price).find(val => typeof val === 'object' && (val.price !== undefined || val.paid !== undefined));
+    if (nested) return extractPriceValue(nested.price ?? nested.paid);
+    return 0;
+  }
+  return 0;
+}
+
+function extractPriceCurrency(price) {
+  if (!price) return 'BTC';
+  if (typeof price === 'string') return price.toUpperCase();
+  if (typeof price === 'object') {
+    if (price.currency) return String(price.currency).toUpperCase();
+    const currencyKey = Object.keys(price).find(key => ['BTC', 'USD', 'EUR', 'ETH'].includes(String(key).toUpperCase()));
+    if (currencyKey) return String(currencyKey).toUpperCase();
+  }
+  return 'BTC';
+}
+
+function formatPrice(price) {
+  const value = extractPriceValue(price);
+  return Number.isFinite(value) ? value.toFixed(4) : '0.0000';
+}
+
 function getRentalStartTime(rental) {
   return rental?.start || rental?.normalized?.startTime || null;
 }
@@ -444,19 +474,14 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
 
                       // Calculate percentage difference
                       const mrrPriceNum = (() => {
-                        let p = rig.price;
-                        if (typeof p === 'object' && p !== null) {
-                          const unit = rig.price_converted || 'BTC';
-                          p = p[unit]?.price ?? p[unit] ?? '0';
-                        }
-                        const val = parseFloat(p || 0);
+                        const basePrice = extractPriceValue(rig.price) || extractPriceValue(info?.price) || extractPriceValue(info?.price?.paid);
                         if (isRented) {
                           const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
                           if (hours > 0 && adsVal > 0) {
-                            return val / (hours / 24) / adsVal;
+                            return basePrice / (hours / 24) / adsVal;
                           }
                         }
-                        return val;
+                        return basePrice;
                       })();
 
                       const diffPercent = calculatePriceComparison(
@@ -543,18 +568,8 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                               <div>
                                 <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Price</div>
                                 <div style={{ color: '#fbbf24' }}>
-                                  {(() => {
-                                    let p = rig.price;
-                                    if (typeof p === 'object' && p !== null) {
-                                      const unit = rig.price_converted || 'BTC';
-                                      p = p[unit]?.price ?? p[unit] ?? '0.00';
-                                    }
-                                    if (endpoint === '/rig' && !p) { // Marketplace fallback
-                                      p = rig.min_price || rig.price;
-                                    }
-                                    return p || '0.00';
-                                  })()}
-                                  <small style={{ opacity: 0.5, marginLeft: '2px' }}>{rig.price_unit || 'BTC'}</small>
+                                  {formatPrice(rig.price || info?.price || rig.min_price)}
+                                  <small style={{ opacity: 0.5, marginLeft: '2px' }}>{extractPriceCurrency(rig.price || info?.price || rig.price_unit || rig.currency || 'BTC')}</small>
                                   {isRented && info?.price?.paid && (
                                     <div style={{ fontSize: '9px', color: '#10b981', marginTop: '1px' }}>
                                       Paid: <strong>{info.price.paid}</strong> <small style={{ opacity: 0.7 }}>{info.price.currency || 'BTC'}</small>
@@ -576,8 +591,13 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                                   </div>
                                 )}
                                 {!hasNhPrice && !loading && !loadingInfoIds.has(rig.id) && (
-                                  <div style={{ fontSize: '8px', color: '#d18d8d', opacity: 0.6, marginTop: '2px' }}>
-                                    NH price unavailable
+                                  <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px' }}>
+                                    <span>
+                                      MRR: <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{Number.isFinite(mrrPriceNum) ? mrrPriceNum.toFixed(4) : '0.0000'}</span>
+                                    </span>
+                                    <small style={{ marginLeft: '4px', opacity: 0.7 }}>
+                                      vs NH: unavailable
+                                    </small>
                                   </div>
                                 )}
                               </div>
@@ -623,6 +643,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                                       const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
                                       const targetHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
                                       const targetDiff = adsVal > 0 ? ((targetHashrate - adsVal) / adsVal * 100).toFixed(1) : null;
+                                      const rentalPriceDiff = diffPercent !== null ? Number.parseFloat(diffPercent) : null;
                                       const isBehind = targetHashrate > adsVal;
                                       // A truly negative target means you've already delivered 100% of the work for the WHOLE rental
                                       const displayTarget = targetHashrate < 0 ? 0 : targetHashrate;
@@ -632,9 +653,9 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                                           <span style={{ color: parseFloat(eff) < 100 ? '#f87171' : '#34d399', marginLeft: '4px' }}>{eff}%</span></div>
                                         <div style={{ fontSize: '9px', marginTop: '2px' }}>
                                           <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
-                                          {targetDiff !== null && (
-                                            <span style={{ color: isBehind ? '#71f89a' : '#d33434', marginLeft: '4px', fontWeight: 'bold' }}>
-                                              ({targetDiff > 0 ? '+' : ''}{targetDiff}%)
+                                          {rentalPriceDiff !== null && Number.isFinite(rentalPriceDiff) && (
+                                            <span style={{ color: rentalPriceDiff < 0 ? '#34d399' : '#f87171', marginLeft: '4px', fontWeight: 'bold' }}>
+                                              (Price {rentalPriceDiff > 0 ? '+' : ''}{rentalPriceDiff.toFixed(1)}% vs NH)
                                             </span>
                                           )}
                                         </div>

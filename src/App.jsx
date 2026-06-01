@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import Pools from './components/Pools';
 import Modal from './components/Modal';
 import HashrateCalculator from './components/HashrateCalculator';
+import HashCompletionCalculator from './components/HashCompletionCalculator';
 import HashpowerBot from './components/HashpowerBot';
 import NiceHash from './components/NiceHash';
 import MiningRigRental from './components/MiningRigRental';
@@ -15,6 +16,7 @@ export default function App() {
   const [lastCall, setLastCall] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
   const [calculatorModalOpen, setCalculatorModalOpen] = useState(false);
+  const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
   const [algorithm, setAlgorithm] = useState('');
   const [market, setMarket] = useState('');
@@ -104,6 +106,9 @@ export default function App() {
               <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
               <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>Open the hashrate calculator in a popup modal.</p>
             </div>
+            <button className="btn-pro secondary" onClick={() => setCompletionModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
+              Completion Calc
+            </button>
             <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
               Open Calculator
             </button>
@@ -156,6 +161,14 @@ export default function App() {
         maxWidth="700px"
       >
         <HashrateCalculator />
+      </Modal>
+      <Modal
+        isOpen={completionModalOpen}
+        onClose={() => setCompletionModalOpen(false)}
+        title="Rental Completion Calculator"
+        maxWidth="750px"
+      >
+        <HashCompletionCalculator />
       </Modal>
     </div>
   );

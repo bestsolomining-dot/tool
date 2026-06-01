@@ -95,7 +95,7 @@ export default function TelegramManager({ onCall, mrrClient }) {
       <button
         className="btn-pro secondary"
         style={{ border: '1px solid #24A1DE', color: '#24A1DE' }}
-        onClick={() => onCall('/api/v2/mrr/monitor/run', { method: 'POST', showModal: true })}
+        onClick={() => onCall('/api/v2/mrr/monitor/run', { method: 'POST', query: { client: mrrClient }, showModal: true })}
         title="Manually trigger heartbeat status for all active rentals"
       >
         Force Heartbeat

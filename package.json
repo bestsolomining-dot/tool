@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "vite",
 		"backend": "node index.js",
-		"build:exe": "npm run build && npx pkg . --no-bytecode --output release/nh-tool.exe",
+		"build:exe": "npm run build && npx pkg . --output release/nh-tool.exe",
 		"electron:build": "npm run build:exe",
 		"all": "concurrently \"npm run backend\" \"npm run dev\"",
 		"build": "vite build",

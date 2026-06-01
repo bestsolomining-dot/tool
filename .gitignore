@@ -10,3 +10,5 @@ dist/client/index.html
 *.asar
 orders.csv
 *.csv
+*.db
+*.csv

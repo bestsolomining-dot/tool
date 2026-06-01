@@ -110,10 +110,11 @@ function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
             <th>ID</th>
             <th>Name</th>
             <th>Algo</th>
+            {mrrClient === 'ALL' && <th>Account</th>}
             <th>Avg / Ads</th>
-            <th>Target to 100%</th>
-            <th>Price</th>
             <th>Active P0 Pool</th>
+            <th>Target to 100%</th>
+            <th style={{ textAlign: 'right' }}>Price</th>
             <th style={{ width: '120px' }}>Remaining</th>
             <th>Status</th>
             <th style={{ textAlign: 'right' }}>Actions</th>
@@ -146,21 +147,24 @@ function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
                 {r.rig?.name || r.name || r.rig_name || r.rigName || 'N/A'}
               </td>
               <td style={{ color: '#60a5fa' }}>{r.rig?.type || r.algo || r.algorithm || r.miningAlgorithm || 'N/A'}</td>
+              {mrrClient === 'ALL' && (
+                <td><span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>{r.mrrClient || 'N/A'}</span></td>
+              )}
               <td style={{ fontFamily: 'monospace' }}>
                 {r.hashrate?.advertised?.nice || (typeof r.hashrate === 'object' ? r.hashrate?.advertised : r.hashrate) || '0'} 
                 <small>{!r.hashrate?.advertised?.nice && (r.hashrate?.suffix || '')}</small>
-              </td>
-              <td style={{ color: '#fbbf24' }}>
-                <strong style={{ color: target > ads ? '#f87171' : '#34d399' }}>{displayTarget.toFixed(2)}</strong> <small>{suffix}</small>
-              </td>
-              <td style={{ color: '#fbbf24' }}>
-                {typeof r.price === 'object' ? (r.price?.paid || r.price?.advertised || r.price?.price || '0.00') : (r.price || '0.00')} {r.price?.currency || r.currency || r.price_unit || r.price_currency || 'BTC'}
               </td>
               <td style={{ fontSize: '10px' }}>
                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px', whiteSpace: 'nowrap' }} title={r.host}>
                   {r.host ? `${r.host}:${r.port}` : <span style={{ opacity: 0.4 }}>No Data</span>}
                 </div>
                 <div style={{ opacity: 0.5, fontSize: '9px' }}>{r.user}</div>
+              </td>
+              <td style={{ color: '#fbbf24' }}>
+                <strong style={{ color: target > ads ? '#f87171' : '#34d399' }}>{displayTarget.toFixed(2)}</strong> <small style={{ opacity: 0.5 }}>{suffix}</small>
+              </td>
+              <td style={{ color: '#fbbf24', textAlign: 'right' }}>
+                {typeof r.price === 'object' ? (r.price?.paid || r.price?.advertised || r.price?.price || '0.00') : (r.price || '0.00')} <small style={{ opacity: 0.5 }}>{r.price?.currency || r.currency || 'BTC'}</small>
               </td>
               <td>
                 <CountdownTimer endTime={r.end} />

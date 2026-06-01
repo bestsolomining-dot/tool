@@ -91,6 +91,14 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
   // More granular status filtering: 'available', 'rented', or 'all'
   const [statusFilter, setStatusFilter] = useState(endpoint === '/rig' ? initialStatus : 'rented');
 
+  const stats = useMemo(() => {
+    return {
+      total: rigs.length,
+      available: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('available')).length,
+      rented: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('rented')).length,
+    };
+  }, [rigs]);
+
   // Debug count to see if items are being filtered out
   const totalFetchedCount = rigs.length;
 
@@ -280,6 +288,31 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
       </div>
 
       {error && <div className="error-message" style={{ margin: '15px 0', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '6px', color: '#f87171' }}><strong>Error:</strong> {error}</div>}
+
+      {/* Status Dashboard */}
+      <div className="rigs-summary-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+        <div className="stat-card-mini" style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ fontSize: '10px', opacity: 0.5, textTransform: 'uppercase' }}>Total Rigs</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold' }}>{stats.total}</div>
+        </div>
+        <div className="stat-card-mini" style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+          <div style={{ fontSize: '10px', color: '#10b981', textTransform: 'uppercase' }}>Available</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>{stats.available}</div>
+        </div>
+        <div className="stat-card-mini" style={{ background: 'rgba(167, 139, 250, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(167, 139, 250, 0.2)' }}>
+          <div style={{ fontSize: '10px', color: '#a78bfa', textTransform: 'uppercase' }}>Rented</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#a78bfa' }}>{stats.rented}</div>
+        </div>
+        <div className="stat-card-mini" style={{ background: 'rgba(251, 191, 36, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(251, 191, 36, 0.2)' }}>
+          <div style={{ fontSize: '10px', color: '#fbbf24', textTransform: 'uppercase' }}>Global Avg Eff</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fbbf24' }}>
+            {(() => {
+              const effs = rigs.map(r => parseFloat(r.percent || r.hashrate?.average?.percent || 0)).filter(e => e > 0);
+              return effs.length ? (effs.reduce((a,b) => a+b, 0) / effs.length).toFixed(1) : '0.0';
+            })()}%
+          </div>
+        </div>
+      </div>
 
       <div className="rig-list" style={{ marginTop: '15px', position: 'relative', flexGrow: 1, display: 'flex', flexDirection: 'column', maxHeight: '800px', overflowY: 'auto', paddingRight: '2px', scrollbarWidth: 'thin', scrollbarColor: 'rgba(143, 64, 64, 0.59) transparent', overscrollBehavior: 'contain' }}>
         {filteredRigs.length === 0 && !loading && !error && (

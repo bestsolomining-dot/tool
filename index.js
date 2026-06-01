@@ -162,11 +162,12 @@ const mrrConfigs = {
     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_SL),
     apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_SL),
   },
-  ALL: {
+  VN: {
     apiKey: normalizeCredential(process.env.MRR_KEY_RIG_VN),
     apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_VN),
   },
 };
+
 const defaultMrrClientRaw = String(process.env.MRR_DEFAULT_CLIENT || 'BT').trim().toUpperCase();
 const defaultMrrClient = (function () {
   if (mrrConfigs[defaultMrrClientRaw]) return defaultMrrClientRaw;
@@ -1352,14 +1353,14 @@ app.get('/api/v2/mrr/profiles', asyncHandler(async (req, res) => mrrRequest('/pr
 async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
   const isAll = clientParam === 'ALL';
   const allClientNames = isAll 
-    ? Object.keys(mrrConfigs).filter(c => c !== 'ALL' && mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret)
+    ? Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret)
     : [clientParam];
 
   const allRentals = [];
   const errors = [];
 
   // Clean query for MRR (remove tool-internal params)
-  const { ts: _t, client: _c, ...mrrQuery } = query;
+  const { ts: _t, client: _c, ...mrrQuery } = query || {};
 
   for (const clientName of allClientNames) {
     try {
@@ -1372,7 +1373,7 @@ async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
           const { data: poolsData } = await mrrApiCall({ endpoint: `/rental/${rentalIds}/pool`, clientNameRaw: clientName });
           if (poolsData && poolsData.success) {
             const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (poolsData.data?.result || poolsData.data?.rentals || []);
-            const poolMap = new Map(poolItems.map(item => [String(item.rigid || item.id || item.rentalid || item.rental_id), item.pools]));
+            const poolMap = new Map(poolItems.map(item => [String(item.rigid || item.id || item.rentalid || item.rental_id || item.rental_id), item.pools]));
             rentals.forEach(r => {
               const pools = poolMap.get(String(r.id));
               if (pools && pools.length > 0) {

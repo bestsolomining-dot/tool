@@ -74,34 +74,67 @@ function getRawHashrate(rate) {
   return parseFloat(rate.hash ?? rate.hashrate ?? rate.advertised ?? 0);
 }
 
-function extractPriceValue(price) {
+function parsePriceValue(price) {
   if (price === undefined || price === null) return 0;
   if (typeof price === 'number') return price;
-  if (typeof price === 'string') return parseFloat(price.replace(/,/g, '')) || 0;
+  if (typeof price === 'string') {
+    const cleaned = price.replace(/,/g, '').replace(/[^\d.-]/g, '');
+    return parseFloat(cleaned) || 0;
+  }
   if (typeof price === 'object') {
-    const candidate = price.paid ?? price.price ?? price.advertised ?? price.amount ?? price.total;
-    if (candidate !== undefined) return extractPriceValue(candidate);
+    const candidate = price.price ?? price.paid ?? price.advertised ?? price.amount ?? price.total;
+    if (candidate !== undefined) return parsePriceValue(candidate);
     const nested = Object.values(price).find(val => typeof val === 'object' && (val.price !== undefined || val.paid !== undefined));
-    if (nested) return extractPriceValue(nested.price ?? nested.paid);
-    return 0;
+    if (nested) return parsePriceValue(nested.price ?? nested.paid);
   }
   return 0;
 }
 
-function extractPriceCurrency(price) {
-  if (!price) return 'BTC';
-  if (typeof price === 'string') return price.toUpperCase();
-  if (typeof price === 'object') {
-    if (price.currency) return String(price.currency).toUpperCase();
-    const currencyKey = Object.keys(price).find(key => ['BTC', 'USD', 'EUR', 'ETH'].includes(String(key).toUpperCase()));
-    if (currencyKey) return String(currencyKey).toUpperCase();
+function getPriceData(source) {
+  if (source === undefined || source === null) return { value: 0, currency: 'BTC' };
+  if (typeof source === 'number') return { value: source, currency: 'BTC' };
+  if (typeof source === 'string') return { value: parsePriceValue(source), currency: 'BTC' };
+
+  const obj = source;
+  if (typeof obj === 'object') {
+    const getObjValue = (key) => {
+      const normalized = obj[key];
+      if (normalized === undefined) return undefined;
+      if (typeof normalized === 'object') {
+        const nested = normalized.price ?? normalized.amount ?? normalized.total ?? normalized.value ?? normalized;
+        return parsePriceValue(nested);
+      }
+      return parsePriceValue(normalized);
+    };
+
+    const currency = String(obj.currency || obj.price_unit || 'BTC').toUpperCase();
+
+    const preferredKeys = ['BTC', 'USD', 'LTC'];
+    for (const key of preferredKeys) {
+      const value = getObjValue(key);
+      if (value !== undefined) return { value, currency: key.toUpperCase() };
+    }
+
+    const directValue = obj.price ?? obj.advertised ?? obj.amount ?? obj.total;
+    if (directValue !== undefined) return { value: parsePriceValue(directValue), currency };
+
+    // fallback to first numeric child field, but ignore paid-only values
+    for (const key of Object.keys(obj)) {
+      if (key === 'paid' || key === 'currency' || key === 'price_unit') continue;
+      const v = getObjValue(key);
+      if (v !== undefined) return { value: v, currency: key.toUpperCase() };
+    }
   }
-  return 'BTC';
+
+  return { value: 0, currency: 'BTC' };
 }
 
-function formatPrice(price) {
-  const value = extractPriceValue(price);
-  return Number.isFinite(value) ? value.toFixed(4) : '0.0000';
+function getNiceHashPriceValue(rawNhData) {
+  const nhData = rawNhData?.price || rawNhData;
+  if (!nhData || typeof nhData !== 'object') return 0;
+
+  const candidate = nhData.fixedPrice ?? nhData.standardPrice?.fast ?? nhData.standardPrice ?? nhData.price ?? nhData.amount ?? 0;
+  return parsePriceValue(candidate);
 }
 
 function getRentalStartTime(rental) {
@@ -197,18 +230,23 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
   useEffect(() => {
     const uniqueAlgos = [...new Set(filteredRigs.map(r => (r.algo || r.algorithm || r.type || 'N/A').toUpperCase()))];
     uniqueAlgos.forEach(async (algo) => {
-      // Ensure we only fetch if we don't have it and it's a valid string
       if (algo && algo !== 'N/A' && !algoMarketPrices[algo]) {
         try {
-          // Use shared provider logic for normalization
           const nhAlgo = normalizeAlgoForNiceHash(algo);
 
-          const res = await fetch(`/api/v2/hashpower/order/price?algorithm=${nhAlgo}&market=USA&client=${mrrClient}&ts=${Date.now()}`);
-          const data = await res.json();
+          const fetchPrice = async (path) => {
+            const res = await fetch(`${path}?algorithm=${encodeURIComponent(nhAlgo)}&market=USA&client=${encodeURIComponent(mrrClient)}&ts=${Date.now()}`);
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data?.price || data;
+          };
 
-          // Handle wrapped response: { price: { ... } }
-          const nhPriceData = data?.price || data;
-          if (nhPriceData && !data.error && (nhPriceData.fixedPrice || nhPriceData.standardPrice)) {
+          let nhPriceData = await fetchPrice('/api/v2/hashpower/business/order');
+          if (!nhPriceData || getNiceHashPriceValue(nhPriceData) <= 0) {
+            nhPriceData = await fetchPrice('/api/v2/hashpower/order/price');
+          }
+
+          if (nhPriceData && getNiceHashPriceValue(nhPriceData) > 0) {
             setAlgoMarketPrices(prev => ({ ...prev, [algo]: nhPriceData }));
           }
         } catch (e) {
@@ -470,24 +508,36 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
 
                       const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised);
 
-                      const hasNhPrice = nhData && (parseFloat(nhData.fixedPrice) > 0 || parseFloat(nhData.standardPrice?.fast || nhData.standardPrice) > 0);
+                      const priceData = getPriceData(rig.price || info?.price || rig.min_price);
+                      const displayPrice = priceData.value;
+                      const displayPriceCurrency = priceData.currency || 'BTC';
+                      const paidAmount = parsePriceValue(info?.price?.paid || rig.price?.paid);
+                      const paidCurrency = info?.price?.currency || rig.price?.currency || '';
+                      const paidLabel = paidAmount > 0 && paidCurrency ? `${paidAmount.toFixed(8)} ${paidCurrency}` : null;
 
-                      // Calculate percentage difference
+                      const nhPriceValue = getNiceHashPriceValue(rawNhData);
+                      const hasNhPrice = nhPriceValue > 0;
+
                       const mrrPriceNum = (() => {
-                        const basePrice = extractPriceValue(rig.price) || extractPriceValue(info?.price) || extractPriceValue(info?.price?.paid);
+                        let p = rig.price;
+                        if (typeof p === 'object' && p !== null) {
+                          const unit = rig.price_converted || 'BTC';
+                          p = p[unit]?.price ?? p[unit] ?? p.price ?? '0';
+                        }
+                        const val = parseFloat(p || 0);
                         if (isRented) {
                           const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
                           if (hours > 0 && adsVal > 0) {
-                            return basePrice / (hours / 24) / adsVal;
+                            return val / (hours / 24) / adsVal;
                           }
                         }
-                        return basePrice;
+                        return val;
                       })();
 
                       const diffPercent = calculatePriceComparison(
                         mrrPriceNum,
                         rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH',
-                        nhData?.fixedPrice || nhData?.standardPrice?.fast || nhData?.standardPrice || 0,
+                        nhPriceValue,
                         nhData?.speedUnit || 'TH'
                       );
 
@@ -568,11 +618,11 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                               <div>
                                 <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Price</div>
                                 <div style={{ color: '#fbbf24' }}>
-                                  {formatPrice(rig.price || info?.price || rig.min_price)}
-                                  <small style={{ opacity: 0.5, marginLeft: '2px' }}>{extractPriceCurrency(rig.price || info?.price || rig.price_unit || rig.currency || 'BTC')}</small>
-                                  {isRented && info?.price?.paid && (
+                                  {displayPrice.toFixed(8)}
+                                  <small style={{ opacity: 0.5, marginLeft: '2px' }}>{displayPriceCurrency}</small>
+                                  {isRented && paidLabel && (
                                     <div style={{ fontSize: '9px', color: '#10b981', marginTop: '1px' }}>
-                                      Paid: <strong>{info.price.paid}</strong> <small style={{ opacity: 0.7 }}>{info.price.currency || 'BTC'}</small>
+                                      Paid: <strong>{paidLabel}</strong>
                                     </div>
                                   )}
                                 </div>
@@ -580,9 +630,9 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                                   <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
                                     <span>
                                       NH: <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>
-                                        {parseFloat(nhData.fixedPrice || nhData.standardPrice?.fast || nhData.standardPrice || 0).toFixed(4)}
+                                        {nhPriceValue.toFixed(4)}
                                       </span>
-                                      <small style={{ marginLeft: '2px', opacity: 0.7 }}>{nhData.fixedPrice ? 'Fix' : 'Std'}</small>
+                                      <small style={{ marginLeft: '2px', opacity: 0.7 }}>{nhData?.fixedPrice ? 'Fix' : 'Std'}</small>
                                       {diffPercent !== null && (
                                         <span style={{ color: parseFloat(diffPercent) < 0 ? '#34d399' : '#f87171', fontWeight: 'bold', marginLeft: '5px' }}>
                                           ({parseFloat(diffPercent) < 0 ? '' : '+'}{diffPercent}%)
@@ -593,10 +643,10 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                                 {!hasNhPrice && !loading && !loadingInfoIds.has(rig.id) && (
                                   <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px' }}>
                                     <span>
-                                      MRR: <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{Number.isFinite(mrrPriceNum) ? mrrPriceNum.toFixed(4) : '0.0000'}</span>
+                                      MRR: <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{displayPrice.toFixed(8)}</span> <small style={{ opacity: 0.7 }}>{displayPriceCurrency}</small>
                                     </span>
-                                    <small style={{ marginLeft: '4px', opacity: 0.7 }}>
-                                      vs NH: unavailable
+                                    <small style={{ display: 'block', marginTop: '2px', opacity: 0.7 }}>
+                                      paid converted to {displayPriceCurrency} vs NH: unavailable
                                     </small>
                                   </div>
                                 )}

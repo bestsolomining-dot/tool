@@ -165,7 +165,7 @@ const nhConfigs = {
   PH: {
     apiKey: normalizeCredential(process.env.NICEHASH_API_KEY_PH),
     apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET_PH),
-    orgId: normalizeCredential(process.env.NICEHASH_ORG_ID_PH),
+    orgId: normalizeCredential(process.env.NICEHASH_ORG_ID_PH || process.env.NICEHASH_ORG_ID),
   }
 };
 
@@ -303,6 +303,7 @@ const getNiceHashApp = (client) => ({
     getVmmOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/vmm/orders', query: { ts: Date.now().toString() } }),
     // Public Hashpower
     getOrderPrice: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/order/price', query }),
+    getBusinessOrder: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/business/order', query }),
     getOrderBook: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/orderBook', query: { ts: Date.now().toString(), ...query } }),
     getGlobalStats24h: () => client.call({ method: 'GET', path: '/main/api/v2/public/stats/global/24h' }),
   },
@@ -633,6 +634,7 @@ app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => {
 app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.createOrder(req.body))));
 app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderBook(req.query))));
 app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderPrice(req.query))));
+app.get('/api/v2/hashpower/business/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getBusinessOrder(req.query))));
 app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.cancelOrder(req.params.orderId))));
 app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.refillOrder(req.params.orderId, req.body))));
 app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.updatePriceLimit(req.params.orderId, req.body))));

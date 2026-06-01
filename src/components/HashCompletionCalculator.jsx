@@ -19,8 +19,10 @@ export default function HashCompletionCalculator() {
     const start = new Date(startTime);
     const end = new Date(endTime);
     const now = new Date();
+    const adsValue = parseFloat(adsHashrate);
+    const avgValue = parseFloat(avgHashrate);
 
-    if (isNaN(start.getTime()) || isNaN(end.getTime()) || !adsHashrate) {
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || isNaN(adsValue) || adsValue <= 0) {
       return null;
     }
 
@@ -30,20 +32,19 @@ export default function HashCompletionCalculator() {
     const elapsedMs = Math.max(0, Math.min(now - start, totalDurationMs));
     const remainingMs = Math.max(0, totalDurationMs - elapsedMs);
 
-    const ads = parseFloat(adsHashrate) * unit;
-    const avg = (parseFloat(avgHashrate) || 0) * unit;
+    const ads = adsValue * unit;
+    const avg = (isNaN(avgValue) ? 0 : avgValue) * unit;
 
-    // Work is Hashrate * Seconds
     const totalExpectedHashes = ads * (totalDurationMs / 1000);
     const actualHashesDone = avg * (elapsedMs / 1000);
     const remainingHashesNeeded = Math.max(0, totalExpectedHashes - actualHashesDone);
 
-    const currentOverallCompletion = (actualHashesDone / totalExpectedHashes) * 100;
+    const currentOverallCompletion = totalExpectedHashes > 0 ? (actualHashesDone / totalExpectedHashes) * 100 : 0;
     const timeProgress = (elapsedMs / totalDurationMs) * 100;
 
-    // Target average for the remaining time to hit 100% of Advertised Total
-    const requiredHashrateRaw = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
-    const requiredHashrateFormatted = (requiredHashrateRaw / unit).toFixed(2);
+    const remainingSeconds = remainingMs / 1000;
+    const requiredHashrateRaw = remainingSeconds > 0 ? remainingHashesNeeded / remainingSeconds : 0;
+    const requiredHashrateFormatted = (requiredHashrateRaw > 0 ? requiredHashrateRaw : 0) / unit;
 
     return {
       durationHrs: (totalDurationMs / 3600000).toFixed(2),
@@ -54,8 +55,8 @@ export default function HashCompletionCalculator() {
       remainingHashesNeeded,
       currentOverallCompletion: currentOverallCompletion.toFixed(2),
       timeProgress: timeProgress.toFixed(2),
-      requiredHashrateFormatted,
-      isBehind: avg < ads && elapsedMs > 0
+      requiredHashrateFormatted: requiredHashrateFormatted.toFixed(2),
+      isBehind: currentOverallCompletion < 100 && elapsedMs > 0
     };
   }, [startTime, endTime, adsHashrate, avgHashrate, unit]);
 

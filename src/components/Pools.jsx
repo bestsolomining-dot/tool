@@ -239,7 +239,7 @@ export default function Pools({ onCall }) {
     setPlaying(true)
     setError('')
 
-    const activePoolKeys = new Set();
+    const activeIdentifiers = new Set();
     if (skipActiveOrders) {
       // 1. Fetch active NiceHash orders to identify pools currently in use
       try {
@@ -250,9 +250,14 @@ export default function Pools({ onCall }) {
         const orders = ordersRes?.list || ordersRes?.myOrders || [];
         orders.forEach(order => {
           const pool = order.pool;
+          const algo = order.algorithm?.algorithm || order.algorithm;
           if (pool?.stratumHostname && pool?.stratumPort) {
             // Normalize key for comparison
-            activePoolKeys.add(`${pool.stratumHostname.toLowerCase()}:${pool.stratumPort}`);
+            activeIdentifiers.add(`${pool.stratumHostname.toLowerCase()}:${pool.stratumPort}`);
+          }
+          if (pool?.name && algo) {
+            // Add name:algo identifier to skip specific pools by name
+            activeIdentifiers.add(`${pool.name.toLowerCase()}:${String(algo).toLowerCase()}`);
           }
         });
       } catch (e) {
@@ -263,13 +268,18 @@ export default function Pools({ onCall }) {
     const poolsToProcess = poolsToVerify.filter(pool => {
       const host = (pool.stratumHostname || pool.host || '').toLowerCase();
       const port = pool.stratumPort || pool.port;
-      const key = `${host}:${port}`;
-      const isActive = activePoolKeys.has(key);
+      const hostKey = host && port ? `${host}:${port}` : null;
+
+      const name = (pool.name || pool.label || '').toLowerCase();
+      const algo = ph.getAlgo(pool)?.toLowerCase();
+      const nameKey = name && algo ? `${name}:${algo}` : null;
+
+      const isActive = (hostKey && activeIdentifiers.has(hostKey)) || (nameKey && activeIdentifiers.has(nameKey));
       return !isActive;
     });
 
-    const skippedCount = poolsToVerify.length - poolsToProcess.length;
-    setSkippedCount(skippedCountLocal);
+    const localSkippedCount = poolsToVerify.length - poolsToProcess.length;
+    setSkippedCount(localSkippedCount);
 
     setResponse(null)
     setVerifyResults([])

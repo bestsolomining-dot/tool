@@ -22,6 +22,13 @@
       "client": "PH"
     },
     {
+      "id": "d18e5075-e8cc-4c43-8d67-5191b47e660c",
+      "name": "Lona 08",
+      "username": "lona.364181",
+      "algorithm": "EQUIHASH",
+      "client": "PH"
+    },
+    {
       "id": "1a078024-2ec3-448d-9c6e-6d9b0edf1a74",
       "name": "12 betsolo",
       "username": "bestsolomining.373726",
@@ -16868,13 +16875,13 @@
       "rigid": "372494",
       "pools": [
         {
-          "id": "67636110",
+          "id": "67757774",
           "priority": "0",
           "type": "equihash",
           "name": "",
-          "host": "us-west01.miningrigrentals.com",
+          "host": "eu-de02.miningrigrentals.com",
           "port": "3333",
-          "user": "bestsolomining.372497",
+          "user": "lona.364181",
           "pass": "x",
           "pool_option1": null,
           "status": "",
@@ -16882,7 +16889,7 @@
           "notes": null
         },
         {
-          "id": "67636111",
+          "id": "67757775",
           "priority": "1",
           "type": "equihash",
           "name": "",
@@ -16896,7 +16903,7 @@
           "notes": null
         },
         {
-          "id": "67636112",
+          "id": "67757776",
           "priority": "2",
           "type": "equihash",
           "name": "",
@@ -16910,7 +16917,7 @@
           "notes": null
         },
         {
-          "id": "67636113",
+          "id": "67757777",
           "priority": "3",
           "type": "equihash",
           "name": "",
@@ -16924,13 +16931,27 @@
           "notes": null
         },
         {
-          "id": "67636114",
+          "id": "67757778",
           "priority": "4",
           "type": "equihash",
           "name": "",
           "host": "us-west01.miningrigrentals.com",
           "port": "3333",
           "user": "bestsolomining.372494",
+          "pass": "x",
+          "pool_option1": null,
+          "status": "",
+          "status_time": null,
+          "notes": null
+        },
+        {
+          "id": "67757779",
+          "priority": "5",
+          "type": "equihash",
+          "name": "",
+          "host": "us-west01.miningrigrentals.com",
+          "port": "3333",
+          "user": "bestsolomining.372497",
           "pass": "x",
           "pool_option1": null,
           "status": "",
@@ -17018,22 +17039,8 @@
       "rigid": "372496",
       "pools": [
         {
-          "id": "67644403",
+          "id": "67757143",
           "priority": "0",
-          "type": "equihash",
-          "name": "",
-          "host": "us-west01.miningrigrentals.com",
-          "port": "3333",
-          "user": "bestsolomining.372495",
-          "pass": "x",
-          "pool_option1": null,
-          "status": "",
-          "status_time": null,
-          "notes": null
-        },
-        {
-          "id": "67644404",
-          "priority": "1",
           "type": "equihash",
           "name": "",
           "host": "us-west01.miningrigrentals.com",
@@ -17046,7 +17053,21 @@
           "notes": null
         },
         {
-          "id": "67644405",
+          "id": "67757144",
+          "priority": "1",
+          "type": "equihash",
+          "name": "",
+          "host": "us-west01.miningrigrentals.com",
+          "port": "3333",
+          "user": "bestsolomining.372495",
+          "pass": "x",
+          "pool_option1": null,
+          "status": "",
+          "status_time": null,
+          "notes": null
+        },
+        {
+          "id": "67757145",
           "priority": "2",
           "type": "equihash",
           "name": "",
@@ -17060,7 +17081,7 @@
           "notes": null
         },
         {
-          "id": "67644406",
+          "id": "67757146",
           "priority": "3",
           "type": "equihash",
           "name": "",
@@ -17074,7 +17095,7 @@
           "notes": null
         },
         {
-          "id": "67644407",
+          "id": "67757147",
           "priority": "4",
           "type": "equihash",
           "name": "",
@@ -20536,7 +20557,7 @@
           "user": "bestsolomining.370124",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -21414,7 +21435,7 @@
           "user": "bestsolomining.370923",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -25978,7 +25999,7 @@
           "user": "bestsolomining.372666",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -26833,7 +26854,7 @@
           "user": "solo:Q01050004d67616f221acd8cf471e59a5c332af808acb405c79530229b0ccfa101ab128c914f7a1",
           "pass": "BESTSOLO 01",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         }
@@ -36701,7 +36722,7 @@
           "user": "bestsolomining.371859",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -40699,7 +40720,7 @@
           "user": "batri.353905",
           "pass": "17",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -62120,7 +62141,7 @@
           "user": "batri.354746",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -79836,7 +79857,7 @@
           "user": "batri.355854",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -85410,7 +85431,7 @@
           "user": "batri.362284",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87332,7 +87353,7 @@
           "user": "batri.292002",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87346,7 +87367,7 @@
           "user": "batri.319821",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87360,7 +87381,7 @@
           "user": "batri.318683",
           "pass": "X",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87374,7 +87395,7 @@
           "user": "batri.319820",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87402,7 +87423,7 @@
           "user": "batri.318586",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87416,7 +87437,7 @@
           "user": "batri.318350",
           "pass": "X",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87430,7 +87451,7 @@
           "user": "batri.318585",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87444,7 +87465,7 @@
           "user": "batri.293263",
           "pass": "03",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87458,7 +87479,7 @@
           "user": "batri.316851",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87472,7 +87493,7 @@
           "user": "batri.318349",
           "pass": "X",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87486,7 +87507,7 @@
           "user": "batri.318685",
           "pass": "X",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87500,7 +87521,7 @@
           "user": "batri.318684",
           "pass": "09",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -87514,7 +87535,7 @@
           "user": "batri.292043",
           "pass": "02",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         }
@@ -106216,13 +106237,13 @@
       "client": "SL",
       "pools": [
         {
-          "id": "67636110",
+          "id": "67757774",
           "priority": "0",
           "type": "equihash",
           "name": "",
-          "host": "us-west01.miningrigrentals.com",
+          "host": "eu-de02.miningrigrentals.com",
           "port": "3333",
-          "user": "bestsolomining.372497",
+          "user": "lona.364181",
           "pass": "x",
           "pool_option1": null,
           "status": "",
@@ -106230,7 +106251,7 @@
           "notes": null
         },
         {
-          "id": "67636111",
+          "id": "67757775",
           "priority": "1",
           "type": "equihash",
           "name": "",
@@ -106244,7 +106265,7 @@
           "notes": null
         },
         {
-          "id": "67636112",
+          "id": "67757776",
           "priority": "2",
           "type": "equihash",
           "name": "",
@@ -106258,7 +106279,7 @@
           "notes": null
         },
         {
-          "id": "67636113",
+          "id": "67757777",
           "priority": "3",
           "type": "equihash",
           "name": "",
@@ -106272,13 +106293,27 @@
           "notes": null
         },
         {
-          "id": "67636114",
+          "id": "67757778",
           "priority": "4",
           "type": "equihash",
           "name": "",
           "host": "us-west01.miningrigrentals.com",
           "port": "3333",
           "user": "bestsolomining.372494",
+          "pass": "x",
+          "pool_option1": null,
+          "status": "",
+          "status_time": null,
+          "notes": null
+        },
+        {
+          "id": "67757779",
+          "priority": "5",
+          "type": "equihash",
+          "name": "",
+          "host": "us-west01.miningrigrentals.com",
+          "port": "3333",
+          "user": "bestsolomining.372497",
           "pass": "x",
           "pool_option1": null,
           "status": "",
@@ -106370,22 +106405,8 @@
       "client": "SL",
       "pools": [
         {
-          "id": "67644403",
+          "id": "67757143",
           "priority": "0",
-          "type": "equihash",
-          "name": "",
-          "host": "us-west01.miningrigrentals.com",
-          "port": "3333",
-          "user": "bestsolomining.372495",
-          "pass": "x",
-          "pool_option1": null,
-          "status": "",
-          "status_time": null,
-          "notes": null
-        },
-        {
-          "id": "67644404",
-          "priority": "1",
           "type": "equihash",
           "name": "",
           "host": "us-west01.miningrigrentals.com",
@@ -106398,7 +106419,21 @@
           "notes": null
         },
         {
-          "id": "67644405",
+          "id": "67757144",
+          "priority": "1",
+          "type": "equihash",
+          "name": "",
+          "host": "us-west01.miningrigrentals.com",
+          "port": "3333",
+          "user": "bestsolomining.372495",
+          "pass": "x",
+          "pool_option1": null,
+          "status": "",
+          "status_time": null,
+          "notes": null
+        },
+        {
+          "id": "67757145",
           "priority": "2",
           "type": "equihash",
           "name": "",
@@ -106412,7 +106447,7 @@
           "notes": null
         },
         {
-          "id": "67644406",
+          "id": "67757146",
           "priority": "3",
           "type": "equihash",
           "name": "",
@@ -106426,7 +106461,7 @@
           "notes": null
         },
         {
-          "id": "67644407",
+          "id": "67757147",
           "priority": "4",
           "type": "equihash",
           "name": "",
@@ -109942,7 +109977,7 @@
           "user": "bestsolomining.370124",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -110824,7 +110859,7 @@
           "user": "bestsolomining.370923",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -115416,7 +115451,7 @@
           "user": "bestsolomining.372666",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -116277,7 +116312,7 @@
           "user": "solo:Q01050004d67616f221acd8cf471e59a5c332af808acb405c79530229b0ccfa101ab128c914f7a1",
           "pass": "BESTSOLO 01",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         }
@@ -126273,7 +126308,7 @@
           "user": "bestsolomining.371859",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -130291,7 +130326,7 @@
           "user": "batri.353905",
           "pass": "17",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -151858,7 +151893,7 @@
           "user": "batri.354746",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -169694,7 +169729,7 @@
           "user": "batri.355854",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -175308,7 +175343,7 @@
           "user": "batri.362284",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177254,7 +177289,7 @@
           "user": "batri.292002",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177268,7 +177303,7 @@
           "user": "batri.319821",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177282,7 +177317,7 @@
           "user": "batri.318683",
           "pass": "X",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177296,7 +177331,7 @@
           "user": "batri.319820",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177324,7 +177359,7 @@
           "user": "batri.318586",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177338,7 +177373,7 @@
           "user": "batri.318350",
           "pass": "X",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177352,7 +177387,7 @@
           "user": "batri.318585",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177366,7 +177401,7 @@
           "user": "batri.293263",
           "pass": "03",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177380,7 +177415,7 @@
           "user": "batri.316851",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177394,7 +177429,7 @@
           "user": "batri.318349",
           "pass": "X",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177408,7 +177443,7 @@
           "user": "batri.318685",
           "pass": "X",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177422,7 +177457,7 @@
           "user": "batri.318684",
           "pass": "09",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -177436,7 +177471,7 @@
           "user": "batri.292043",
           "pass": "02",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         }
@@ -180003,49 +180038,49 @@
       "mrrRigId": "364180",
       "mrrRigName": "06",
       "mrrClient": "LN",
-      "nhPoolName": "LONA 08",
+      "nhPoolName": "Lona 08",
       "username": "lona.364181",
-      "nhClient": "BT"
+      "nhClient": "PH"
     },
     {
       "mrrRigId": "364183",
       "mrrRigName": "07",
       "mrrClient": "LN",
-      "nhPoolName": "LONA 08",
+      "nhPoolName": "Lona 08",
       "username": "lona.364181",
-      "nhClient": "BT"
+      "nhClient": "PH"
     },
     {
       "mrrRigId": "364181",
       "mrrRigName": "08",
       "mrrClient": "LN",
-      "nhPoolName": "LONA 08",
+      "nhPoolName": "Lona 08",
       "username": "lona.364181",
-      "nhClient": "BT"
+      "nhClient": "PH"
     },
     {
       "mrrRigId": "364089",
       "mrrRigName": "01 LONA",
       "mrrClient": "LN",
-      "nhPoolName": "LONA 08",
+      "nhPoolName": "Lona 08",
       "username": "lona.364181",
-      "nhClient": "BT"
+      "nhClient": "PH"
     },
     {
       "mrrRigId": "364092",
       "mrrRigName": "02 LONA",
       "mrrClient": "LN",
-      "nhPoolName": "LONA 08",
+      "nhPoolName": "Lona 08",
       "username": "lona.364181",
-      "nhClient": "BT"
+      "nhClient": "PH"
     },
     {
       "mrrRigId": "364090",
       "mrrRigName": "03 LONA",
       "mrrClient": "LN",
-      "nhPoolName": "LONA 08",
+      "nhPoolName": "Lona 08",
       "username": "lona.364181",
-      "nhClient": "BT"
+      "nhClient": "PH"
     },
     {
       "mrrRigId": "332747",
@@ -180507,6 +180542,14 @@
       "mrrRigId": "372494",
       "mrrRigName": "01 best solo ",
       "mrrClient": "SL",
+      "nhPoolName": "Lona 08",
+      "username": "lona.364181",
+      "nhClient": "PH"
+    },
+    {
+      "mrrRigId": "372494",
+      "mrrRigName": "01 best solo ",
+      "mrrClient": "SL",
       "nhPoolName": "BEST SOLO 04",
       "username": "bestsolomining.372495",
       "nhClient": "BT"
@@ -180563,16 +180606,16 @@
       "mrrRigId": "372496",
       "mrrRigName": "03  best solo ",
       "mrrClient": "SL",
-      "nhPoolName": "BEST SOLO 04",
-      "username": "bestsolomining.372495",
+      "nhPoolName": "BA TRI 00",
+      "username": "batri.320093",
       "nhClient": "BT"
     },
     {
       "mrrRigId": "372496",
       "mrrRigName": "03  best solo ",
       "mrrClient": "SL",
-      "nhPoolName": "BA TRI 00",
-      "username": "batri.320093",
+      "nhPoolName": "BEST SOLO 04",
+      "username": "bestsolomining.372495",
       "nhClient": "BT"
     },
     {
@@ -195656,5 +195699,5 @@
       "nhClient": "BT"
     }
   ],
-  "lastSync": "2026-06-02T06:56:17.894Z"
+  "lastSync": "2026-06-02T09:30:54.158Z"
 }

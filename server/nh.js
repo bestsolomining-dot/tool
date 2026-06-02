@@ -24,7 +24,7 @@ export const isAggregate = (c) => {
   return uc === 'ALL' || uc === AGGREGATE_CLIENT;
 };
 
-const defaultMrrClientRaw = String(process.env.MRR_DEFAULT_CLIENT || 'BT').trim().toUpperCase();
+const defaultMrrClientRaw = String(process.env.MRR_DEFAULT_CLIENT || 'VN').trim().toUpperCase();
 export const defaultMrrClient = (function () {
   if (defaultMrrClientRaw === 'VN') return 'VN';
   if (defaultMrrClientRaw === 'SL') return 'SL';

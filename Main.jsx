@@ -23,7 +23,7 @@ export default function App() {
   const [algorithm, setAlgorithm] = useState('');
   const [market, setMarket] = useState('');
   const [nhClient, setNhClient] = useState('BT');
-  const [mrrClient, setMrrClient] = useState('BT');
+  const [mrrClient, setMrrClient] = useState('VN');
   const [mrrPoolData, setMrrPoolData] = useState(null);
   const [mrrPoolRigId, setMrrPoolRigId] = useState('');
   const [mrrPoolRentalId, setMrrPoolRentalId] = useState('');

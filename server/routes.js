@@ -298,8 +298,9 @@ export function registerRoutes(app) {
     const msg = `🚀 <b>[New Rental] (Test)</b>\n\n` +
       `<b>Rig:</b> Test-Rig-Notice\n` +
       `<b>Algo:</b> SHA256\n` +
-      `<b>Current Avg:</b> 1.23 TH/s\n` +
-      `<b>Efficiency:</b> 100.0%\n` +
+      `<b>AVG Hashrate:</b> 1.23 TH/s\n` +
+      `<b>Effect:</b> 100.0%\n` +
+      `<b>Time:</b> 2024-01-01 12:00:00 - 2024-01-02 12:00:00\n` +
       `<b>Paid:</b> 0.00045000 BTC\n` +
       `<b>Remaining:</b> 24.00h\n` +
       `<b>Target to 100%:</b> 1.23 TH/s\n` +

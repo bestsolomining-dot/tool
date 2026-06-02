@@ -6,7 +6,7 @@ import { nhConfigs, getNiceHashApp, resolveNhClient } from './nh.js';
 import { mrrConfigs, initNonces, syncMrrClock, mrrApiCall } from './mrr.js';
 import { registerRoutes } from './routes.js';
 import { corsMiddleware, logRequestMiddleware } from './utils.js';
-import { runRentalMonitor } from './monitor.js';
+import { runRentalMonitor, sendTelegramInternal } from './monitor.js';
 
 export function createApp({ distPath }) {
   const app = express();
@@ -40,6 +40,10 @@ export async function initializeApp() {
 
   setInterval(() => runRentalMonitor(), 60000);
   runRentalMonitor();
+
+  // Send initialization notice to Telegram
+  sendTelegramInternal(`🤖 <b>System Started</b>\nTime: ${new Date().toLocaleString()}\nMonitoring is now active.`)
+    .catch(e => console.warn('[init] Telegram startup notice failed:', e.message));
 
   try {
     const { client } = resolveNhClient('BT');

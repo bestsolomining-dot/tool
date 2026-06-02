@@ -384,6 +384,11 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     const rigId = rig.rigid || rig.rig_id || rig.rig?.id || (isRented ? '' : rig.id);
     const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id || (isRented ? rig.id : '');
 
+    if (typeof onCall !== 'function') {
+      console.error("fetchRigDetailInfo: onCall is not a function. Check prop passing in parent component.");
+      return;
+    }
+
     setLoadingInfoIds(prev => new Set(prev).add(rig.id));
     try {
       const path = (isRented && rentalId)
@@ -450,7 +455,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
   // Auto-fetch details for rented rigs so "Started X ago" and "Eff" show up automatically
   useEffect(() => {
-    if (loading) return;
+    if (loading || typeof onCall !== 'function') return;
     const rentedWithoutInfo = filteredRigs.filter(r => {
       const s = String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase();
       return (s.includes('rented') || s.includes('active')) && !enrichedInfo[r.id] && !loadingInfoIds.has(r.id);
@@ -459,7 +464,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     if (rentedWithoutInfo.length > 0) {
       rentedWithoutInfo.forEach(r => fetchRigDetailInfo(r));
     }
-  }, [filteredRigs, enrichedInfo, loading, loadingInfoIds]);
+  }, [filteredRigs, enrichedInfo, loading, loadingInfoIds, onCall]);
 
   const getStatusClass = (status) => {
     const statusValue = typeof status === 'object' ? status.status : status;
@@ -708,7 +713,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                 </div>
                                 {hasNhPrice && (
                                   <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                    {/* <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
                                     <span>
                                       NH Mkt: <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>
                                         {nhPriceValue.toFixed(8)}
@@ -719,12 +724,12 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                         {parseFloat(diffPercent) < 0 ? '' : '+'}{diffPercent}%
                                         </span>
                                     )}
-                                    </div>
-                                    
+                                    </div> */}
+
                                     {myNhOrderPrice > 0 && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
                                         <span>
-                                          My NH: <span style={{ fontWeight: 'bold' }}>
+                                          Current: <span style={{ fontWeight: 'bold' }}>
                                             {myNhOrderPrice.toFixed(8)}
                                           </span>
                                         </span>
@@ -795,8 +800,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
                                       return <div>
                                         <div><span style={{ opacity: 0.8 }}>Effect:</span>
-                                          <span style={{ color: parseFloat(eff) < 100 ? '#f87171' : '#34d399', marginLeft: '4px' }}>{eff}%</span></div>
-                                        <div style={{ fontSize: '9px', marginTop: '2px' }}>
+                                          <span style={{ color: parseFloat(eff) < 100 ? '#31ff42' : '#d33434', marginLeft: '4px' }}>{eff}%</span></div>
+                                        
                                           <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
                                           <div style={{ marginTop: '2px', opacity: 0.9 }}>
                                             {/* {rentalPriceDiff !== null && Number.isFinite(rentalPriceDiff) && (
@@ -807,11 +812,10 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                             {rentalPriceDiff !== null && rentalMyOrderDiff !== null && <span style={{ margin: '0 4px', opacity: 0.3 }}></span>}
                                             {rentalMyOrderDiff !== null && Number.isFinite(rentalMyOrderDiff) && (
                                               <span style={{ color: rentalMyOrderDiff < 0 ? '#d33434' : '#2eff4a', fontWeight: 'bold' }}>
-                                                {rentalMyOrderDiff > 0 ? '+' : ''}{rentalMyOrderDiff.toFixed(1)}% vs My NH
+                                                {rentalMyOrderDiff > 0 ? '+' : ''}{rentalMyOrderDiff.toFixed(1)}%
                                               </span>
                                             )}
                                           </div>
-                                        </div>
                                       </div>;
                                     })()}
                                     <div style={{ fontSize: '9px', textAlign: 'right' }}>

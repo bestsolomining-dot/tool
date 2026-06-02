@@ -62,6 +62,9 @@ const NiceHashApp = {
     getPools: (nh, query) => nh.pools.getPools(query),
     getPoolDetails: (nh, poolId) => nh.pools.getPoolDetails(poolId),
     verifyPool: (nh, body) => nh.pools.verifyPool(body),
+  },
+  hashpower: {
+    getMyOrders: (nh, query) => nh.hashpower.getMyOrders(query),
   }
 };
 
@@ -84,6 +87,11 @@ app.post('/api/v2/pools/verify', async (c) => {
   const nh = resolveNhClient(c.env);
   const body = await c.req.json();
   return c.json(await NiceHashApp.pools.verifyPool(nh, body));
+});
+
+app.get('/api/v2/hashpower/myOrders', async (c) => {
+  const nh = resolveNhClient(c.env);
+  return c.json(await NiceHashApp.hashpower.getMyOrders(nh, c.req.query()));
 });
 
 app.onError((err, c) => {

@@ -250,14 +250,16 @@ export default function Pools({ onCall }) {
         const orders = ordersRes?.list || ordersRes?.myOrders || [];
         orders.forEach(order => {
           const pool = order.pool;
-          const algo = order.algorithm?.algorithm || order.algorithm;
+          const algoCode = (typeof order.algorithm === 'object' ? order.algorithm?.algorithm : order.algorithm)?.toString() || '';
+          
+          if (pool?.id) {
+            activeIdentifiers.add(String(pool.id).toLowerCase());
+          }
           if (pool?.stratumHostname && pool?.stratumPort) {
-            // Normalize key for comparison
             activeIdentifiers.add(`${pool.stratumHostname.toLowerCase()}:${pool.stratumPort}`);
           }
-          if (pool?.name && algo) {
-            // Add name:algo identifier to skip specific pools by name
-            activeIdentifiers.add(`${pool.name.toLowerCase()}:${String(algo).toLowerCase()}`);
+          if (pool?.name && algoCode) {
+            activeIdentifiers.add(`${pool.name.trim().toLowerCase()}:${algoCode.toLowerCase()}`);
           }
         });
       } catch (e) {
@@ -270,11 +272,14 @@ export default function Pools({ onCall }) {
       const port = pool.stratumPort || pool.port;
       const hostKey = host && port ? `${host}:${port}` : null;
 
-      const name = (pool.name || pool.label || '').toLowerCase();
-      const algo = ph.getAlgo(pool)?.toLowerCase();
-      const nameKey = name && algo ? `${name}:${algo}` : null;
+      const poolId = ph.getId(pool);
+      const poolIdKey = poolId ? String(poolId).toLowerCase() : null;
 
-      const isActive = (hostKey && activeIdentifiers.has(hostKey)) || (nameKey && activeIdentifiers.has(nameKey));
+      const name = (pool.name || pool.label || pool.poolName || '').trim().toLowerCase();
+      const poolAlgo = String(ph.getAlgo(pool) || '').toLowerCase();
+      const nameKey = name && poolAlgo ? `${name}:${poolAlgo}` : null;
+
+      const isActive = (poolIdKey && activeIdentifiers.has(poolIdKey)) || (hostKey && activeIdentifiers.has(hostKey)) || (nameKey && activeIdentifiers.has(nameKey));
       return !isActive;
     });
 
@@ -364,7 +369,7 @@ export default function Pools({ onCall }) {
     } finally {
       setPlaying(false)
       if (!stopRef.current) setLastRunTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
-      if (skippedCount > 0) console.info(`[Pools] Verification complete. ${skippedCount} active order pools were skipped.`);
+      if (localSkippedCount > 0) console.info(`[Pools] Verification complete. ${localSkippedCount} active order pools were skipped.`);
       if (!keepRunning && stopRef.current) setRunning(false)
     }
   }

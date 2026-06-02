@@ -41,7 +41,6 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
         stratumHostname: 'stratum.example.com',
         stratumPort: 3333,
         username: 'worker',
-        password: 'x',
       }, null, 2))
       setEditorVerifyBody(null)
     } else {

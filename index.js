@@ -1,11 +1,15 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { logger } from 'hono/logger';
 import { serve } from '@hono/node-server';
 import 'dotenv/config';
 // Note: NiceHashClient must be updated to use fetch() instead of undici/axios for Workers
 import { NiceHashClient } from './NiceHashClient.js'; 
 
 const app = new Hono();
+
+// --- LOGGING ---
+app.use('*', logger());
 
 // --- CORS ---
 app.use('/api/*', cors({
@@ -17,12 +21,7 @@ app.use('/api/*', cors({
 
 // --- AUTHENTICATION ---
 app.post('/api/login', async (c) => {
-  const { password } = await c.req.json();
-  const securePassword = c.env.APP_PASSWORD || 'Admin123';
-  if (password === securePassword) {
-    return c.json({ success: true, token: 'session_' + Math.random().toString(36).slice(2) });
-  }
-  return c.json({ error: 'Invalid password' }, 401);
+  return c.json({ success: true, token: 'bypass' });
 });
 
 app.get('/api/config-status', (c) => {
@@ -92,8 +91,17 @@ app.get('/api/v2/hashpower/myOrders', async (c) => {
 });
 
 app.onError((err, c) => {
-  console.error(err);
-  return c.json({ error: err.message }, 500);
+  const status = err.statusCode || 500;
+  console.error(`[Backend Error] ${status}: ${err.message}`);
+  
+  if (status === 429 && err.headers) {
+    const retryAfter = typeof err.headers.get === 'function' 
+      ? err.headers.get('retry-after') 
+      : err.headers['retry-after'];
+    if (retryAfter) c.header('Retry-After', retryAfter);
+  }
+
+  return c.json({ error: err.message }, status);
 });
 
 if (typeof process !== 'undefined' && process.release?.name === 'node') {

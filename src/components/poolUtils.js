@@ -97,7 +97,7 @@ export const poolHelpers = {
     stratumHost: pool.stratumHost || pool.stratumHostname || pool.host,
     stratumPort: Number(pool.stratumPort || pool.port),
     username: pool.username,
-    password: pool.password,
+    password: pool.password || 'x',
   }),
 
   buildSaveBody: (pool) => !pool ? null : ({
@@ -107,14 +107,14 @@ export const poolHelpers = {
     stratumHostname: pool.stratumHostname || pool.stratumHost || pool.host,
     stratumPort: Number(pool.stratumPort || pool.port),
     username: pool.username,
-    password: pool.password,
+    password: pool.password || 'x',
   }),
 
   getMissingVerifyFields: (p) => Object.entries(p || {})
-    .filter(([, v]) => v === undefined || v === null || v === '' || Number.isNaN(v))
+    .filter(([k, v]) => k !== 'password' && (v === undefined || v === null || v === '' || Number.isNaN(v)))
     .map(([k]) => k),
 
-  getMissingSaveFields: (p) => ['name', 'algorithm', 'stratumHostname', 'stratumPort', 'username', 'password']
+  getMissingSaveFields: (p) => ['name', 'algorithm', 'stratumHostname', 'stratumPort', 'username']
     .filter(k => p?.[k] === undefined || p?.[k] === null || p?.[k] === '' || Number.isNaN(p?.[k])),
 
   isVerifySuccess: (result) => {
@@ -159,6 +159,10 @@ export const poolApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
+  },
+  getMyOrders: (params) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return apiFetch(`/api/v2/hashpower/myOrders${qs}`);
   },
   mrrRigs: (params) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';

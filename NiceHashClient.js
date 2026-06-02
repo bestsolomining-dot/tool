@@ -59,6 +59,7 @@ export class NiceHashClient {
   }
 
   async call({ method, path, query = {}, body = null }) {
+    const startedAt = performance.now();
     const serverTime = await this.getServerTime();
     const time = serverTime.toString();
     const nonce = randomUUID();
@@ -80,12 +81,15 @@ export class NiceHashClient {
     };
 
     const url = `${this.baseUrl}${path}${queryString ? '?' + queryString : ''}`;
+    console.log(`[NiceHash] -> ${method} ${url}`);
+
     const response = await request(url, {
       method: method.toUpperCase(),
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
 
+    const duration = (performance.now() - startedAt).toFixed(2);
     if (response.statusCode >= 400) {
       const errorText = await response.body.text();
       const error = new Error(`NiceHash API [${response.statusCode}]: ${errorText}`);
@@ -93,6 +97,8 @@ export class NiceHashClient {
       error.headers = response.headers;
       throw error;
     }
+
+    console.log(`[NiceHash] <- ${response.statusCode} (${duration}ms)`);
     return response.body.json();
   }
 }

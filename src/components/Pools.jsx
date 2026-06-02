@@ -3,7 +3,7 @@ import PoolEditorPopup from './PoolEditorPopup' // Use the new wrapper
 import Modal from './Modal' // Import the new Modal component
 import { poolHelpers as ph, poolApi } from './poolUtils'
 
-export default function Pools({ onCall }) {
+export default function Pools({ onCall, nhClient }) {
   const [pools, setPools] = useState([])
   const [selected, setSelected] = useState(null)
   const [selectedId, setSelectedId] = useState('')
@@ -30,6 +30,7 @@ export default function Pools({ onCall }) {
   const [skippedCount, setSkippedCount] = useState(0)
   const [skippedPoolNames, setSkippedPoolNames] = useState([])
   const [skipActiveOrders, setSkipActiveOrders] = useState(true)
+  const [activeOrders, setActiveOrders] = useState([])
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false) // State for Pool Selection Modal
   const [enableVerifyAllButton, setEnableVerifyAllButton] = useState(true)
@@ -54,8 +55,7 @@ export default function Pools({ onCall }) {
         algorithm: "SHA256",
         stratumHostname: "stratum.example.com",
         stratumPort: 3333,
-        username: "worker",
-        password: "x"
+        username: "worker"
       },
       isNew: true,
       usePopout: false
@@ -67,6 +67,7 @@ export default function Pools({ onCall }) {
     const activeIdentifiers = new Set();
     const algos = Array.isArray(algorithms) ? algorithms : [algorithms];
     const uniqueAlgos = [...new Set(algos.filter(a => a && a !== 'Unknown'))];
+    const allDetailedOrders = [];
     
     for (const algo of uniqueAlgos) {
       try {
@@ -75,18 +76,27 @@ export default function Pools({ onCall }) {
         let hasMore = true;
 
         while (hasMore) {
-          const ordersRes = await onCall('/api/v2/hashpower/myOrders', { 
-            query: { 
-              algorithm: algo, 
-              active: true, 
-              limit, 
-              offset,
-              op: 'LT' // Required by NiceHash when 'ts' is present in the request
-            }, 
-            silent: true 
+          const ordersRes = await poolApi.getMyOrders({ 
+            algorithm: algo, 
+            active: true, 
+            limit, 
+            offset,
+            ts: Date.now(),
+            op: 'LE',
+            client: nhClient
           });
           
-          const orders = (ordersRes?.list || ordersRes?.myOrders || []);
+          if (ordersRes.status === 429) {
+            const retryAfter = ordersRes.headers?.get?.('Retry-After') || ordersRes.data?.headers?.['retry-after'];
+            const waitTime = (parseInt(retryAfter, 10) || 3);
+            setRateLimitStatus(`Rate limit on active orders for ${algo}. Waiting ${waitTime}s...`);
+            await new Promise(r => setTimeout(r, waitTime * 1000));
+            setRateLimitStatus(null);
+            continue; // Retry current page
+          }
+
+          const orders = (ordersRes.data?.list || ordersRes.data?.myOrders || []);
+          
           if (orders.length === 0) {
             hasMore = false;
             break;
@@ -95,6 +105,8 @@ export default function Pools({ onCall }) {
           orders.forEach(order => {
             const status = String(order?.status?.status || order?.status || '').toUpperCase();
             if (['COMPLETED', 'CANCELED', 'EXPIRED'].includes(status)) return;
+
+            allDetailedOrders.push(order);
 
             const p = order.pool;
             const algoCode = (typeof order.algorithm === 'object' ? order.algorithm?.algorithm : order.algorithm)?.toString() || algo;
@@ -114,8 +126,9 @@ export default function Pools({ onCall }) {
         console.warn(`[Pools] Could not fetch active orders for algo ${algo}:`, e.message);
       }
     }
+    setActiveOrders(allDetailedOrders);
     return activeIdentifiers;
-  }, [onCall]);
+  }, [nhClient]);
 
   async function loadPools() {
     try {
@@ -283,7 +296,7 @@ export default function Pools({ onCall }) {
 
       if (result.status === 429) {
         const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
-        const seconds = parseInt(retryAfter, 10) || 10;
+        const seconds = parseInt(retryAfter, 10) || 3;
         setRateLimitStatus(`Rate limit hit. Retrying in ${seconds}s...`);
         try {
           await new Promise(r => setTimeout(r, seconds * 1000));
@@ -389,7 +402,7 @@ export default function Pools({ onCall }) {
           if (poolId) {
           let resDetails = await poolApi.get(poolId);
             if (resDetails.status === 429) {
-              const seconds = parseInt(resDetails.headers?.get('Retry-After') || resDetails.data?.headers?.['retry-after'], 10) || 10;
+              const seconds = parseInt(resDetails.headers?.get('Retry-After') || resDetails.data?.headers?.['retry-after'], 10) || 3;
               setRateLimitStatus(`Rate limit hit on details. Waiting ${seconds}s...`);
               try {
                 await new Promise(r => setTimeout(r, seconds * 1000));
@@ -406,7 +419,7 @@ export default function Pools({ onCall }) {
 
           if (result.status === 429) {
             const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
-            const seconds = parseInt(retryAfter, 10) || 10;
+            const seconds = parseInt(retryAfter, 10) || 3;
             setRateLimitStatus(`Rate limit hit on verify. Waiting ${seconds}s...`);
             try {
               await new Promise(r => setTimeout(r, seconds * 1000));
@@ -447,6 +460,11 @@ export default function Pools({ onCall }) {
       if (!stopRef.current) setLastRunTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
       if (localSkippedCount > 0) console.info(`[Pools] Verification complete. ${localSkippedCount} active order pools were skipped.`);
       if (!keepRunning && stopRef.current) setRunning(false)
+
+      // Re-fetch orders for visibility on loop completion
+      if (skipActiveOrders) {
+        getActiveOrderIdentifiers(poolsToVerify.map(p => ph.getAlgo(p)));
+      }
     }
   }
 
@@ -654,9 +672,11 @@ export default function Pools({ onCall }) {
     counts[algorithm] = (counts[algorithm] || 0) + 1
     return counts
   }, {})
-  const algorithmSummary = Object.entries(algorithmCounts)
-    .map(([algorithm, count]) => `${algorithm}: ${count}`)
-    .join(', ')
+  const algorithmSummary = Object.entries(algorithmCounts).map(([algorithm, count]) => (
+    <span key={algorithm} style={{ whiteSpace: 'nowrap' }}>
+      <span style={{ color: '#a78bfa' }}>{algorithm}</span>: <strong style={{ color: '#60a5fa' }}>{count}</strong>
+    </span>
+  ))
   const poolAlgorithmGroups = Object.entries(
     pools.reduce((groups, pool) => {
       const algorithm = ph.getAlgo(pool)
@@ -863,10 +883,22 @@ export default function Pools({ onCall }) {
                         </div>
                       </div>
                     )}
+                    {activeOrders.length > 0 && (
+                      <div style={{ minWidth: '200px' }}>
+                        <span>Active NH Orders</span>
+                        <div style={{ fontSize: '0.7rem', color: '#60a5fa', maxHeight: '45px', overflowY: 'auto', borderLeft: '2px solid #3b82f6', paddingLeft: '6px', lineBreak: 'anywhere' }}>
+                          {activeOrders.map((o, idx) => (
+                            <div key={o.id || idx}>
+                              <span style={{ color: '#a78bfa' }}>{o.algorithm?.algorithm || o.algorithm}</span>: {o.limit} TH/s ({o.market})
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="wide" style={{ gridColumn: '1 / -1', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                       <span style={{ display: 'block', marginBottom: '4px', opacity: 0.6 }}>Algorithm Breakdown</span>
-                      <div style={{ lineHeight: '1.5', fontSize: '0.85rem' }}>
-                        {algorithmSummary || 'No completed checks'}
+                      <div style={{ lineHeight: '1.5', fontSize: '0.85rem', display: 'flex', flexWrap: 'nowrap', overflowX: 'auto', gap: '16px', paddingBottom: '8px' }}>
+                        {algorithmSummary.length > 0 ? algorithmSummary : 'No completed checks'}
                       </div>
                     </div>
                   </div>
@@ -916,7 +948,7 @@ export default function Pools({ onCall }) {
                             >
                               Inspect
                             </button>
-                            <span className="verify-algorithm">{algorithm}</span>
+                            <span className="verify-algorithm" style={{ color: '#a78bfa' }}>{algorithm}</span>
                             <small>{pending ? 'Waiting for response' : ph.getVerifyMessage(item.result)}</small>
                           </summary>
                           {logs.length > 0 && (
@@ -959,8 +991,8 @@ export default function Pools({ onCall }) {
                 <div className="algorithm-grid">
                   {poolAlgorithmGroups.map(([algorithm, count]) => (
                     <div className="algorithm-row" key={algorithm}>
-                      <span>{algorithm}</span>
-                      <strong style={{ marginLeft: 'auto', marginRight: '1rem' }}>
+                      <span style={{ color: '#a78bfa', fontWeight: '500' }}>{algorithm}</span>
+                      <strong style={{ marginLeft: 'auto', marginRight: '1rem', color: '#60a5fa' }}>
                         {count}
                       </strong>
                       <button

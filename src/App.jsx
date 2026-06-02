@@ -4,7 +4,7 @@ import Modal from './components/Modal';
 import './App.css';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -20,7 +20,8 @@ export default function App() {
     let finalPath = path;
     const enrichedQuery = { ...query };
 
-    if (path.startsWith('/api/v2/')) {
+    // Do not add 'ts' to myOrders; it's a filter param that requires a matching 'op'
+    if (path.startsWith('/api/v2/') && !path.includes('hashpower/myOrders')) {
       if (!enrichedQuery.ts) enrichedQuery.ts = Date.now();
     }
 

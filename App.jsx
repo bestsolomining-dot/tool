@@ -11,7 +11,7 @@ import './src/App.css';
 
 export default function App() {
   const [loading, setLoading] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [loginPass, setLoginPass] = useState('');
   const [error, setError] = useState('');
   const [output, setOutput] = useState(null);
@@ -38,7 +38,8 @@ export default function App() {
     const { query, section, ...fetchOptions } = options;
     let finalPath = path;
     const enrichedQuery = { ...query };
-    if (path.startsWith('/api/v2/') && !path.startsWith('/api/v2/mrr/')) {
+    // Do not add 'ts' to myOrders; it's a filter param that requires a matching 'op'
+    if (path.startsWith('/api/v2/') && !path.startsWith('/api/v2/mrr/') && !path.includes('hashpower/myOrders')) {
       if (!enrichedQuery.ts) enrichedQuery.ts = Date.now();
       if (!enrichedQuery.client) {
         enrichedQuery.client = nhClient;

@@ -295,16 +295,18 @@ export function registerRoutes(app) {
   }));
 
   app.post('/api/v2/test/rented-notice', asyncHandler(async (req, res) => {
-    const msg = `🚀 <b>[New Rental] (Test)</b>\n\n` +
-      `<b>Rig:</b> Test-Rig-Notice\n` +
-      `<b>Algo:</b> SHA256\n` +
-      `<b>AVG Hashrate:</b> 1.23 TH/s\n` +
-      `<b>Effect:</b> 100.0%\n` +
+    const msg = `🚀 <b>[New Rental]</b>\n` +
+      `<b>Account:</b> <code>TEST_BT</code>\n` +
+      `━━━━━━━━━━━━━━\n` +
+      `<b>Rig:</b> Test-Rig-Notice (<code>123456</code>)\n` +
+      `<b>Algo:</b> <code>SHA256</code>\n` +
       `<b>Time:</b> 2024-01-01 12:00:00 - 2024-01-02 12:00:00\n` +
-      `<b>Paid:</b> 0.00045000 BTC\n` +
+      `━━━━━━━━━━━━━━\n` +
+      `<b>Paid:</b> <code>0.00045000 BTC</code>\n` +
+      `<b>Efficiency:</b> <b>100.0%</b>\n` +
       `<b>Remaining:</b> 24.00h\n` +
       `<b>Target to 100%:</b> 1.23 TH/s\n` +
-      `<b>Account:</b> TEST_BT`;
+      `<i>This is a simulated rental notice.</i>`;
 
     try {
       const tgRes = await sendTelegramInternal(msg);

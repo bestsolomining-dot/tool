@@ -257,10 +257,25 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
                 <div style={{ fontWeight: 'bold', color: '#f59e0b' }}>{rentalInfo.hashrate?.average?.percent || rentalInfo.normalized?.percent || '0'}%</div>
               </div>
               <div className="stat-box" style={{ gridColumn: 'span 2', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '6px' }}>
-                <div style={{ fontSize: '9px', opacity: 0.5, marginBottom: '4px', textTransform: 'uppercase' }}>Time To End</div>
-                <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
-                  <CountdownTimer endTime={rentalInfo.end || rentalInfo.normalized?.endTime} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '9px', opacity: 0.5, textTransform: 'uppercase' }}>Time To End</div>
+                  <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
+                    <CountdownTimer endTime={rentalInfo.end || rentalInfo.normalized?.endTime} />
+                  </div>
                 </div>
+                {(() => {
+                  const s = new Date((rentalInfo.start || rentalInfo.normalized?.startTime) + (String(rentalInfo.start || rentalInfo.normalized?.startTime).endsWith('UTC') ? '' : ' UTC')).getTime();
+                  const e = new Date((rentalInfo.end || rentalInfo.normalized?.endTime) + (String(rentalInfo.end || rentalInfo.normalized?.endTime).endsWith('UTC') ? '' : ' UTC')).getTime();
+                  const now = Date.now();
+                  const total = e - s;
+                  const elapsed = Math.max(0, Math.min(now - s, total));
+                  const progress = total > 0 ? (elapsed / total) * 100 : 0;
+                  return (
+                    <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden', marginTop: '6px' }}>
+                      <div style={{ width: `${progress}%`, height: '100%', background: progress > 90 ? '#f87171' : 'linear-gradient(90deg, #60a5fa, #a78bfa)', transition: 'width 0.5s ease' }} />
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 

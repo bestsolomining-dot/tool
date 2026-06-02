@@ -294,7 +294,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         const fresh = newList.find(r => {
           const isKnown = knownRentalIds.current.has(String(r.id));
           const startTime = toUtcTimestamp(r.start);
-          return !isKnown && (now - startTime < 300000); // Trigger if seen first time AND started within 5 mins
+          return !isKnown && (now - startTime < 900000); // Trigger if seen first time AND started within 15 mins
         });
 
         if (fresh) {
@@ -302,6 +302,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           if (Notification.permission === 'granted') {
             new Notification(`Rig Rented: ${fresh.name || fresh.id}`, { body: `New rental active for ${fresh.hours}h` });
           }
+          tg.notifyNewRental(fresh).catch(() => {});
         }
 
         // Monitoring Logic for Telegram Alerts

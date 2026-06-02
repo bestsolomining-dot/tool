@@ -8,7 +8,8 @@ const ALERT_COOLDOWN_MS = 600000;
 const WARNING_RIG_THRESHOLD = 5;
 const NEW_RENTAL_WINDOW_MS = 15 * 60 * 1000;
 const RENTED_HEARTBEAT_MS = 5 * 60 * 1000;
-const lastAlertTimes = new Map();
+const lastAlertTimes = new Map(); // key -> timestamp
+const lastRigStates = new Map(); // rigId -> status string
 
 /** Safely escapes HTML special characters for Telegram's HTML parse_mode */
 function escapeHtml(text) {
@@ -101,7 +102,9 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   let offlineAll = 0;
   let disabledAll = 0;
   let warningAll = 0;
+  let onlineAll = 0;
   const activeRentalLines = [];
+  const accountMetrics = [];
   const allRentedRigs = [];
   const rigLookupByRentalId = new Map();
   const harvestedRentalIds = new Set();
@@ -124,6 +127,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         let offlineCount = 0;
         let disabledCount = 0;
         let warningCount = 0;
+        let onlineCount = 0;
 
         for (const rig of rigList) {
           const status = parseStatus(rig);
@@ -136,6 +140,31 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const isWarning = status.includes('warning');
           const isAvailable = !isRented && !isDisabled && onlineFlag && (status.includes('available') || status.includes('online') || status === '');
 
+          // TRACK INDIVIDUAL RIG STATUS CHANGES
+          const rigIdKey = `rig_state_${rig.id}`;
+          const prevStatus = lastRigStates.get(rigIdKey);
+          const currentStatus = isOffline ? 'OFFLINE' : (isWarning ? 'WARNING' : (isDisabled ? 'DISABLED' : 'OK'));
+          
+          if (prevStatus && prevStatus !== currentStatus && currentStatus !== 'OK') {
+             const statusEmoji = isOffline ? '🚫' : '⚠️';
+             const rigAlertKey = `alert_${rigIdKey}_${currentStatus}`;
+             const lastRigAlert = lastAlertTimes.get(rigAlertKey) || 0;
+             
+             if (now - lastRigAlert > ALERT_COOLDOWN_MS) {
+                const rigMsg = `${statusEmoji} <b>[Rig Status: ${escapeHtml(acct)}]</b>\n` +
+                  `━━━━━━━━━━━━━━\n` +
+                  `<b>Rig:</b> ${escapeHtml(rig.name)}\n` +
+                  `<b>ID:</b> <code>${rig.id}</code>\n` +
+                  `<b>Status:</b> <b>${currentStatus}</b>\n` +
+                  `<b>Algo:</b> <code>${escapeHtml(rig.algo || rig.type)}</code>\n` +
+                  `━━━━━━━━━━━━━━\n` +
+                  `<i>Please check your local miner connectivity.</i>`;
+                await sendTelegramInternal(rigMsg).catch(() => {});
+                lastAlertTimes.set(rigAlertKey, now);
+             }
+          }
+          lastRigStates.set(rigIdKey, currentStatus);
+
           if (isRented) {
             rentedRigs.push(rig);
             if (rentalId) harvestedRentalIds.add(String(rentalId));
@@ -145,25 +174,39 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           if (isOffline) offlineCount += 1;
           if (isDisabled) disabledCount += 1;
           if (isWarning) warningCount += 1;
+          if (onlineFlag) onlineCount += 1;
         }
 
         const alertKeyWarn = `${acct}_warn`;
         const lastWarnAlert = lastAlertTimes.get(alertKeyWarn) || 0;
         if (warningCount >= WARNING_RIG_THRESHOLD && (now - lastWarnAlert > ALERT_COOLDOWN_MS)) {
-          const warnMsg = `🚨 <b>[Status Alert: ${acct}]</b>\n\n` +
-            `High number of rigs in warning state: <b>${warningCount}</b>\n` +
+          const warnMsg = `🚨 <b>[Status Alert]</b>\n` +
+            `<b>Account:</b> <code>${escapeHtml(acct)}</code>\n` +
+            `━━━━━━━━━━━━━━\n` +
+            `<b>Issue:</b> High Warning Count\n` +
+            `<b>Count:</b> <b>${warningCount}</b> rigs\n` +
             `Please check your rig connectivity.`;
           await sendTelegramInternal(warnMsg).catch(e => console.error(`[monitor:error] Failed to send warning alert: ${e.message}`));
           lastAlertTimes.set(alertKeyWarn, now);
         }
 
-        summaryParts.push(`📊 <b>${escapeHtml(acct)}</b>: ${rigList.length} rigs (Online ${availableCount}, Rented ${rentedRigs.length}, Offline ${offlineCount}, Disabled ${disabledCount}, ⚠️ ${warningCount})`);
+        accountMetrics.push({
+          name: acct,
+          total: rigList.length,
+          online: onlineCount,
+          rented: rentedRigs.length,
+          offline: offlineCount,
+          disabled: disabledCount,
+          warning: warningCount
+        });
+
         totalAll += rigList.length;
         availableAll += availableCount;
         rentedAll += rentedRigs.length;
         offlineAll += offlineCount;
         disabledAll += disabledCount;
         warningAll += warningCount;
+        onlineAll += onlineCount;
         allRentedRigs.push(...rentedRigs.map(r => ({ ...r, acct })));
       }
       else if (rigsRes.data) {
@@ -248,13 +291,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             const alertKey = `${r.id}_low_50`;
             const lastAlert = lastAlertTimes.get(alertKey) || 0;
             if (now - lastAlert > ALERT_COOLDOWN_MS) {
-              const startStr = String(r.start || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-              const endStr = String(r.end || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-              const msg = `⚠️ <b>[Performance Alert: ${escapeHtml(acct)}]</b>\n\n` +
-                `Rig <b>${escapeHtml(r.name || r.id)}</b> is underperforming!\n` +
-                `<b>Efficiency:</b> ${efficiency}% (< 50% for 15m)\n` +
-                `<b>Time:</b> ${startStr} - ${endStr}\n` +
-                `<b>Paid:</b> ${info.price.paid} ${info.price.currency}`;
+              const msg = `⚠️ <b>[Efficiency Alert]</b>\n` +
+                `<b>Account:</b> <code>${escapeHtml(acct)}</code>\n` +
+                `━━━━━━━━━━━━━━\n` +
+                `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+                `<b>Efficiency:</b> <b>${efficiency.toFixed(1)}%</b> (< 50% for 15m)\n` +
+                `<b>Target:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}`;
               await sendTelegramInternal(msg).catch(e => console.error(`[monitor:error] Low hashrate alert failed: ${e.message}`));
               console.log(`[${monitorTime}] [monitor] Sending Telegram alert: [Performance Alert] for Rig ${r.id}`);
               lastAlertTimes.set(alertKey, now);
@@ -270,13 +312,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             const alertKey = `${r.id}_zero_5m`;
             const lastAlert = lastAlertTimes.get(alertKey) || 0;
             if (now - lastAlert > ALERT_COOLDOWN_MS) {
-              const startStr = String(r.start || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-              const endStr = String(r.end || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-              const msg = `🚨 <b>[Critical Alert: ${escapeHtml(acct)}]</b>\n\n` +
-                `Rig <b>${escapeHtml(r.name || r.id)}</b> has ZERO hashrate!\n` +
-                `<b>Duration:</b> > 5 mins\n` +
-                `<b>Time:</b> ${startStr} - ${endStr}\n` +
-                `<b>Paid:</b> ${info.price.paid} ${info.price.currency}`;
+              const msg = `🚨 <b>[Critical Alert]</b>\n` +
+                `<b>Account:</b> <code>${escapeHtml(acct)}</code>\n` +
+                `━━━━━━━━━━━━━━\n` +
+                `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+                `<b>Status:</b> <b>ZERO HASHRATE</b> (> 5m)\n` +
+                `<b>Paid:</b> <code>${info.price.paid} ${info.price.currency}</code>`;
               await sendTelegramInternal(msg).catch(e => console.error(`[monitor:error] Zero hashrate alert failed: ${e.message}`));
               console.log(`[${monitorTime}] [monitor] Sending Telegram alert: [Critical Alert] for Rig ${r.id}`);
               lastAlertTimes.set(alertKey, now);
@@ -290,13 +331,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const startupKey = `${r.id}_startup_70`;
           const lastAlert = lastAlertTimes.get(startupKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
-            const startStr = String(r.start || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-            const endStr = String(r.end || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-            const msg = `🚀 <b>[Startup Alert: ${escapeHtml(acct)}]</b>\n\n` +
-              `Rig <b>${escapeHtml(r.name || r.id)}</b> startup efficiency is low!\n` +
-              `<b>Effect:</b> ${efficiency}% (< 70% in first hour)\n` +
-              `<b>Time:</b> ${startStr} - ${endStr}\n` +
-              `<b>Paid:</b> ${info.price.paid} ${info.price.currency}`;
+            const msg = `🚀 <b>[Startup Alert]</b>\n` +
+              `<b>Account:</b> <code>${escapeHtml(acct)}</code>\n` +
+              `━━━━━━━━━━━━━━\n` +
+              `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+              `<b>Efficiency:</b> <b>${efficiency.toFixed(1)}%</b> (< 70% in 1st hour)\n` +
+              `<b>Target:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}`;
             console.log(`[${monitorTime}] [monitor] Sending Telegram alert: [Startup Alert] for Rig ${r.id}`);
             await sendTelegramInternal(msg).catch(e => console.error(`[monitor:error] Startup alert failed: ${e.message}`));
             lastAlertTimes.set(startupKey, now);
@@ -307,13 +347,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const completionKey = `${r.id}_completion_70`;
           const lastAlert = lastAlertTimes.get(completionKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
-            const startStr = String(r.start || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-            const endStr = String(r.end || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-            const msg = `🏁 <b>[Completion Alert: ${escapeHtml(acct)}]</b>\n\n` +
-              `Rig <b>${escapeHtml(r.name || r.id)}</b> efficiency is low near the end!\n` +
-              `<b>Effect:</b> ${efficiency}% (< 70% with < 1h left)\n` +
-              `<b>Time:</b> ${startStr} - ${endStr}\n` +
-              `<b>Paid:</b> ${info.price.paid} ${info.price.currency}`;
+            const msg = `🏁 <b>[Completion Alert]</b>\n` +
+              `<b>Account:</b> <code>${escapeHtml(acct)}</code>\n` +
+              `━━━━━━━━━━━━━━\n` +
+              `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+              `<b>Efficiency:</b> <b>${efficiency.toFixed(1)}%</b> (< 70% in last hour)\n` +
+              `<b>Target:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}`;
             console.log(`[${monitorTime}] [monitor] Sending Telegram alert: [Completion Alert] for Rig ${r.id}`);
             await sendTelegramInternal(msg).catch(e => console.error(`[monitor:error] Completion alert failed: ${e.message}`));
             lastAlertTimes.set(completionKey, now);
@@ -322,8 +361,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
         // Format detailed rental line for the summary heartbeat
         const startStr = String(r.start || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-        const endStr = String(r.end || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-        const perfEmoji = efficiency >= 98 ? '🟢' : (efficiency >= 90 ? '🟡' : '🔴');
+        const endStr = String(r.end || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '').trim();
+        const perfEmoji = efficiency >= 98 ? '🟢' : (efficiency >= 70 ? '🟡' : '🔴');
         activeRentalLines.push(`${perfEmoji} [${escapeHtml(acct)}] <b>${escapeHtml(r.name || r.id)}</b>\n    ${info.niceAverageHashrate} | ${startStr} - ${endStr} | <b>${info.percent}%</b>`);
 
         await new Promise((resolve) => {
@@ -338,27 +377,33 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         });
 
         const lastNotified = row?.last_notified || 0;
-        const isNewRental = lastNotified === 0 && elapsedMs >= 0 && elapsedMs < NEW_RENTAL_WINDOW_MS;
-        const shouldNotify = forceNotify || isNewRental;
+        // FIX: Notify if it's the first time we see it, ignoring clock skew (elapsedMs < 0)
+        // and providing a wider window to catch up after downtime.
+        const isNewToMonitor = lastNotified === 0;
+        const withinReasonableStart = elapsedMs < (12 * 60 * 60 * 1000); 
+        const shouldNotify = forceNotify || (isNewToMonitor && withinReasonableStart);
 
         if (shouldNotify) {
-          const remHours = Math.max(0, remainingMs / 3600000).toFixed(2);
-          const hbType = forceNotify ? 'Forced Monitor' : 'New Rental';
-          const icon = forceNotify ? '💓' : '🚀';
+          const hbType = forceNotify ? 'MONITOR' : 'RENTED';
+          const roi = (efficiency - 100).toFixed(1);
+          const timeProgress = totalDurationMs > 0 ? Math.floor((elapsedMs / totalDurationMs) * 100) : 0;
+          
+          const remD = Math.floor(remainingMs / 86400000);
+          const remH = Math.floor((remainingMs % 86400000) / 3600000);
+          const remStr = remD > 0 ? `${remD}d ${remH}h` : `${remH}h`;
 
-          const startStr = String(r.start || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-          const endStr = String(r.end || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-
-          const msg = `${icon} <b>[${hbType}]</b>\n\n` +
-            `<b>Rig:</b> ${escapeHtml(r.name || r.id)}\n` +
-            `<b>Account:</b> ${escapeHtml(acct)}\n` +
-            `<b>Algo:</b> ${escapeHtml(info.algo)}\n` + // Algorithm
-            `<b>AVG Hashrate:</b> ${info.niceAverageHashrate}\n` + // AVG Hashrate
-            `<b>Eff:</b> ${info.percent}%\n` + // Effect
-            `<b>Time:</b> ${startStr} - ${endStr}\n` + // Start Time - Endtime
-            `<b>Paid:</b> ${info.price.paid} ${info.price.currency}\n` +
-            `<b>Remaining:</b> ${remHours}h\n` +
-            `<b>Target to 100%:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}\n`;
+          const msg = `<b>#${r.id}</b>\n\n` +
+            `[${escapeHtml(info.algo).toUpperCase()}] [${escapeHtml(acct).toUpperCase()}] [${hbType}]\n\n` +
+            `<b>Hashrate</b>\n` +
+            `${info.niceAverageHashrate}\n\n` +
+            `<b>ROI</b>\n` +
+            `${roi >= 0 ? '+' : ''}${roi}%\n\n` +
+            `<b>Remaining</b>\n` +
+            `${remStr}\n\n` +
+            `<b>Progress</b>\n` +
+            `${timeProgress}%\n\n` +
+            `<b>Price</b> ${info.price.paid} ${info.price.currency}\n\n` +
+            `<a href="https://www.miningrigrentals.com/rentals/view/${r.id}">[Details]</a>`;
 
           try {
             console.log(`[${monitorTime}] [monitor] Sending Telegram alert: ${hbType} for Rig ${r.id}`);
@@ -385,21 +430,38 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     db.all(`SELECT * FROM rentals WHERE last_updated < ? AND client IN (${accountListStr})`, [now], (err, rows) => resolve(rows || []));
   });
   for (const fr of finishedRentals) {
-    const finishMsg = `🏁 <b>[Rental Finished: ${escapeHtml(fr.client)}]</b>\n\n` +
-      `Rig <b>${escapeHtml(fr.name || fr.id)}</b> has ended.\n` +
-      `<b>Algo:</b> ${escapeHtml(fr.algo)}\n` +
-      `<b>Last Target:</b> ${fr.target_100 ? fr.target_100.toFixed(2) : 'N/A'}`;
+    const finishMsg = `🏁 <b>[Rental Finished]</b>\n` +
+      `<b>Account:</b> <code>${escapeHtml(fr.client)}</code>\n` +
+      `━━━━━━━━━━━━━━\n` +
+      `<b>Rig:</b> ${escapeHtml(fr.name || fr.id)} (<code>${fr.id}</code>)\n` +
+      `━━━━━━━━━━━━━━\n` +
+      `<b>Algo:</b> <code>${escapeHtml(fr.algo)}</code>\n` +
+      `<b>Final Target:</b> ${fr.target_100 ? fr.target_100.toFixed(2) : 'N/A'}`;
     console.log(`[${monitorTime}] [monitor] Sending finish notice for ${fr.id}`);
     await sendTelegramInternal(finishMsg).catch(e => console.warn(`[monitor:error] Finish notice failed: ${e.message}`));
     await new Promise((resolve) => db.run(`DELETE FROM rentals WHERE id = ?`, [fr.id], () => resolve()));
   }
 
   const shouldSendCombinedSummary = forceNotify || (now - (lastAlertTimes.get('global_summary') || 0) >= RENTED_HEARTBEAT_MS);
-  if (shouldSendCombinedSummary && (summaryParts.length > 0 || activeRentalLines.length > 0)) {
-    const allSummaryMsg = `📊 <b>[Current Rentals]</b>\n\n` +
-      (summaryParts.length > 0 ? summaryParts.join('\n') + `\n\n` : '') +
-      `<b>Totals</b>: ${totalAll} rigs | ${availableAll} Avail | ${rentedAll} Rented | ${offlineAll} Offline | ${disabledAll} Disabled | ${warningAll} Warn` +
-      (activeRentalLines.length > 0 ? `\n\n<b>Active Rentals:</b>\n${activeRentalLines.join('\n')}` : '');
+  if (shouldSendCombinedSummary && (accountMetrics.length > 0 || activeRentalLines.length > 0)) {
+    const maxBarLen = 14;
+    const barChart = accountMetrics.map(am => {
+      const ratio = totalAll > 0 ? am.total / totalAll : 0;
+      const filled = Math.max(1, Math.round(ratio * maxBarLen));
+      const bar = '█'.repeat(filled);
+      return `<code>${am.name.padEnd(4)}${bar.padEnd(maxBarLen + 2)}${am.total}</code>`;
+    }).join('\n');
+
+    const allSummaryMsg = `🏭 <b>Infrastructure Overview</b>\n\n` +
+      `${barChart}\n\n` +
+      `━━━━━━━━━━━━━━\n\n` +
+      `<code>Online      ${String(onlineAll).padStart(4)}</code>\n` +
+      `<code>Rented      ${String(rentedAll).padStart(4)}</code>\n` +
+      `<code>Offline     ${String(offlineAll).padStart(4)}</code>\n` +
+      `<code>Disabled    ${String(disabledAll).padStart(4)}</code>\n\n` +
+      `<b>Fleet Total ${totalAll}</b>\n\n` +
+      (activeRentalLines.length > 0 ? `━━━━━━━━━━━━━━\n<b>Active Rentals</b>\n` + activeRentalLines.join('\n') : '') +
+      `\n<i>Refreshed at ${monitorTime}</i>`;
 
     try {
       console.log(`[${monitorTime}] [monitor] Sending combined summary heartbeat to Telegram (${activeRentalLines.length} active rentals)`);

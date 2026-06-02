@@ -99,6 +99,17 @@ function findRigArray(obj) {
   return [];
 }
 
+/** Helper to style client badges */
+const getClientBadgeStyle = (client) => {
+  const c = String(client || '').toUpperCase();
+  const styles = {
+    'BT': { background: '#2563eb', color: '#fff' }, // Blue
+    'SL': { background: '#d97706', color: '#fff' }, // Orange
+    'LN': { background: '#0891b2', color: '#fff' }, // Cyan
+  };
+  return styles[c] || { background: 'rgba(255,255,255,0.1)', color: '#94a3b8' };
+};
+
 function formatHashrateValue(rate) {
   if (!rate) return '0 N/A';
   if (typeof rate === 'string' || typeof rate === 'number') return String(rate);
@@ -560,8 +571,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                   <div className="rig-grid" style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                    gap: '15px',
-                    padding: '15px 5px'
+                    gap: '12px',
+                    padding: '10px 5px'
                   }}>
                     {rigsInGroup.map((rig) => {
                       const rigId = rig.id || rig.rigid || rig.rig_id;
@@ -713,24 +724,12 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                 </div>
                                 {hasNhPrice && (
                                   <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
-                                    {/* <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                                    <span>
-                                      NH Mkt: <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>
-                                        {nhPriceValue.toFixed(8)}
-                                      </span>
-                                    </span>
-                                    {diffPercent !== null && (
-                                        <span style={{ color: parseFloat(diffPercent) < 0 ? '#d33434' : '#71f87c', fontWeight: 'bold', marginLeft: '5px' }}>
-                                        {parseFloat(diffPercent) < 0 ? '' : '+'}{diffPercent}%
-                                        </span>
-                                    )}
-                                    </div> */}
 
                                     {myNhOrderPrice > 0 && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
                                         <span>
                                           Current: <span style={{ fontWeight: 'bold' }}>
-                                            {myNhOrderPrice.toFixed(8)}
+                                            {myNhOrderPrice.toFixed(8)} BTC
                                           </span>
                                         </span>
                                         {myOrderDiff !== null && (
@@ -766,15 +765,16 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                   <div style={{ gridColumn: 'span 2', overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.user || info?.username}><span style={{ opacity: 0.7 }}>User:</span> {rig.user || info?.username || 'N/A'}</div>
                                 </div>
                                 {isRented && (
-                                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    {/* Fix: use rig.hashrate for list-view rentals to show efficiency immediately */}
+                                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                     {(() => {
                                       const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
                                       const eff = parseFloat(effValue).toFixed(2);
 
                                       // Calculate Target Hashrate to reach 100% completion
-                                      const startT = new Date((info?.startTime || rig.start) + (String(info?.startTime || rig.start).endsWith('UTC') ? '' : ' UTC')).getTime();
-                                      const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)).endsWith('UTC') ? '' : ' UTC')).getTime();
+                                      const rentalStartTime = info?.startTime || rig.start;
+                                      const rentalEndTime = info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null);
+                                      const startT = new Date(rentalStartTime + (String(rentalStartTime).endsWith('UTC') ? '' : ' UTC')).getTime();
+                                      const endT = new Date(rentalEndTime + (String(rentalEndTime).endsWith('UTC') ? '' : ' UTC')).getTime();
 
                                       // Fix: Always use raw numbers for math to prevent unit mismatch errors
                                       const avgVal = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash);
@@ -785,6 +785,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                       const now = Date.now();
                                       const elapsedMs = Math.max(0, Math.min(now - startT, totalMs));
                                       const remainingMs = Math.max(0, endT - now);
+                                      const timeProgress = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
 
                                       const totalExpectedHashes = adsVal * (totalMs / 1000);
                                       const actualHashesDone = avgVal * (elapsedMs / 1000);
@@ -798,30 +799,29 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                       // A truly negative target means you've already delivered 100% of the work for the WHOLE rental
                                       const displayTarget = targetHashrate < 0 ? 0 : targetHashrate;
 
-                                      return <div>
-                                        <div><span style={{ opacity: 0.8 }}>Effect:</span>
-                                          <span style={{ color: parseFloat(eff) < 100 ? '#31ff42' : '#d33434', marginLeft: '4px' }}>{eff}%</span></div>
-                                        
-                                          <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
-                                          <div style={{ marginTop: '2px', opacity: 0.9 }}>
-                                            {/* {rentalPriceDiff !== null && Number.isFinite(rentalPriceDiff) && (
-                                              <span style={{ color: rentalPriceDiff < 0 ? '#d33434' : '#71f878', fontWeight: 'bold' }}>
-                                                {rentalPriceDiff > 0 ? '+' : ''}{rentalPriceDiff.toFixed(1)}% vs Mkt
-                                              </span>
-                                            )} */}
-                                            {rentalPriceDiff !== null && rentalMyOrderDiff !== null && <span style={{ margin: '0 4px', opacity: 0.3 }}></span>}
-                                            {rentalMyOrderDiff !== null && Number.isFinite(rentalMyOrderDiff) && (
-                                              <span style={{ color: rentalMyOrderDiff < 0 ? '#d33434' : '#2eff4a', fontWeight: 'bold' }}>
-                                                {rentalMyOrderDiff > 0 ? '+' : ''}{rentalMyOrderDiff.toFixed(1)}%
-                                              </span>
-                                            )}
+                                      return (
+                                        <>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <div>
+                                              <div><span style={{ opacity: 0.8 }}>Effect:</span>
+                                                <span style={{ color: parseFloat(eff) < 100 ? '#31ff42' : '#d33434', marginLeft: '4px' }}>{eff}%</span></div>
+
+                                              <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
+                                              <div style={{ marginTop: '2px', opacity: 0.9 }}>
+                                                {rentalPriceDiff !== null && rentalMyOrderDiff !== null && <span style={{ margin: '0 4px', opacity: 0.3 }}></span>}
+                                                
+                                              </div>
+                                            </div>
+                                            <div style={{ fontSize: '9px', textAlign: 'right' }}>
+                                              <div><span style={{ opacity: 0.8 }}>End in:</span> <CountdownTimer endTime={rentalEndTime} /></div>
+                                            </div>
                                           </div>
-                                      </div>;
+                                          <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+                                            <div style={{ width: `${timeProgress}%`, height: '100%', background: timeProgress > 90 ? '#f87171' : 'linear-gradient(90deg, #60a5fa, #a78bfa)', transition: 'width 0.5s ease' }} />
+                                          </div>
+                                        </>
+                                      );
                                     })()}
-                                    <div style={{ fontSize: '9px', textAlign: 'right' }}>
-                                      {/* <div style={{ marginBottom: '2px' }}>{formatRentalStartTime(info?.startTime || rig.start)}</div> */}
-                                      <div><span style={{ opacity: 0.8 }}>End in:</span> <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /></div>
-                                    </div>
                                   </div>
                                 )}
                               </div>

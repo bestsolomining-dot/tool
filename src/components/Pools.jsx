@@ -14,7 +14,7 @@ export default function Pools({ onCall, nhClient }) {
   const [error, setError] = useState('')
   const [playing, setPlaying] = useState(false)
   const [running, setRunning] = useState(false)
-  const [verificationDelay, setVerificationDelay] = useState(2000)
+  const [verificationDelay, setVerificationDelay] = useState(2234)
   const [autoDelay, setAutoDelay] = useState(9000)
   const [lastRunTime, setLastRunTime] = useState(null)
   const [rateLimitStatus, setRateLimitStatus] = useState(null)

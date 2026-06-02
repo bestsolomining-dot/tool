@@ -5515,7 +5515,7 @@
           "user": "lona.332744",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -5529,7 +5529,7 @@
           "user": "lona.332747",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -5543,7 +5543,7 @@
           "user": "lona.332639",
           "pass": "X",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -18688,7 +18688,7 @@
           "user": "bestsolomining.371858",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -20578,7 +20578,7 @@
           "user": "bestsolomining.370124",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -21017,7 +21017,7 @@
           "user": "bestsolomining.370922",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -21031,7 +21031,7 @@
           "user": "batri.367703",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -21456,7 +21456,7 @@
           "user": "bestsolomining.370923",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -23320,7 +23320,7 @@
           "user": "bestsolomining.371664",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -23334,7 +23334,7 @@
           "user": "bestsolomining.371646",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -26020,7 +26020,7 @@
           "user": "bestsolomining.372666",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -26875,7 +26875,7 @@
           "user": "solo:Q01050004d67616f221acd8cf471e59a5c332af808acb405c79530229b0ccfa101ab128c914f7a1",
           "pass": "BESTSOLO 01",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         }
@@ -36729,7 +36729,7 @@
           "user": "batri.319767",
           "pass": "X",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -36743,7 +36743,7 @@
           "user": "bestsolomining.371859",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -40741,7 +40741,7 @@
           "user": "batri.353905",
           "pass": "17",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -42226,7 +42226,7 @@
           "user": "batri.353970",
           "pass": "20",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -62685,7 +62685,7 @@
           "user": "batri.354747",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -65380,7 +65380,7 @@
           "user": "batri.348846",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -67925,7 +67925,7 @@
           "user": "batri.362563",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -67939,7 +67939,7 @@
           "user": "batri.354800",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -67953,7 +67953,7 @@
           "user": "batri.367639",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -72874,7 +72874,7 @@
           "user": "batri.363908",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -72888,7 +72888,7 @@
           "user": "bestsolomining.369458",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -72902,7 +72902,7 @@
           "user": "batri.363906",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -82074,7 +82074,7 @@
           "user": "batri.355856",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -82429,7 +82429,7 @@
           "user": "batri.362283",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -83214,7 +83214,7 @@
           "user": "batri.362283",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -85452,7 +85452,7 @@
           "user": "batri.362284",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -94703,7 +94703,7 @@
           "user": "lona.332744",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -94717,7 +94717,7 @@
           "user": "lona.332747",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -94731,7 +94731,7 @@
           "user": "lona.332639",
           "pass": "X",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -108094,7 +108094,7 @@
           "user": "bestsolomining.371858",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -110012,7 +110012,7 @@
           "user": "bestsolomining.370124",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -110453,7 +110453,7 @@
           "user": "bestsolomining.370922",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -110467,7 +110467,7 @@
           "user": "batri.367703",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -110894,7 +110894,7 @@
           "user": "bestsolomining.370923",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -112770,7 +112770,7 @@
           "user": "bestsolomining.371664",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -112784,7 +112784,7 @@
           "user": "bestsolomining.371646",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -115486,7 +115486,7 @@
           "user": "bestsolomining.372666",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -116347,7 +116347,7 @@
           "user": "solo:Q01050004d67616f221acd8cf471e59a5c332af808acb405c79530229b0ccfa101ab128c914f7a1",
           "pass": "BESTSOLO 01",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         }
@@ -126329,7 +126329,7 @@
           "user": "batri.319767",
           "pass": "X",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -126343,7 +126343,7 @@
           "user": "bestsolomining.371859",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -130361,7 +130361,7 @@
           "user": "batri.353905",
           "pass": "17",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -131852,7 +131852,7 @@
           "user": "batri.353970",
           "pass": "20",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -152453,7 +152453,7 @@
           "user": "batri.354747",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -155162,7 +155162,7 @@
           "user": "batri.348846",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -157717,7 +157717,7 @@
           "user": "batri.362563",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -157731,7 +157731,7 @@
           "user": "batri.354800",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -157745,7 +157745,7 @@
           "user": "batri.367639",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -162708,7 +162708,7 @@
           "user": "batri.363908",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -162722,7 +162722,7 @@
           "user": "bestsolomining.369458",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -162736,7 +162736,7 @@
           "user": "batri.363906",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -171976,7 +171976,7 @@
           "user": "batri.355856",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -172333,7 +172333,7 @@
           "user": "batri.362283",
           "pass": "x",
           "pool_option1": null,
-          "status": "",
+          "status": "SickPool",
           "status_time": null,
           "notes": null
         },
@@ -173124,7 +173124,7 @@
           "user": "batri.362283",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -175378,7 +175378,7 @@
           "user": "batri.362284",
           "pass": "x",
           "pool_option1": null,
-          "status": "SickPool",
+          "status": "",
           "status_time": null,
           "notes": null
         },
@@ -195742,5 +195742,5 @@
       "nhClient": "BT"
     }
   ],
-  "lastSync": "2026-06-02T18:06:28.522Z"
+  "lastSync": "2026-06-02T18:50:33.499Z"
 }

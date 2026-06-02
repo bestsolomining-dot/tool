@@ -132,20 +132,29 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         for (const rig of rigList) {
           const status = parseStatus(rig);
           const rentedFlag = Boolean(rig?.status?.rented);
-          const rentalId = rig?.status?.rentalid || rig?.rentalid;
+          const rentalId = rig?.status?.rentalid || rig?.status?.rental_id || rig?.rentalid || rig?.rental_id;
           const onlineFlag = typeof rig?.status?.online === 'boolean' ? rig.status.online : Boolean(rig?.online);
-          const isRented = rentedFlag || status.includes('rented') || status.includes('active');
-          const isDisabled = status.includes('disabled');
-          const isOffline = status.includes('offline') || !onlineFlag;
+          
+          // Robust rented detection: check flag, status string, or presence of a valid rental ID
+          const isRented = rentedFlag || status.includes('rented') || status.includes('active') || (!!rentalId && rentalId !== '0' && rentalId !== 0);
+          // const isDisabled = status.includes('disabled');
+          // const isOffline = status.includes('offline') || !onlineFlag;
           const isWarning = status.includes('warning');
           const isAvailable = !isRented && !isDisabled && onlineFlag && (status.includes('available') || status.includes('online') || status === '');
 
           // TRACK INDIVIDUAL RIG STATUS CHANGES
           const rigIdKey = `rig_state_${rig.id}`;
           const prevStatus = lastRigStates.get(rigIdKey);
-          const currentStatus = isOffline ? 'OFFLINE' : (isWarning ? 'WARNING' : (isDisabled ? 'DISABLED' : 'OK'));
+          // Status priority: Offline and Disabled take precedence over Warnings.
+          // This ensures a disabled rig with a warning flag doesn't trigger a "WARNING" alert.
+          // const currentStatus = isOffline ? 'OFFLINE' : (isDisabled ? 'DISABLED' : (isWarning ? 'WARNING' : 'OK'));
           
-          if (prevStatus && prevStatus !== currentStatus && currentStatus !== 'OK') {
+          // Only notify for specific status transitions (WARNING).
+          // We explicitly ignore OK, OFFLINE, and DISABLED to reduce notification fatigue.
+          const isStatusChanged = prevStatus !== undefined && prevStatus !== currentStatus;
+          const isCriticalChange = currentStatus === 'WARNING';
+
+          if (isStatusChanged && isCriticalChange) {
              const statusEmoji = isOffline ? '🚫' : '⚠️';
              const rigAlertKey = `alert_${rigIdKey}_${currentStatus}`;
              const lastRigAlert = lastAlertTimes.get(rigAlertKey) || 0;
@@ -218,12 +227,15 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       const soldRes = await mrrApiCall({ endpoint: '/rental', query: { type: 'sold' }, clientNameRaw: acct });
 
       const allRentalsRaw = [
-        ...(boughtRes.data?.success ? extractArray(boughtRes.data) : []),
-        ...(soldRes.data?.success ? extractArray(soldRes.data) : [])
+        ...extractArray(boughtRes.data || {}),
+        ...extractArray(soldRes.data || {})
       ];
 
       // De-duplicate by ID in case the same rental appears in both categories or the API defaults change
-      const rentalsMap = new Map(allRentalsRaw.map(r => [String(r.id), r]));
+      const rentalsMap = new Map();
+      allRentalsRaw.forEach(r => {
+        if (r && r.id) rentalsMap.set(String(r.id), r);
+      });
       
       // HARVESTER: If we saw a Rental ID in the rig list that isn't in the rental list, fetch it specifically
       for (const hid of harvestedRentalIds) {
@@ -239,15 +251,6 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       harvestedRentalIds.clear(); // Clear for next account
 
       const rentals = Array.from(rentalsMap.values());
-
-      if (!boughtRes.data?.success && !soldRes.data?.success) {
-        console.warn(`[${monitorTime}] [monitor] Account ${acct} rental fetch failed.`);
-        continue;
-      }
-
-      if (rentals.length > 0) {
-        console.log(`[${monitorTime}] [monitor] Account ${acct}: Found ${rentals.length} active rentals.`);
-      }
 
       for (const r of rentals) {
         // Fallback: If rental summary is missing hashrate (common for sold rentals), 

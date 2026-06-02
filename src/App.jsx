@@ -5,14 +5,7 @@ import './App.css';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [configStatus, setConfigStatus] = useState({ loading: true, ready: false });
   const [password, setPassword] = useState('');
-  const [setupData, setSetupData] = useState({
-    NICEHASH_API_KEY: '',
-    NICEHASH_API_SECRET: '',
-    NICEHASH_ORG_ID: '',
-    APP_PASSWORD: 'admin'
-  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [output, setOutput] = useState(null);
@@ -98,24 +91,6 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    const checkConfig = async () => {
-      try {
-        const status = await callApi('/api/config-status', { silent: true });
-        if (status && typeof status === 'object') {
-          setConfigStatus({ loading: false, ready: !!status?.nicehash, data: status });
-        } else {
-          // Fallback if API returns empty or invalid
-          throw new Error("Invalid config response");
-        }
-      } catch {
-        console.warn("Backend configuration check failed (404 or Network Error). Defaulting to setup mode.");
-        setConfigStatus({ loading: false, ready: false });
-      }
-    };
-    checkConfig();
-  }, [callApi]);
-
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -127,38 +102,9 @@ export default function App() {
     }
   };
 
-  const handleSetup = async (e) => {
-    e.preventDefault();
-    try {
-      await callApi('/api/update-config', { method: 'POST', body: { config: setupData } });
-      window.location.reload();
-    } catch (err) {
-      setError('Failed to save config');
-    }
-  };
-
   const handleMiningCall = useCallback((path, opts = {}) => {
     return callApi(path, { ...opts });
   }, [callApi]);
-
-  if (configStatus.loading) return <div className="loader-fullscreen">Checking System Config...</div>;
-
-  if (!configStatus.ready) {
-    return (
-      <div className="login-container">
-        <form onSubmit={handleSetup} className="card login-card">
-          <h2>Initial Setup</h2>
-          <p>Provide your API credentials to begin.</p>
-          <input type="text" placeholder="NiceHash API Key" className="input-pro" value={setupData.NICEHASH_API_KEY} onChange={e => setSetupData({...setupData, NICEHASH_API_KEY: e.target.value})} required />
-          <input type="password" placeholder="NiceHash API Secret" className="input-pro" value={setupData.NICEHASH_API_SECRET} onChange={e => setSetupData({...setupData, NICEHASH_API_SECRET: e.target.value})} required />
-          <input type="text" placeholder="NiceHash Org ID" className="input-pro" value={setupData.NICEHASH_ORG_ID} onChange={e => setSetupData({...setupData, NICEHASH_ORG_ID: e.target.value})} required />
-          <input type="password" placeholder="Set Dashboard Password" className="input-pro" value={setupData.APP_PASSWORD} onChange={e => setSetupData({...setupData, APP_PASSWORD: e.target.value})} required />
-          <button type="submit" className="btn-pro primary">Save & Initialize</button>
-          {error && <p className="error-message">{error}</p>}
-        </form>
-      </div>
-    );
-  }
 
   if (!isAuthenticated) {
     return (

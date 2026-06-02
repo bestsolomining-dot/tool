@@ -18,17 +18,11 @@ app.use('/api/*', cors({
 // --- AUTHENTICATION ---
 app.post('/api/login', async (c) => {
   const { password } = await c.req.json();
-  const securePassword = c.env.APP_PASSWORD || 'admin123';
+  const securePassword = c.env.APP_PASSWORD || 'Admin123';
   if (password === securePassword) {
     return c.json({ success: true, token: 'session_' + Math.random().toString(36).slice(2) });
   }
   return c.json({ error: 'Invalid password' }, 401);
-});
-
-// Workers are stateless; writing to .env with fs.writeFile is not possible.
-// You should use Cloudflare KV or Secrets to update configuration.
-app.post('/api/update-config', async (c) => {
-  return c.json({ error: 'Runtime config updates require Cloudflare KV setup.' }, 501);
 });
 
 app.get('/api/config-status', (c) => {

@@ -364,7 +364,7 @@ export default function Pools({ onCall }) {
     } finally {
       setPlaying(false)
       if (!stopRef.current) setLastRunTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
-      if (skippedCount > 0) console.info(`[Pools] Verification complete. ${skippedCount} active order pools were skipped.`);
+      if (skippedCount > 0) console.info(`[Pools] Verification complete. ${skippedCount} active order pools were skipped.`) || 0;
       if (!keepRunning && stopRef.current) setRunning(false)
     }
   }
@@ -751,28 +751,28 @@ export default function Pools({ onCall }) {
                   <div style={{ marginBottom: '10px', fontSize: '0.95rem', color: '#e2e8f0' }}>
                     Verified {successCount} of {completedResults.length} completed results
                   </div>
-                  <div className="verify-summary">
-                    <div>
+                  <div className="verify-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, auto))', gap: '24px', justifyContent: 'start' }}>
+                    <div style={{ minWidth: '100px' }}>
                       <span>Target pools</span>
                       <strong>{pools.length}</strong>
                     </div>
-                    <div>
+                    <div style={{ minWidth: '100px' }}>
                       <span>Verified</span>
                       <strong>{completedResults.length}</strong>
                     </div>
-                    <div>
+                    <div style={{ minWidth: '100px' }}>
                       <span>Success</span>
                       <strong>{successCount}</strong>
                     </div>
-                    <div>
+                    <div style={{ minWidth: '100px' }}>
                       <span>Error</span>
                       <strong>{failCount}</strong>
                     </div>
-                    <div>
+                    <div style={{ minWidth: '100px' }}>
                       <span>Skipped</span>
                       <strong>{skippedCount}</strong>
                     </div>
-                    <div className="wide" style={{ gridColumn: '1 / -1', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div className="wide" style={{ gridColumn: '1 / -1', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                       <span style={{ display: 'block', marginBottom: '4px', opacity: 0.6 }}>Algorithm Breakdown</span>
                       <div style={{ lineHeight: '1.5', fontSize: '0.85rem' }}>
                         {algorithmSummary || 'No completed checks'}

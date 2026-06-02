@@ -7,8 +7,7 @@ import MiningRigRental from './src/components/MiningRigRental';
 import MiningRigSection from './src/components/MiningRigSection';
 import HashrateCalculator from './src/components/HashrateCalculator';
 import MrrPoolsManager from './src/components/MrrPoolsManager';
-import { RentedRigProvider, useRentedRigs } from './src/components/RentedRigContext';
-import RentedRigCard from './src/components/RentedRigCard';
+import { RentedRigProvider } from './src/components/RentedRigContext';
 import './src/App.css';
 
 export default function App() {
@@ -243,15 +242,13 @@ export default function App() {
           <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhClient} setNhClient={setNhClient} />
         </section>
         <main className="dashboard">
-          <RentedRigsSummarySection />
-
           <section className="quick-actions">
             <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <article className="panel">
                 <NiceHash
                   key={nhClient}
-                  output={output}
                   onCall={handleMiningCall}
+                  output={output}
                   algorithm={algorithm}
                   market={market}
                   nhClient={nhClient}
@@ -267,17 +264,7 @@ export default function App() {
                   Open Calculator
                 </button>
               </div>
-              {/* <article className="panel">
-              <div style={{ marginTop: '5px' }}>
-                <HashpowerBot
-                  algorithm={algorithm}
-                  market={market}
-                  onCall={handleHashpowerCall}
-                  nhClient={nhClient}
-                  setNhClient={setNhClient}
-                />
-              </div>
-            </article> */}
+              
             </div>
             <article className="panel">
               <MiningRigSection
@@ -295,6 +282,7 @@ export default function App() {
                 externalRigId={mrrPoolRigId}
                 externalRentalId={mrrPoolRentalId}
               />
+              
             </article>
           </section>
         </main>
@@ -323,29 +311,5 @@ export default function App() {
         </Modal>
       </div>
     </RentedRigProvider>
-  );
-}
-
-/** Helper sub-component to display the rented rigs from context */
-function RentedRigsSummarySection() {
-  const { rentedRigs, summary, loading } = useRentedRigs();
-
-  if (rentedRigs.length === 0 && !loading) return null;
-
-  return (
-    <section style={{ marginBottom: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
-        <h3 style={{ margin: 0 }}>Active Rented Power</h3>
-        <div style={{ fontSize: '0.9rem' }}>
-          Total Paid: <span style={{ color: '#f3ba2f', fontWeight: 'bold' }}>{summary.totalPaid} BTC</span>
-          <span style={{ margin: '0 10px', opacity: 0.3 }}>|</span>
-          Orders: <b>{summary.count}</b>
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '8px' }}>
-        {loading && <p>Updating rented orders...</p>}
-        {rentedRigs.map(rig => <RentedRigCard key={rig.id} order={rig} />)}
-      </div>
-    </section>
   );
 }

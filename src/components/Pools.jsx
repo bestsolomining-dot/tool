@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import PoolEditorPopup from './PoolEditorPopup' // Use the new wrapper
 import Modal from './Modal' // Import the new Modal component
 import { poolHelpers as ph, poolApi, apiFetch } from '../core/poolUtils'
@@ -82,7 +82,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   };
 
   // Function to load NiceHash pools for the selected client
-  async function loadPools() {
+  const loadPools = useCallback(async () => {
     setLoading(true);
     try {
       const result = await poolApi.list(nhClient); // Pass nhClient to the API call
@@ -96,12 +96,12 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     } finally {
       setLoading(false);
     }
-  }
+  }, [nhClient]);
 
   // Initialize pools on mount
   useEffect(() => {
     loadPools();
-  }, [nhClient]); // Re-fetch pools when nhClient changes
+  }, [loadPools]); // Re-fetch pools when loadPools (or nhClient) changes
 
   // Update the elapsed time counter every second while automation is running
   useEffect(() => {
@@ -579,8 +579,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         <small style={{ opacity: 0.8, fontSize: '13px', marginLeft: '10px' }}>ACTIVE NICEHASH CLIENT</small>
         <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
           <option value="BT">NiceHash Client: BT</option>
-          {/* <option value="LN">NiceHash Client: LN</option>
-          <option value="VN">NiceHash Client: VN (all MRR clients)</option> */}
+          <option value="PH">NiceHash Client: PH</option>
+          <option value="VN">NiceHash Client: VN (all NH Pools)</option>
         </select>
         <div className="pool-automation-main" style={{ flex: 1, minWidth: '600px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Integrated Pool Automation & Bulk Verification Section */}

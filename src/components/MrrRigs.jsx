@@ -3,6 +3,7 @@ import { poolApi } from '../core/poolUtils';
 import { CountdownTimer } from './MiningRigRental';
 import { normalizeAlgoForNiceHash } from '../core/algoMapping';
 import { getPriceData as getPriceDataUtils, getBtcPriceData as getBtcPriceDataUtils, parsePriceValue as parsePriceValueUtils } from '../core/priceUtils';
+import { useRentedRigs } from './RentedRigContext';
 
 /** Power factor mapping for normalization (EH/s base) */
 const UNIT_TO_POWER = {
@@ -10,7 +11,58 @@ const UNIT_TO_POWER = {
   'E': 0, 'P': -3, 'T': -6, 'G': -9, 'M': -12,
   'EHS': 0, 'PHS': -3, 'THS': -6, 'GHS': -9, 'MHS': -12
 };
+const NICEHASH_BASE_UNIT = 'PH';
+const MRR_BASE_UNIT = 'TH';
+const NICEHASH_BASE_POWER = UNIT_TO_POWER[NICEHASH_BASE_UNIT];
+const MRR_BASE_POWER = UNIT_TO_POWER[MRR_BASE_UNIT];
 
+/** Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH') */
+const clean = (u) => {
+  const m = String(u || '').toUpperCase().match(/(EH|LN|TH|GH|MH|KH|H|E|P|T|G|M|K)/);
+  if (!m) return 'TH';
+  let unit = m[0];
+  const singleMap = { 'E': 'EH', 'P': 'LN', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };
+  return singleMap[unit] || unit;
+};
+
+const convertPriceToBaseUnit = (price, priceUnit) => {
+  const unit = clean(priceUnit);
+  const power = UNIT_TO_POWER[unit] ?? -6;
+  return price / Math.pow(10, power);
+};
+
+const convertPriceBetweenUnits = (price, fromUnit, toUnit) => {
+  const fromPower = UNIT_TO_POWER[clean(fromUnit) || 'TH'] ?? -6;
+  const toPower = UNIT_TO_POWER[clean(toUnit) || 'TH'] ?? -6;
+  return price * Math.pow(10, fromPower - toPower);
+};
+
+const normalizePriceForComparison = (price, priceUnit) => {
+  return convertPriceToBaseUnit(convertPriceBetweenUnits(price, priceUnit, MRR_BASE_UNIT), priceUnit);
+};
+
+const normalizeNiceHashPriceForComparison = (price, priceUnit) => {
+  return convertPriceToBaseUnit(convertPriceBetweenUnits(price, priceUnit, NICEHASH_BASE_UNIT), priceUnit);
+};
+
+const normalizeMrrPriceForComparison = (price, priceUnit) => {
+  return convertPriceToBaseUnit(convertPriceBetweenUnits(price, priceUnit, MRR_BASE_UNIT), priceUnit);
+};
+
+const calculatePriceDifferencePercentage = (mrrPrice, mrrUnit, nhPrice, nhUnit) => {
+  const mrrPriceNorm = normalizeMrrPriceForComparison(mrrPrice, mrrUnit);
+  const nhPriceNorm = normalizeNiceHashPriceForComparison(nhPrice, nhUnit);
+
+  if (nhPriceNorm <= 0 || mrrPriceNorm <= 0) return null;
+
+  return ((mrrPriceNorm - nhPriceNorm) / nhPriceNorm * 100).toFixed(8);
+};
+
+const nicehashPriceToMrrUnit = (price, priceUnit) => {
+  return convertPriceBetweenUnits(price, NICEHASH_BASE_UNIT, MRR_BASE_UNIT);
+};
+
+// NiceHash prices are typically in BTC/TH/day
 /**
  * Reusable logic to calculate the price difference percentage between MRR and NiceHash.
  */
@@ -19,17 +71,6 @@ export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
   const mrrPriceNum = Number.parseFloat(mrrPrice || 0);
 
   if (nhPriceNum <= 0 || mrrPriceNum <= 0) return null;
-
-  // Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH')
-  const clean = (u) => {
-    const m = String(u || '').toUpperCase().match(/(EH|LN|TH|GH|MH|KH|H|E|P|T|G|M|K)/);
-    if (!m) return 'TH';
-    let unit = m[0];
-    // Normalize single letters to standard 2-letter codes for mapping
-    const singleMap = { 'E': 'EH', 'P': 'LN', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };
-    return singleMap[unit] || unit;
-  };
-
   const mrrUnitClean = clean(mrrUnit) || 'TH';
   const nhUnitClean = clean(nhUnit) || 'TH';
 
@@ -207,7 +248,8 @@ function getRentalEfficiency(rental) {
   return String(rental?.hashrate?.average?.percent || rental?.normalized?.percent || '0');
 }
 
-export default function MrrRigs({ mrrClient, onOpenPool, onOpenCompletionCalculator, onInfo, endpoint = '/rig/mine', algo, initialStatus = 'available' }) {
+export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletionCalculator, onInfo, endpoint = '/rig/mine', algo, initialStatus = 'available' }) {
+  const { rentedRigs: nhOrders } = useRentedRigs();
   const [rigs, setRigs] = useState([]);
   const [userRigIds, setUserRigIds] = useState(new Set());
   const [loading, setLoading] = useState(false);
@@ -259,9 +301,10 @@ export default function MrrRigs({ mrrClient, onOpenPool, onOpenCompletionCalcula
           const nhAlgo = normalizeAlgoForNiceHash(algo);
 
           const fetchPrice = async (path) => {
-            const res = await fetch(`${path}?algorithm=${encodeURIComponent(nhAlgo)}&market=USA&client=${encodeURIComponent(mrrClient)}&ts=${Date.now()}`);
-            if (!res.ok) return null;
-            const data = await res.json();
+            const data = await onCall(path, {
+              query: { algorithm: nhAlgo, market: 'USA' },
+              silent: true
+            });
             return data?.price || data;
           };
 
@@ -278,7 +321,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onOpenCompletionCalcula
         }
       }
     });
-  }, [filteredRigs, mrrClient, algoMarketPrices]);
+  }, [filteredRigs, mrrClient]);
 
   const toggleAlgoGroup = (algo) => {
     setExpandedAlgos(prev => ({
@@ -343,15 +386,15 @@ export default function MrrRigs({ mrrClient, onOpenPool, onOpenCompletionCalcula
 
     setLoadingInfoIds(prev => new Set(prev).add(rig.id));
     try {
-      const apiBase = ''; // Rely on Vite dev proxy for /api routes
+      const path = (isRented && rentalId)
+        ? `/api/v2/mrr/rental/${encodeURIComponent(rentalId)}`
+        : `/api/v2/mrr/rig/${encodeURIComponent(rigId || rig.id)}/info`;
 
-      const url = (isRented && rentalId)
-        ? `${apiBase}/api/v2/mrr/rental/${encodeURIComponent(rentalId)}?client=${mrrClient}&ts=${Date.now()}`
-        : `${apiBase}/api/v2/mrr/rig/${encodeURIComponent(rigId || rig.id)}/info?client=${mrrClient}&ts=${Date.now()}`;
-      // Adding ts parameter prevents the browser from serving cached results when refreshing stats
+      const data = await onCall(path, {
+        query: { client: mrrClient },
+        silent: true
+      });
 
-      const result = await fetch(url);
-      const data = await result.json();
       if (data && !data.error) {
         let infoBoxData;
         if (isRented && rentalId) {
@@ -573,17 +616,22 @@ export default function MrrRigs({ mrrClient, onOpenPool, onOpenCompletionCalcula
                         nhData?.speedUnit || nhData?.unit || 'TH'
                       );
 
+                      // Find our specific active NiceHash order for this algorithm
+                      const myNhOrder = nhOrders.find(o => o.algo === algoName.toUpperCase());
+                      const myNhOrderPrice = myNhOrder ? parseFloat(myNhOrder.price) : 0;
+                      const myOrderDiff = (myNhOrderPrice > 0) ? calculatePriceComparison(
+                        mrrPriceNum,
+                        rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH',
+                        myNhOrderPrice,
+                        'TH' // NH orders for major algos are BTC/TH/Day
+                      ) : null;
+
                       return (
                         <div key={rig.id} style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           <div style={{ padding: '0 2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ background: isMine ? '#5c005f' : 'rgba(255,255,255,0.05)', color: 'white', fontSize: '8px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
                               {idLabel}: #{displayId}
                             </span>
-                            {rig.mrrClient && (
-                              <span style={{ fontSize: '10px', fontWeight: 'bold', color: rig.mrrClient === 'SL' ? '#3b82f6' : rig.mrrClient === 'BT' ? '#fbbf24' : rig.mrrClient === 'LN' ? '#10b981' : '#f87171' }}>
-                                {rig.mrrClient}
-                              </span>
-                            )}
                           </div>
                           <div className="rig-card" style={{
                             background: isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)',
@@ -659,25 +707,40 @@ export default function MrrRigs({ mrrClient, onOpenPool, onOpenCompletionCalcula
                                   )}
                                 </div>
                                 {hasNhPrice && (
-                                  <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
+                                  <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
                                     <span>
-                                      NH: <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>
+                                      NH Mkt: <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>
                                         {nhPriceValue.toFixed(8)}
                                       </span>
-                                      <small style={{ marginLeft: '2px', opacity: 0.7 }}>
-                                        {nhData?.fixedPrice ? 'Fix' : 'Std'}{(nhData?.speedUnit || nhData?.unit) ? `/${nhData?.speedUnit || nhData?.unit}` : ''}
-                                      </small>
-                                      {diffPercent !== null && (
-                                        <span style={{ color: parseFloat(diffPercent) < 0 ? '#34d399' : '#f87171', fontWeight: 'bold', marginLeft: '5px' }}>
-                                          ({parseFloat(diffPercent) < 0 ? '' : '+'}{diffPercent}%)
+                                    </span>
+                                    {diffPercent !== null && (
+                                        <span style={{ color: parseFloat(diffPercent) < 0 ? '#d33434' : '#71f87c', fontWeight: 'bold', marginLeft: '5px' }}>
+                                        {parseFloat(diffPercent) < 0 ? '' : '+'}{diffPercent}%
                                         </span>
-                                      )}</span>
+                                    )}
+                                    </div>
+                                    
+                                    {myNhOrderPrice > 0 && (
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
+                                        <span>
+                                          My NH: <span style={{ fontWeight: 'bold' }}>
+                                            {myNhOrderPrice.toFixed(8)}
+                                          </span>
+                                        </span>
+                                        {myOrderDiff !== null && (
+                                          <span style={{ color: parseFloat(myOrderDiff) < 0 ? '#d33434' : '#2eff4a', fontWeight: 'bold' }}>
+                                            {parseFloat(myOrderDiff) < 0 ? '' : '+'}{myOrderDiff}%
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                                 {!hasNhPrice && !loading && !loadingInfoIds.has(rig.id) && (
                                   <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px' }}>
                                     <span>
-                                      NH market price unavailable
+                                      NH market rate N/A
                                     </span>
                                   </div>
                                 )}
@@ -725,6 +788,7 @@ export default function MrrRigs({ mrrClient, onOpenPool, onOpenCompletionCalcula
                                       const targetHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
                                       const targetDiff = adsVal > 0 ? ((targetHashrate - adsVal) / adsVal * 100).toFixed(1) : null;
                                       const rentalPriceDiff = diffPercent !== null ? Number.parseFloat(diffPercent) : null;
+                                      const rentalMyOrderDiff = myOrderDiff !== null ? Number.parseFloat(myOrderDiff) : null;
                                       const isBehind = targetHashrate > adsVal;
                                       // A truly negative target means you've already delivered 100% of the work for the WHOLE rental
                                       const displayTarget = targetHashrate < 0 ? 0 : targetHashrate;
@@ -734,11 +798,19 @@ export default function MrrRigs({ mrrClient, onOpenPool, onOpenCompletionCalcula
                                           <span style={{ color: parseFloat(eff) < 100 ? '#f87171' : '#34d399', marginLeft: '4px' }}>{eff}%</span></div>
                                         <div style={{ fontSize: '9px', marginTop: '2px' }}>
                                           <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
-                                          {rentalPriceDiff !== null && Number.isFinite(rentalPriceDiff) && (
-                                            <span style={{ color: rentalPriceDiff < 0 ? '#34d399' : '#f87171', marginLeft: '4px', fontWeight: 'bold' }}>
-                                              (Price {rentalPriceDiff > 0 ? '+' : ''}{rentalPriceDiff.toFixed(1)}% vs NH)
-                                            </span>
-                                          )}
+                                          <div style={{ marginTop: '2px', opacity: 0.9 }}>
+                                            {/* {rentalPriceDiff !== null && Number.isFinite(rentalPriceDiff) && (
+                                              <span style={{ color: rentalPriceDiff < 0 ? '#d33434' : '#71f878', fontWeight: 'bold' }}>
+                                                {rentalPriceDiff > 0 ? '+' : ''}{rentalPriceDiff.toFixed(1)}% vs Mkt
+                                              </span>
+                                            )} */}
+                                            {rentalPriceDiff !== null && rentalMyOrderDiff !== null && <span style={{ margin: '0 4px', opacity: 0.3 }}></span>}
+                                            {rentalMyOrderDiff !== null && Number.isFinite(rentalMyOrderDiff) && (
+                                              <span style={{ color: rentalMyOrderDiff < 0 ? '#d33434' : '#2eff4a', fontWeight: 'bold' }}>
+                                                {rentalMyOrderDiff > 0 ? '+' : ''}{rentalMyOrderDiff.toFixed(1)}% vs My NH
+                                              </span>
+                                            )}
+                                          </div>
                                         </div>
                                       </div>;
                                     })()}

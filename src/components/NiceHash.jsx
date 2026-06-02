@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import Accounting from './Accounting';
+import { useRentedRigs } from './RentedRigContext';
+import RentedRigCard from './RentedRigCard';
 
 export default function MiningRigNiceHash({ onCall, output, algorithm, market, nhClient, setNhClient }) {
+  const { rentedRigs, refresh: refreshSummary } = useRentedRigs();
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [localOrders, setLocalOrders] = useState([]);
   const [orderDetail, setOrderDetail] = useState(null);
@@ -23,10 +26,10 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     return [];
   }, [output, localOrders]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoadingLocal(true);
     const data = await onCall('/api/v2/hashpower/myOrders', {
-      query: { op: 'LE', limit: 1000 }, // Increased limit to fetch more orders at once
+      query: { op: 'LE', limit: 1000, client: nhClient }, // Pass the selected account client
       silent: true
     });
     const list = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
@@ -34,7 +37,13 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     setLocalOrders(list);
     setOrderDetail(null);
     setLoadingLocal(false);
-  };
+  }, [onCall, nhClient]);
+
+  // Unified refresh for both the list and the summary context
+  const handleManualRefresh = useCallback(() => {
+    fetchOrders();
+    refreshSummary();
+  }, [fetchOrders, refreshSummary]);
 
   const fetchOrderDetail = async (orderId) => {
     const id = String(orderId || '').trim();
@@ -92,16 +101,16 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     });
   };
 
-  // Sort localOrders so ACTIVE status appears on top
-  const sortedLocalOrders = useMemo(() => {
-    return [...localOrders].sort((a, b) => {
-      const aActive = a.status?.code === 'ACTIVE';
-      const bActive = b.status?.code === 'ACTIVE';
+  // Unified sorting for dropdown and table, using localOrders or fallback output
+  const sortedOrders = useMemo(() => {
+    return [...orders].sort((a, b) => {
+      const aActive = (a.status?.code || a.status) === 'ACTIVE';
+      const bActive = (b.status?.code || b.status) === 'ACTIVE';
       if (aActive && !bActive) return -1;
       if (!aActive && bActive) return 1;
       return 0;
     });
-  }, [localOrders]);
+  }, [orders]);
 
   // Clear local state when client changes to avoid showing data from the wrong account
   useEffect(() => {
@@ -112,23 +121,31 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     if (nhClient && typeof onCall === 'function') {
       fetchOrders();
     }
-  }, [nhClient]); // No need to add fetchOrders here as it's not wrapped in useCallback, but it's safe.
+  }, [nhClient, fetchOrders, onCall]); 
+
+  // Find market comparison data for the currently selected order
+  const matchingOrderInfo = useMemo(() => 
+    rentedRigs.find(r => r.id === String(selectedOrderId)), 
+    [rentedRigs, selectedOrderId]
+  );
 
   return (
     <div className="rig-section nh-theme" style={{ marginLeft: '5px', marginRight: '5px', marginTop: '5px', paddingTop: '5px', paddingBottom: '5px' }}>
       <h2 className="section-title" style={{ paddingBottom: '10px' }}>NiceHash</h2>
 
+      
+
       <div className="market-inputs" style={{ marginBottom: '15px' }}>
         <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
+          <option value="VN">VN (All Clients)</option>
           <option value="BT">BT Account</option>
           <option value="PH">PH Account</option>
-          <option value="VN">VN (All Clients)</option>
         </select>
-        <small style={{ opacity: 0.5, fontSize: '10px', marginLeft: '10px' }}>ACTIVE CLIENT</small>
+        <RentedRigsSummarySection />
       </div>
 
       <div className="button-group">
-        <button className="btn-pro" onClick={fetchOrders}>Orders List</button>
+        <button className="btn-pro" onClick={handleManualRefresh}>Orders List</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/mining/address')}>Mining Address</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/algorithms')}>Algorithms</button>
         <button className="btn-pro" onClick={() => onCall('/api/v2/mining/payouts')}>Payouts</button>
@@ -138,7 +155,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
       <div className="market-inputs" style={{ marginTop: '15px', display: 'flex', alignItems: 'center' }}>
         <select className="select-pro" value={selectedOrderId} onChange={(e) => handleOrderSelect(e.target.value)}>
           <option value="">Select Order</option>
-          {orders.map((order, index) => {
+          {sortedOrders.map((order, index) => {
             const id = String(order?.id ?? order?.orderId ?? order?.hashpowerOrderId ?? '');
             const algo = typeof order?.algorithm === 'object' ? order.algorithm.algorithm || order.algorithm.displayName : order?.algorithm;
             const poolName = order?.pool?.name || order?.pool?.stratumHostname;
@@ -209,7 +226,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
       )}
 
       <div className="market-inputs" style={{ marginTop: '10px' }}>
-        <button className="btn-pro" onClick={fetchOrders}>Refresh Orders</button>
+        <button className="btn-pro" onClick={handleManualRefresh}>Refresh Orders</button>
       </div>
 
       {loadingLocal && <div style={{ fontSize: '11px', opacity: 0.6, margin: '10px 0' }}>Fetching order data...</div>}
@@ -226,7 +243,26 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>POOL NAME</span> <strong>{orderDetail.pool?.name || 'N/A'}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>ALGO</span> <strong>{typeof orderDetail.algorithm === 'object' ? orderDetail.algorithm.algorithm : orderDetail.algorithm}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>MARKET</span> <strong>{orderDetail.market}</strong></div>
-            <div><span style={{ opacity: 0.8, display: 'block', fontSize: '9px' }}>PRICE</span> <strong style={{ color: '#f59e0b' }}>{orderDetail.price}</strong></div>
+            <div>
+              <span style={{ opacity: 0.8, display: 'block', fontSize: '9px' }}>PRICE</span> 
+              <strong style={{ color: '#f59e0b' }}>{orderDetail.price}</strong>
+              {matchingOrderInfo?.priceDiff && (
+                <span style={{ 
+                  marginLeft: '6px', 
+                  fontSize: '9px', 
+                  fontWeight: 'bold',
+                  color: parseFloat(matchingOrderInfo.priceDiff) <= 0 ? '#10b981' : '#f87171' 
+                }}>
+                  ({parseFloat(matchingOrderInfo.priceDiff) > 0 ? '+' : ''}{matchingOrderInfo.priceDiff}%)
+                </span>
+              )}
+            </div>
+            {matchingOrderInfo?.marketPrice > 0 && (
+              <div>
+                <span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>NH MARKET PRICE</span>
+                <strong style={{ color: '#94a3b8' }}>{parseFloat(matchingOrderInfo.marketPrice).toFixed(8)}</strong>
+              </div>
+            )}
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>LIMIT</span> <strong>{orderDetail.limit}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>REMAINING</span> <strong style={{ color: '#10b981' }}>{parseFloat(orderDetail.availableAmount || 0).toFixed(8)}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>BUDGET PROGRESS</span> <strong style={{ color: '#60a5fa' }}>{(() => {
@@ -264,7 +300,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
                 </tr>
               </thead>
               <tbody>
-                {sortedLocalOrders.map((o, i) => {
+                {sortedOrders.map((o, i) => {
                   const id = o.id || o.orderId || o.hashpowerOrderId;
                   const algo = typeof o.algorithm === 'object' ? o.algorithm.algorithm : o.algorithm;
                   return (
@@ -311,5 +347,28 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
         )}
       </div>
     </div>
+  );
+}
+
+/** Helper sub-component to display the rented rigs from context */
+function RentedRigsSummarySection() {
+  const { rentedRigs, summary, loading } = useRentedRigs();
+
+  return (
+    <section style={{ marginBottom: '15px', padding: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
+        <h4 style={{ margin: 0 }}>Active Orders</h4>
+        <div style={{ fontSize: '0.6rem' }}>
+          Total Paid: <span style={{ color: '#f3ba2f', fontWeight: 'bold' }}>{summary.totalPaid} BTC</span>
+          <span style={{ margin: '0 10px', opacity: 0.3 }}>|</span>
+          Orders: <b>{summary.count}</b>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '5px' }}>
+        {loading && <p>Updating orders...</p>}
+        {!loading && rentedRigs.length === 0 && <p style={{ fontSize: '0.8rem', opacity: 0.5 }}>No active NiceHash orders.</p>}
+        {rentedRigs.map(rig => <RentedRigCard key={rig.id} order={rig} />)}
+      </div>
+    </section>
   );
 }

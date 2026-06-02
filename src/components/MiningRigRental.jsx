@@ -445,10 +445,11 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
       <div className="market-inputs">
         <small style={{ opacity: 0.5, fontSize: '10px', marginLeft: '2px', display: 'block', marginBottom: '4px' }}>ACTIVE MRR CLIENT</small>
         <select className="select-pro" value={mrrClient || 'BT'} onChange={(e) => setMrrClient(e.target.value)}>
+          <option value="VN">MRR Client: VN (all MRR clients)</option>
           <option value="BT">MRR Client: BT</option>
           <option value="SL">MRR Client: SL</option>
           <option value="LN">MRR Client: LN</option>
-          <option value="VN">MRR Client: VN (all MRR clients)</option>
+          
         </select>
       </div>
 
@@ -536,6 +537,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         <div style={{ padding: '2px' }}> {/* Removed maxHeight and overflowY: 'auto' from here */}
           {activeModal === 'list' && (
             <MrrRigs
+              onCall={onCall}
               mrrClient={mrrClient}
               algo={algorithm}
               onOpenPool={onOpenMrrPools}
@@ -546,6 +548,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
 
           {activeModal === 'list_all_rigs' && (
             <MrrRigs
+              onCall={onCall}
               mrrClient={mrrClient}
               endpoint="/rig"
               algo={algorithm}

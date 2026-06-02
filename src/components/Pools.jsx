@@ -28,6 +28,7 @@ export default function Pools({ onCall }) {
   const [currentRunElapsed, setCurrentRunElapsed] = useState(0)
 
   const [skippedCount, setSkippedCount] = useState(0)
+  const [skippedPoolNames, setSkippedPoolNames] = useState([])
   const [skipActiveOrders, setSkipActiveOrders] = useState(true)
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false) // State for Pool Selection Modal
@@ -156,7 +157,56 @@ export default function Pools({ onCall }) {
     setResponse(null)
     setVerifyResults([])
     setSkippedCount(0)
+    setSkippedPoolNames([])
     setError('')
+
+    if (skipActiveOrders) {
+      try {
+        const algo = ph.getAlgo(selected);
+        if (algo) {
+          const activeIdentifiers = new Set();
+          // Fetch orders for the specific algorithm of the selected pool
+          for (const opType of ['STANDARD', 'FIXED']) {
+            const ordersRes = await onCall('/api/v2/hashpower/myOrders', { 
+              query: { algorithm: algo, op: opType, limit: 100 }, 
+              silent: true 
+            });
+            const orders = (ordersRes?.list || ordersRes?.myOrders || []);
+            
+            orders.forEach(order => {
+              const status = String(order?.status?.status || order?.status || '').toUpperCase();
+              if (status === 'COMPLETED' || status === 'CANCELED' || status === 'EXPIRED') return;
+
+              const p = order.pool;
+              const algoCode = (typeof order.algorithm === 'object' ? order.algorithm?.algorithm : order.algorithm)?.toString() || algo;
+              
+              if (p?.id) activeIdentifiers.add(String(p.id).toLowerCase());
+              if (p?.stratumHostname && p?.stratumPort) activeIdentifiers.add(`${p.stratumHostname.toLowerCase()}:${p.stratumPort}`);
+              if (p?.name && algoCode) activeIdentifiers.add(`${p.name.trim().toLowerCase()}:${algoCode.toLowerCase()}`);
+            });
+          }
+
+          const poolId = ph.getId(selected);
+          const poolIdKey = poolId ? String(poolId).toLowerCase() : null;
+          const host = (selected.stratumHostname || selected.host || '').toLowerCase();
+          const port = selected.stratumPort || selected.port;
+          const hostKey = host && port ? `${host}:${port}` : null;
+          const name = (selected.name || selected.label || selected.poolName || '').trim().toLowerCase();
+          const poolAlgo = String(ph.getAlgo(selected) || '').toLowerCase();
+          const nameKey = name && poolAlgo ? `${name}:${poolAlgo}` : null;
+
+          if ((poolIdKey && activeIdentifiers.has(poolIdKey)) || (hostKey && activeIdentifiers.has(hostKey)) || (nameKey && activeIdentifiers.has(nameKey))) {
+            setError(`Skipped: Pool '${name}' has an active order on ${poolAlgo}.`);
+            setSkippedCount(1);
+            setSkippedPoolNames([selected.name || selected.label || selected.poolName || 'Unknown']);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn(`[Pools] Could not verify active status:`, e.message);
+      }
+    }
 
     const payload = ph.buildVerifyBody(selected)
     const missingFields = ph.getMissingVerifyFields(payload)
@@ -239,31 +289,44 @@ export default function Pools({ onCall }) {
     setPlaying(true)
     setError('')
 
+    const skippedNames = [];
     const activeIdentifiers = new Set();
     if (skipActiveOrders) {
-      // 1. Fetch active NiceHash orders to identify pools currently in use
-      try {
-        const ordersRes = await onCall('/api/v2/hashpower/myOrders', { 
-          query: { op: 'ACTIVE' }, 
-          silent: true 
-        });
-        const orders = ordersRes?.list || ordersRes?.myOrders || [];
-        orders.forEach(order => {
-          const pool = order.pool;
-          const algoCode = (typeof order.algorithm === 'object' ? order.algorithm?.algorithm : order.algorithm)?.toString() || '';
-          
-          if (pool?.id) {
-            activeIdentifiers.add(String(pool.id).toLowerCase());
+      // 1. Identify unique algorithms in current pool set (NiceHash requires algorithm for myOrders)
+      const uniqueAlgos = [...new Set(poolsToVerify.map(p => ph.getAlgo(p)).filter(Boolean))];
+      
+      for (const algo of uniqueAlgos) {
+        try {
+          // Fetch both Standard and Fixed orders using the correct API enum values and required limit
+          for (const opType of ['STANDARD', 'FIXED']) {
+            const ordersRes = await onCall('/api/v2/hashpower/myOrders', { 
+              query: { algorithm: algo, op: opType, limit: 100 }, 
+              silent: true 
+            });
+            const orders = (ordersRes?.list || ordersRes?.myOrders || []);
+            
+            orders.forEach(order => {
+              // Only consider orders that are actually active
+              const status = String(order?.status?.status || order?.status || '').toUpperCase();
+              if (status === 'COMPLETED' || status === 'CANCELED' || status === 'EXPIRED') return;
+
+              const pool = order.pool;
+              const algoCode = (typeof order.algorithm === 'object' ? order.algorithm?.algorithm : order.algorithm)?.toString() || algo;
+              
+              if (pool?.id) {
+                activeIdentifiers.add(String(pool.id).toLowerCase());
+              }
+              if (pool?.stratumHostname && pool?.stratumPort) {
+                activeIdentifiers.add(`${pool.stratumHostname.toLowerCase()}:${pool.stratumPort}`);
+              }
+              if (pool?.name && algoCode) {
+                activeIdentifiers.add(`${pool.name.trim().toLowerCase()}:${algoCode.toLowerCase()}`);
+              }
+            });
           }
-          if (pool?.stratumHostname && pool?.stratumPort) {
-            activeIdentifiers.add(`${pool.stratumHostname.toLowerCase()}:${pool.stratumPort}`);
-          }
-          if (pool?.name && algoCode) {
-            activeIdentifiers.add(`${pool.name.trim().toLowerCase()}:${algoCode.toLowerCase()}`);
-          }
-        });
-      } catch (e) {
-        console.warn('[Pools] Could not fetch active orders for skipping:', e.message);
+        } catch (e) {
+          console.warn(`[Pools] Could not fetch active orders for algo ${algo}:`, e.message);
+        }
       }
     }
 
@@ -280,11 +343,13 @@ export default function Pools({ onCall }) {
       const nameKey = name && poolAlgo ? `${name}:${poolAlgo}` : null;
 
       const isActive = (poolIdKey && activeIdentifiers.has(poolIdKey)) || (hostKey && activeIdentifiers.has(hostKey)) || (nameKey && activeIdentifiers.has(nameKey));
+      if (isActive) skippedNames.push(pool.name || pool.label || pool.poolName || 'Unknown');
       return !isActive;
     });
 
     const localSkippedCount = poolsToVerify.length - poolsToProcess.length;
     setSkippedCount(localSkippedCount);
+    setSkippedPoolNames(skippedNames);
 
     setResponse(null)
     setVerifyResults([])
@@ -773,9 +838,18 @@ export default function Pools({ onCall }) {
                       <span>Error</span>
                       <strong>{failCount}</strong>
                     </div>
-                    <div style={{ minWidth: '100px' }}>
-                      <span>Skipped</span>
-                      <strong>{skippedCount}</strong>
+                    <div style={{ minWidth: '150px' }}>
+                      <span title="Pools skipped due to active NiceHash orders">Skipped (Active)</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <strong>{skippedCount}</strong>
+                        {skippedPoolNames.length > 0 && (
+                          <div style={{ fontSize: '0.7rem', color: '#94a3b8', maxHeight: '45px', overflowY: 'auto', borderLeft: '2px solid #ef4444', paddingLeft: '6px', lineBreak: 'anywhere' }}>
+                            {skippedPoolNames.map((name, idx) => (
+                              <div key={idx}>{name}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="wide" style={{ gridColumn: '1 / -1', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                       <span style={{ display: 'block', marginBottom: '4px', opacity: 0.6 }}>Algorithm Breakdown</span>

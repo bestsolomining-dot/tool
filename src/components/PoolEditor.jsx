@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react'
 import Modal from './Modal'
 import { poolHelpers as ph, apiFetch, poolApi } from './poolUtils'
 
-export default function PoolEditor({ pool, uccess, onVerifySuccess, initialPoolData, isNew, isPopout = false }) {
-tryset [editorVerifyBody, setEditorVerifyBody] = useState(null)
+export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySuccess, initialPoolData, isNew, isPopout = false }) {
+  const [editorBody, setEditorBody] = useState('')
+  const [editorVerifyBody, setEditorVerifyBody] = useState(null)
   const [editorResponse, setEditorResponse] = useState(null)
   const [editorSaveResponse, setEditorSaveResponse] = useState(null)
   const [editorError, setEditorError] = useState('')
@@ -52,7 +53,8 @@ tryset [editorVerifyBody, setEditorVerifyBody] = useState(null)
       if (!currentPoolId || isNew) return
 
       setEditorDetailsLoading(true)
-      const result = await cal
+      const result = await callEditorApi(poolApi.get(currentPoolId), 'Pool details');
+
       if (cancelled) return
 
       if (result.ok) {
@@ -130,9 +132,10 @@ tryset [editorVerifyBody, setEditorVerifyBody] = useState(null)
       return
     }
 
-    t      const result = await callEditorApi(poolApi.verify(payload), 'Verify pool');
-st enrichedResult = { ...result, poolDetails }
- pnrs
+    try {
+      const result = await callEditorApi(poolApi.verify(payload), 'Verify pool');
+      const enrichedResult = { ...result, poolDetails }
+      setEditorResponse(enrichedResult)
 
       if (!result.ok) {
         setEditorError(result.data?.error || result.data?.message || result.status)
@@ -172,6 +175,7 @@ st enrichedResult = { ...result, poolDetails }
       const saveResult = await callEditorApi(poolApi.save(savePayload), 'Save pool');
       setEditorSaveResponse(saveResult)
 
+      if (!saveResult.ok) {
         const message = typeof saveResult.data === 'string'
           ? saveResult.data
           : saveResult.data?.error || saveResult.data?.message || saveResult.status
@@ -183,7 +187,8 @@ st enrichedResult = { ...result, poolDetails }
         const detailResult = await callEditorApi(poolApi.get(savedId), 'Reload pool details');
 
         if (detailResult.ok) {
-          setEditorB
+          setEditorBody(JSON.stringify(detailResult.data, null, 2))
+          setEditorVerifyBody(ph.buildVerifyBody(detailResult.data))
           setEditorResponse(detailResult)
         }
       }

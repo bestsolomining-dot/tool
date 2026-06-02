@@ -27,6 +27,7 @@ export default function Pools({ onCall }) {
   const [currentRunStartTime, setCurrentRunStartTime] = useState(null)
   const [currentRunElapsed, setCurrentRunElapsed] = useState(0)
 
+  const [skippedCount, setSkippedCount] = useState(0)
   const [skipActiveOrders, setSkipActiveOrders] = useState(true)
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false) // State for Pool Selection Modal
@@ -154,6 +155,7 @@ export default function Pools({ onCall }) {
     setLoading(true)
     setResponse(null)
     setVerifyResults([])
+    setSkippedCount(0)
     setError('')
 
     const payload = ph.buildVerifyBody(selected)
@@ -242,7 +244,7 @@ export default function Pools({ onCall }) {
       // 1. Fetch active NiceHash orders to identify pools currently in use
       try {
         const ordersRes = await onCall('/api/v2/hashpower/myOrders', { 
-          query: { status: 'ACTIVE' }, 
+          query: { op: 'ACTIVE' }, 
           silent: true 
         });
         const orders = ordersRes?.list || ordersRes?.myOrders || [];
@@ -262,8 +264,12 @@ export default function Pools({ onCall }) {
       const host = (pool.stratumHostname || pool.host || '').toLowerCase();
       const port = pool.stratumPort || pool.port;
       const key = `${host}:${port}`;
-      return !activePoolKeys.has(key);
+      const isActive = activePoolKeys.has(key);
+      return !isActive;
     });
+
+    const skippedCount = poolsToVerify.length - poolsToProcess.length;
+    setSkippedCount(skippedCountLocal);
 
     setResponse(null)
     setVerifyResults([])
@@ -348,6 +354,7 @@ export default function Pools({ onCall }) {
     } finally {
       setPlaying(false)
       if (!stopRef.current) setLastRunTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+      if (skippedCount > 0) console.info(`[Pools] Verification complete. ${skippedCount} active order pools were skipped.`);
       if (!keepRunning && stopRef.current) setRunning(false)
     }
   }
@@ -751,9 +758,15 @@ export default function Pools({ onCall }) {
                       <span>Error</span>
                       <strong>{failCount}</strong>
                     </div>
-                    <div className="wide">
-                      <span>Algorithm</span>
-                      {algorithmSummary || 'No completed checks'}
+                    <div>
+                      <span>Skipped</span>
+                      <strong>{skippedCount}</strong>
+                    </div>
+                    <div className="wide" style={{ gridColumn: '1 / -1', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                      <span style={{ display: 'block', marginBottom: '4px', opacity: 0.6 }}>Algorithm Breakdown</span>
+                      <div style={{ lineHeight: '1.5', fontSize: '0.85rem' }}>
+                        {algorithmSummary || 'No completed checks'}
+                      </div>
                     </div>
                   </div>
                   <div className="verify-list">

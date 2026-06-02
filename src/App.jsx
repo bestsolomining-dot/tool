@@ -102,7 +102,7 @@ export default function App() {
     const checkConfig = async () => {
       try {
         const status = await callApi('/api/config-status', { silent: true });
-        setConfigStatus({ loading: false, ready: status?.nicehash && status?.mrr, data: status });
+        setConfigStatus({ loading: false, ready: !!status?.nicehash, data: status });
       } catch {
         setConfigStatus({ loading: false, ready: false });
       }

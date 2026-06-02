@@ -203,9 +203,9 @@
 .verify-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 10px;
   margin-bottom: 20px;
-  padding: 12px;
+  padding: 6px;
   background: var(--control);
   border-radius: var(--radius);
   border: 1px solid var(--border-color);

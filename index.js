@@ -16,7 +16,7 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   // Explicitly expose custom headers so the browser allows the frontend to read them
-  res.setHeader('Access-Control-Expose-Headers', 'X-MRR-Client, Retry-After, X-RateLimit-Limit');
+  res.setHeader('Access-Control-Expose-Headers', 'Retry-After, X-RateLimit-Limit');
   
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -85,6 +85,31 @@ app.use((req, res, next) => {
 /**
  * NiceHashApp organizes API calls into logical domains.
  */
+async function fetchAllPages(nhClient, apiMethod, query) {
+  let allItems = [];
+  let page = 0;
+  let hasMore = true;
+  const pageSize = 100;
+
+  while (hasMore && page < 50) {
+    const data = await apiMethod(nhClient, { ...query, size: pageSize, page });
+    const list = data?.list || data?.myOrders || data?.pools || (Array.isArray(data) ? data : []);
+
+    if (!Array.isArray(list) || list.length === 0) break;
+    allItems = allItems.concat(list);
+    
+    const pagination = data?.pagination || data?.result?.pagination;
+    if (pagination?.totalPageCount !== undefined) {
+      hasMore = (page + 1) < pagination.totalPageCount;
+    } else {
+      // Fallback: if we got a full page, assume there might be more
+      hasMore = list.length === pageSize;
+    }
+    page++;
+  }
+  return { list: allItems };
+}
+
 let nhInstance = null;
 
 function resolveNhClient() {

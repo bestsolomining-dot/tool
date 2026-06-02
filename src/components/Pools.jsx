@@ -3,7 +3,7 @@ import PoolEditorPopup from './PoolEditorPopup' // Use the new wrapper
 import Modal from './Modal' // Import the new Modal component
 import { poolHelpers as ph, poolApi } from './poolUtils'
 
-export default function Pools({ onCall, nhClient, setNhClient }) {
+export default function Pools({ onCall }) {
   const [pools, setPools] = useState([])
   const [selected, setSelected] = useState(null)
   const [selectedId, setSelectedId] = useState('')
@@ -21,13 +21,13 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
   const [nextRunCountdown, setNextRunCountdown] = useState(null)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const [sidebarVisible, setSidebarVisible] = useState(true)
-  const [mrrRigs, setMrrRigs] = useState(null)
   const [importedPools, setImportedPools] = useState([])
   const [inspectData, setInspectData] = useState(null)
   const [runCount, setRunCount] = useState(0)
   const [currentRunStartTime, setCurrentRunStartTime] = useState(null)
   const [currentRunElapsed, setCurrentRunElapsed] = useState(0)
 
+  const [skipActiveOrders, setSkipActiveOrders] = useState(true)
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false) // State for Pool Selection Modal
   const [enableVerifyAllButton, setEnableVerifyAllButton] = useState(true)
@@ -63,7 +63,7 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
 
   async function loadPools() {
     try {
-      const result = await poolApi.list({ size: 1000, client: nhClient });
+      const result = await poolApi.list({ size: 1000 });
       const normalized = ph.normalizeList(result.data);
       setPools(normalized);
       return normalized;
@@ -80,25 +80,11 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
       setSelectedId('')
       setVerifyResults([])
     })
-  }, [nhClient])
+  }, [])
 
   useEffect(() => {
     poolsRef.current = pools
   }, [pools])
-
-  async function fetchMrrRigs() {
-    setLoading(true);
-    setMrrRigs(null);
-    try {
-      const result = await poolApi.mrrRigs({ client: nhClient });
-      if (result.ok) setMrrRigs(result.data);
-      else throw new Error(result.data?.error || 'Failed to fetch MRR rigs');
-    } catch (err) {
-      setError(`MRR Error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   useEffect(() => {
     function onPointerDown(event) {
@@ -140,7 +126,7 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
 
     setDetailsLoading(true)
     try {
-      const result = await poolApi.get(poolId, { client: nhClient });
+      const result = await poolApi.get(poolId);
 
       if (!result.ok) {
         const message = typeof result.data === 'string'
@@ -176,9 +162,9 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
       const poolId = ph.getId(selected);
       if (poolId) {
         try {
-          const details = (await poolApi.get(poolId, { client: nhClient })).data;
+          const details = (await poolApi.get(poolId)).data;
           const fullPayload = ph.buildVerifyBody(details)
-          return await performVerification(fullPayload, details, { client: nhClient })
+          return await performVerification(fullPayload, details, {})
         } catch (e) {
           setError(`Details Error: ${e.message}`);
           setLoading(false);
@@ -189,7 +175,7 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
       setLoading(false)
       return
     }
-    await performVerification(payload, selected, { client: nhClient })
+    await performVerification(payload, selected, {})
   }
 
   async function performVerification(payload, poolDetails, params) {
@@ -245,20 +231,50 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
   }
 
   async function verifyAllOnce({ resetStop = true, keepRunning = false, targetPools } = {}) {
-    const poolsToVerify = targetPools || poolsRef.current
+    let poolsToVerify = targetPools || poolsRef.current
     if (!Array.isArray(poolsToVerify) || poolsToVerify.length === 0 || playing) return
+
     setPlaying(true)
     setError('')
+
+    const activePoolKeys = new Set();
+    if (skipActiveOrders) {
+      // 1. Fetch active NiceHash orders to identify pools currently in use
+      try {
+        const ordersRes = await onCall('/api/v2/hashpower/myOrders', { 
+          query: { status: 'ACTIVE' }, 
+          silent: true 
+        });
+        const orders = ordersRes?.list || ordersRes?.myOrders || [];
+        orders.forEach(order => {
+          const pool = order.pool;
+          if (pool?.stratumHostname && pool?.stratumPort) {
+            // Normalize key for comparison
+            activePoolKeys.add(`${pool.stratumHostname.toLowerCase()}:${pool.stratumPort}`);
+          }
+        });
+      } catch (e) {
+        console.warn('[Pools] Could not fetch active orders for skipping:', e.message);
+      }
+    }
+
+    const poolsToProcess = poolsToVerify.filter(pool => {
+      const host = (pool.stratumHostname || pool.host || '').toLowerCase();
+      const port = pool.stratumPort || pool.port;
+      const key = `${host}:${port}`;
+      return !activePoolKeys.has(key);
+    });
+
     setResponse(null)
     setVerifyResults([])
-    setProgress({ current: 0, total: poolsToVerify.length })
+    setProgress({ current: 0, total: poolsToProcess.length })
     if (resetStop) stopRef.current = false
 
     try {
-      for (let i = 0; i < poolsToVerify.length; i++) {
+      for (let i = 0; i < poolsToProcess.length; i++) {
         if (stopRef.current) break
 
-        const pool = poolsToVerify[i]
+        const pool = poolsToProcess[i]
         const poolId = ph.getId(pool)
         const key = ph.getKey(pool, i)
         const controller = new AbortController()
@@ -274,13 +290,13 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
         try {
           let details = pool
           if (poolId) {
-          let resDetails = await poolApi.get(poolId, { client: nhClient });
+          let resDetails = await poolApi.get(poolId);
             if (resDetails.status === 429) {
               const seconds = parseInt(resDetails.headers?.get('Retry-After') || resDetails.data?.headers?.['retry-after'], 10) || 10;
               setRateLimitStatus(`Rate limit hit on details. Waiting ${seconds}s...`);
               try {
                 await new Promise(r => setTimeout(r, seconds * 1000));
-              resDetails = await poolApi.get(poolId, { client: nhClient });
+              resDetails = await poolApi.get(poolId);
               } finally {
                 setRateLimitStatus(null);
               }
@@ -289,7 +305,7 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
           }
 
           const bodyToSend = typeof details === 'string' ? JSON.parse(details) : details
-          result = await verifyPoolBody(bodyToSend, { client: nhClient }, controller.signal)
+          result = await verifyPoolBody(bodyToSend, {}, controller.signal)
 
           if (result.status === 429) {
             const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
@@ -298,7 +314,7 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
             try {
               await new Promise(r => setTimeout(r, seconds * 1000));
               // Retry once for this pool
-              result = await verifyPoolBody(bodyToSend, { client: nhClient }, controller.signal);
+              result = await verifyPoolBody(bodyToSend, {}, controller.signal);
             } finally {
               setRateLimitStatus(null);
             }
@@ -316,9 +332,9 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
           ...prev.filter(item => item.key !== key),
           { key, label: ph.getLabel(pool, i), result },
         ])
-        setProgress({ current: i + 1, total: poolsToVerify.length })
+        setProgress({ current: i + 1, total: poolsToProcess.length })
 
-        if (stopRef.current || i >= poolsToVerify.length - 1) break
+        if (stopRef.current || i >= poolsToProcess.length - 1) break
         await new Promise(resolve => {
           const startedAt = Date.now()
           const timer = setInterval(() => {
@@ -576,22 +592,6 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
           </div>
         </Modal>
       )}
-      <div className="client-selector" style={{ marginBottom: '1rem', padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <label style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>NiceHash Account:</label>
-        <select 
-          className="input-pro" 
-          value={nhClient} 
-          onChange={(e) => setNhClient(e.target.value)}
-          style={{ width: '150px' }}
-          disabled={playing || running}
-        >
-          <option value="BT">BT Account</option>
-          <option value="PH">PH Account</option>
-        </select>
-        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-          {nhClient === 'PH' ? 'Using Org: 806de471...' : 'Using BT Credentials'}
-        </span>
-      </div>
 
       <div className="pool-actions" style={{ minWidth: '500px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.8rem', marginBottom: '1rem' }}>
         <div className="pool-actions" style={{ width: '100%', display: 'flex', flexWrap: 'wrap', alignItems: 'left', gap: '0.8rem', marginBottom: '1rem' }}>
@@ -651,6 +651,10 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
             <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem' }}>
               <input type="checkbox" checked={runVerifyAllInAuto} onChange={(e) => setRunVerifyAllInAuto(e.target.checked)} />
               Run 'Verify All' in Auto Mode
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.85rem', color: '#60a5fa' }}>
+              <input type="checkbox" checked={skipActiveOrders} onChange={(e) => setSkipActiveOrders(e.target.checked)} />
+              Skip active order pools
             </label>
           </div>
           {/* Time information block – pushed to the end on flex row, wraps below on small screens */}
@@ -860,18 +864,6 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
                 <pre className="response-body compact">No pools loaded.</pre>
               )}
             </div>
-
-            {mrrRigs && (
-              <div className="pool-mrr-summary" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.3rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div className="response-header compact" style={{ marginBottom: '10px' }}>
-                  <h3 style={{ margin: 0, fontSize: '14px' }}>MRR Rigs Data</h3>
-                  <button className="text-button" onClick={() => setMrrRigs(null)}>Clear</button>
-                </div>
-                <pre className="response-body compact" style={{ fontSize: '11px', maxHeight: '300px', overflow: 'auto', background: 'rgba(0,0,0,0.2)' }}>
-                  {JSON.stringify(mrrRigs, null, 2)}
-                </pre>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -882,7 +874,6 @@ export default function Pools({ onCall, nhClient, setNhClient }) {
         <PoolEditorPopup
           key={editor.key}
           editor={editor}
-          selectedClient={nhClient}
           onClose={() => closePoolEditor(editor.key)}
           onSaveSuccess={handleEditorSaveSuccess}
           onVerifySuccess={handleEditorVerifySuccess}

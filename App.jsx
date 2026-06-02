@@ -11,6 +11,8 @@ import './src/App.css';
 
 export default function App() {
   const [loading, setLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginPass, setLoginPass] = useState('');
   const [error, setError] = useState('');
   const [output, setOutput] = useState(null);
   const [lastCall, setLastCall] = useState(null);
@@ -152,6 +154,16 @@ export default function App() {
 
   }, [nhClient]);
 
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      const data = await callApi('/api/login', { method: 'POST', body: { password: loginPass } });
+      if (data?.success) setIsAuthenticated(true);
+    } catch (err) {
+      setError('Login failed: ' + err.message);
+    }
+  };
+
   // Clear output when switching accounts to prevent showing stale data
   useEffect(() => {
     setOutput(null);
@@ -206,7 +218,7 @@ export default function App() {
         alignItems: 'flex-end'
       }}>
         <div className="brand-block" style={{ flex: 1 }}>
-          <h3>Ben Tre Mining Tool</h3>
+          <h3>BT Tool</h3>
           <div className="status-card" style={{ marginBottom: '2px' }}>
             <div className="status-item">
               <span style={{ opacity: 0.5, marginRight: '10px' }}>SYSTEM:</span>

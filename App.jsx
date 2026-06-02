@@ -66,9 +66,8 @@ export default function App() {
       setLastCall({ method, path: finalPath, status: 'Pending', durationMs: null });
     }
 
-    const apiBase = window.location.port === '5173'
-      ? `${window.location.protocol}//${window.location.hostname}:3000`
-      : '';
+    // Use relative API paths so development proxy and production same-origin routing both work.
+    const apiBase = '';
 
     const headers = { ...fetchOptions.headers };
     let body = fetchOptions.body;

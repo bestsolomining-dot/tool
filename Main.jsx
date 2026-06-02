@@ -27,6 +27,57 @@ export default function App() {
   const [mrrPoolData, setMrrPoolData] = useState(null);
   const [mrrPoolRigId, setMrrPoolRigId] = useState('');
   const [mrrPoolRentalId, setMrrPoolRentalId] = useState('');
+  const [completionCalculatorContext, setCompletionCalculatorContext] = useState(null);
+
+  const toDateTimeLocal = (value) => {
+    if (!value) return '';
+    const date = new Date(String(value));
+    if (Number.isNaN(date.getTime())) return '';
+    const offsetMs = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+  };
+
+  const parseHashrateValue = (value) => {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value.replace(/,/g, ''));
+      return Number.isFinite(parsed) ? String(parsed) : '';
+    }
+    if (typeof value === 'object') {
+      return parseHashrateValue(value.hash || value.advertised || value.nice || value.value || Object.values(value)[0]);
+    }
+    return '';
+  };
+
+  const inferUnitValue = (source) => {
+    const unitMap = { EH: 1e18, PH: 1e15, LN: 1e15, TH: 1e12, GH: 1e9, MH: 1e6, KH: 1e3, H: 1 };
+    if (source === undefined || source === null) return 1e12;
+    if (typeof source === 'number' && Number.isFinite(source)) return source;
+    const normalized = String(source).toUpperCase().replace(/\s+/g, '');
+    const match = normalized.match(/(EH|PH|LN|TH|GH|MH|KH|H)(?:\/S)?$/) || normalized.match(/(EH|PH|LN|TH|GH|MH|KH|H)/);
+    if (match && match[1]) return unitMap[match[1]] || 1e12;
+    return 1e12;
+  };
+
+  const openCompletionCalculator = useCallback((rig, info = {}) => {
+    const algo = info?.algo || rig?.algo || rig?.algorithm || rig?.type || '';
+    const start = toDateTimeLocal(info?.startTime || rig?.start || (typeof rig?.status === 'object' ? rig.status.start : '') || '');
+    const end = toDateTimeLocal(info?.endTime || rig?.end || (typeof rig?.status === 'object' ? rig.status.end : '') || '');
+    const adsHashrate = parseHashrateValue(info?.advertised || rig?.hashrate?.advertised || rig?.advertised || rig?.hashrate?.hash || rig?.hash || '');
+    const avgHashrate = parseHashrateValue(info?.average || rig?.hashrate?.average || rig?.average || rig?.hash || '');
+    const unit = inferUnitValue(info?.advertised || info?.average || rig?.hashrate?.advertised || rig?.hashrate?.average || rig?.hashrate?.suffix || rig?.hashrate_unit || rig?.hashrate?.type || '');
+
+    setCompletionCalculatorContext({
+      initialAlgo: algo,
+      initialStartTime: start,
+      initialEndTime: end,
+      initialAdsHashrate: adsHashrate,
+      initialAvgHashrate: avgHashrate,
+      initialUnit: unit,
+    });
+    setCompletionModalOpen(true);
+  }, []);
   const scrollToPools = useCallback(() => {
     const poolsEl = document.querySelector('.pools-section');
     if (poolsEl) poolsEl.scrollIntoView({ behavior: 'smooth' });
@@ -65,9 +116,8 @@ export default function App() {
       setLastCall({ method, path: finalPath, status: 'Pending', durationMs: null });
     }
 
-    const apiBase = window.location.port === '5173'
-      ? `${window.location.protocol}//${window.location.hostname}:3000`
-      : '';
+    // Use relative API paths so development proxy and production same-origin routing both work.
+    const apiBase = '';
 
     const headers = { ...fetchOptions.headers };
     let body = fetchOptions.body;
@@ -258,7 +308,10 @@ export default function App() {
                 <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>Unit conversions and rental projections.</p>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn-pro secondary" onClick={() => setCompletionModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
+                <button className="btn-pro secondary" onClick={() => {
+                  setCompletionCalculatorContext(null);
+                  setCompletionModalOpen(true);
+                }} style={{ whiteSpace: 'nowrap' }}>
                   Completion Calc
                 </button>
                 <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
@@ -311,7 +364,7 @@ export default function App() {
         title="Rental Completion Calculator"
         maxWidth="750px"
       >
-        <HashCompletionCalculator />
+        <HashCompletionCalculator {...completionCalculatorContext} />
       </Modal>
       <Modal
         isOpen={responseModalOpen}

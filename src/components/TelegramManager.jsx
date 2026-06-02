@@ -6,6 +6,13 @@ export function calculateRemainingTime(endTime) {
   return sharedCalculateRemainingTime(endTime);
 }
 
+function getTelegramAccount(r, mrrClient) {
+  const account = r?.mrrClient || r?.client || r?.account || mrrClient;
+  if (!account) return 'N/A';
+  if (String(account).toUpperCase() === 'VN') return 'ALL';
+  return String(account).toUpperCase();
+}
+
 export function useTelegram(onCall, mrrClient) {
   const sendTelegram = useCallback((message, options = {}) => {
     return onCall('/api/v2/notify/telegram', {
@@ -16,7 +23,7 @@ export function useTelegram(onCall, mrrClient) {
   }, [onCall]);
 
   const notifyZeroHashrate = useCallback((r, elapsedMs) => {
-    const account = r.mrrClient || mrrClient;
+    const account = getTelegramAccount(r, mrrClient);
     const msg = `?? <b>[Critical] Zero Hashrate!</b>\n\n` +
       `<b>Rig:</b> ${r.name || r.id}\n` +
       `<b>Started:</b> ${Math.round(elapsedMs / 1000)}s ago\n` +
@@ -26,7 +33,7 @@ export function useTelegram(onCall, mrrClient) {
   }, [sendTelegram, mrrClient]);
 
   const notifyLowEfficiency = useCallback((r, remainingMs, efficiency) => {
-    const account = r.mrrClient || mrrClient;
+    const account = getTelegramAccount(r, mrrClient);
     const msg = `?? <b>[Alert] Low Efficiency</b>\n\n` +
       `<b>Rig:</b> ${r.name || r.id}\n` +
       `<b>Remaining:</b> ${Math.round(remainingMs / 60000)}m\n` +
@@ -36,7 +43,7 @@ export function useTelegram(onCall, mrrClient) {
   }, [sendTelegram, mrrClient]);
 
   const notifyStartupEfficiencyAlert = useCallback((r, efficiency) => {
-    const account = r.mrrClient || mrrClient;
+    const account = getTelegramAccount(r, mrrClient);
     const msg = `?? <b>[Startup Alert: ${account}]</b>\n\n` +
       `Rig <b>${r.name || r.id}</b> startup efficiency is low!\n` +
       `Efficiency: <b>${efficiency}%</b> (< 70% in first hour)\n` +
@@ -45,7 +52,7 @@ export function useTelegram(onCall, mrrClient) {
   }, [sendTelegram, mrrClient]);
 
   const notifyCompletionEfficiencyAlert = useCallback((r, efficiency) => {
-    const account = r.mrrClient || mrrClient;
+    const account = getTelegramAccount(r, mrrClient);
     const msg = `?? <b>[Completion Alert: ${account}]</b>\n\n` +
       `Rig <b>${r.name || r.id}</b> efficiency is low near the end!\n` +
       `Efficiency: <b>${efficiency}%</b> (< 70% with < 1h remaining)\n` +
@@ -57,7 +64,7 @@ export function useTelegram(onCall, mrrClient) {
     const remainingStr = calculateRemainingTime(r.end);
     const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0);
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
-    const account = r.mrrClient || mrrClient;
+    const account = getTelegramAccount(r, mrrClient);
     const msg = `?? <b>[Notice] Hash Completion</b>\n\n` +
       `<b>Rig:</b> ${r.name || r.id}\n` +
       `<b>Algo:</b> ${r.rig?.type || r.algo || 'N/A'}\n` +

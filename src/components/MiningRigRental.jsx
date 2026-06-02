@@ -258,7 +258,7 @@ export function MrrPoolsTable({ data }) {
   );
 }
 
-export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algorithm, onOpenMrrPools }) {
+export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algorithm, onOpenMrrPools, onOpenCompletionCalculator }) {
   const [activeModal, setActiveModal] = useState(null); // 'list', 'pool', 'rental'
   const [modalData, setModalData] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
@@ -515,6 +515,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           mrrClient={mrrClient}
           algo={algorithm}
           onOpenPool={onOpenMrrPools}
+          onOpenCompletionCalculator={onOpenCompletionCalculator}
           onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
         />
       </div>
@@ -538,6 +539,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
               mrrClient={mrrClient}
               algo={algorithm}
               onOpenPool={onOpenMrrPools}
+              onOpenCompletionCalculator={onOpenCompletionCalculator}
               onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
             />
           )}
@@ -548,6 +550,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
               endpoint="/rig"
               algo={algorithm}
               onOpenPool={onOpenMrrPools}
+              onOpenCompletionCalculator={onOpenCompletionCalculator}
               onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
             />
           )}

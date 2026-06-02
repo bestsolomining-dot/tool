@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { poolApi } from '../core/poolUtils';
 import { CountdownTimer } from './MiningRigRental';
 import { normalizeAlgoForNiceHash } from '../core/algoMapping';
+import { getPriceData as getPriceDataUtils, getBtcPriceData as getBtcPriceDataUtils, parsePriceValue as parsePriceValueUtils } from '../core/priceUtils';
 
 /** Power factor mapping for normalization (EH/s base) */
 const UNIT_TO_POWER = {
@@ -74,7 +75,7 @@ function getRawHashrate(rate) {
   return parseFloat(rate.hash ?? rate.hashrate ?? rate.advertised ?? 0);
 }
 
-function parsePriceValue(price) {
+function parsePriceValueLocal(price) {
   if (price === undefined || price === null) return 0;
   if (typeof price === 'number') return price;
   if (typeof price === 'string') {
@@ -83,17 +84,17 @@ function parsePriceValue(price) {
   }
   if (typeof price === 'object') {
     const candidate = price.price ?? price.paid ?? price.advertised ?? price.amount ?? price.total;
-    if (candidate !== undefined) return parsePriceValue(candidate);
+    if (candidate !== undefined) return parsePriceValueLocal(candidate);
     const nested = Object.values(price).find(val => typeof val === 'object' && (val.price !== undefined || val.paid !== undefined));
-    if (nested) return parsePriceValue(nested.price ?? nested.paid);
+    if (nested) return parsePriceValueLocal(nested.price ?? nested.paid);
   }
   return 0;
 }
 
-function getPriceData(source) {
+function getPriceDataLocal(source) {
   if (source === undefined || source === null) return { value: 0, currency: 'BTC' };
   if (typeof source === 'number') return { value: source, currency: 'BTC' };
-  if (typeof source === 'string') return { value: parsePriceValue(source), currency: 'BTC' };
+  if (typeof source === 'string') return { value: parsePriceValueLocal(source), currency: 'BTC' };
 
   const obj = source;
   if (typeof obj === 'object') {
@@ -102,9 +103,9 @@ function getPriceData(source) {
       if (normalized === undefined) return undefined;
       if (typeof normalized === 'object') {
         const nested = normalized.price ?? normalized.amount ?? normalized.total ?? normalized.value ?? normalized;
-        return parsePriceValue(nested);
+        return parsePriceValueLocal(nested);
       }
-      return parsePriceValue(normalized);
+      return parsePriceValueLocal(normalized);
     };
 
     const currency = String(obj.currency || obj.price_unit || 'BTC').toUpperCase();
@@ -116,7 +117,7 @@ function getPriceData(source) {
     }
 
     const directValue = obj.price ?? obj.advertised ?? obj.amount ?? obj.total;
-    if (directValue !== undefined) return { value: parsePriceValue(directValue), currency };
+    if (directValue !== undefined) return { value: parsePriceValueLocal(directValue), currency };
 
     // fallback to first numeric child field, but ignore paid-only values
     for (const key of Object.keys(obj)) {
@@ -129,12 +130,35 @@ function getPriceData(source) {
   return { value: 0, currency: 'BTC' };
 }
 
+function getBtcPriceDataLocal(source) {
+  const candidate = getPriceDataLocal(source);
+  if (candidate.currency === 'BTC' && candidate.value > 0) return candidate;
+  if (!source || typeof source !== 'object') return { value: 0, currency: candidate.currency };
+
+  const nestedBtc = source.BTC || source.btc || source['BTC'] || source['btc'];
+  if (nestedBtc) {
+    const nestedData = getPriceDataLocal(nestedBtc);
+    if (nestedData.currency === 'BTC' && nestedData.value > 0) return nestedData;
+  }
+
+  // Some MRR payloads include an explicit converted BTC object or field
+  const explicitBtcSource = source.price ?? source.advertised ?? source.amount ?? source.total;
+  if (explicitBtcSource && candidate.currency !== 'BTC') {
+    const fallback = getPriceDataLocal(explicitBtcSource);
+    if (fallback.currency === 'BTC' && fallback.value > 0) return fallback;
+  }
+
+  return { value: 0, currency: candidate.currency };
+}
+
 function getNiceHashPriceValue(rawNhData) {
   const nhData = rawNhData?.price || rawNhData;
-  if (!nhData || typeof nhData !== 'object') return 0;
+  if (nhData === undefined || nhData === null) return 0;
+  if (typeof nhData === 'number') return nhData;
+  if (typeof nhData === 'string') return parsePriceValueUtils(nhData);
 
-  const candidate = nhData.fixedPrice ?? nhData.standardPrice?.fast ?? nhData.standardPrice ?? nhData.price ?? nhData.amount ?? 0;
-  return parsePriceValue(candidate);
+  const candidate = nhData.fixedPrice ?? nhData.standardPrice?.fast ?? nhData.standardPrice ?? nhData.price ?? nhData.amount ?? nhData.total ?? 0;
+  return parsePriceValueUtils(candidate);
 }
 
 function getRentalStartTime(rental) {
@@ -183,7 +207,7 @@ function getRentalEfficiency(rental) {
   return String(rental?.hashrate?.average?.percent || rental?.normalized?.percent || '0');
 }
 
-export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/rig/mine', algo, initialStatus = 'available' }) {
+export default function MrrRigs({ mrrClient, onOpenPool, onOpenCompletionCalculator, onInfo, endpoint = '/rig/mine', algo, initialStatus = 'available' }) {
   const [rigs, setRigs] = useState([]);
   const [userRigIds, setUserRigIds] = useState(new Set());
   const [loading, setLoading] = useState(false);
@@ -508,37 +532,45 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
 
                       const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised);
 
-                      const priceData = getPriceData(rig.price || info?.price || rig.min_price);
-                      const displayPrice = priceData.value;
-                      const displayPriceCurrency = priceData.currency || 'BTC';
-                      const paidAmount = parsePriceValue(info?.price?.paid || rig.price?.paid);
-                      const paidCurrency = info?.price?.currency || rig.price?.currency || '';
+                      const displayPriceData = getPriceDataLocal(rig.price || info?.price || rig.min_price);
+                      const displayPrice = displayPriceData.value;
+                      const displayPriceCurrency = displayPriceData.currency || 'BTC';
+                      const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid);
+                      const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || '';
                       const paidLabel = paidAmount > 0 && paidCurrency ? `${paidAmount.toFixed(8)} ${paidCurrency}` : null;
+
+                      const effectivePriceSource = (info?.price?.paid !== undefined || rig.price?.paid !== undefined)
+                        ? { ...(rig.price || {}), ...(info?.price || {}), paid: info?.price?.paid ?? rig.price?.paid, currency: String(info?.price?.currency || rig.price?.currency || info?.price?.price_unit || rig.price?.price_unit || 'BTC').toUpperCase() }
+                        : rig.price_converted || info?.price_converted || info?.price?.BTC || rig?.price?.BTC || rig.price || info?.price || rig.min_price;
+
+                      const effectiveCostData = (info?.price?.paid !== undefined || rig.price?.paid !== undefined)
+                        ? { value: parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid), currency: String(info?.price?.currency || rig.price?.currency || info?.price?.price_unit || rig.price?.price_unit || 'BTC').toUpperCase() }
+                        : displayPriceData;
+
+                      const btcPriceData = getBtcPriceDataUtils(effectivePriceSource);
+                      const mrrComparePriceValue = btcPriceData.value;
 
                       const nhPriceValue = getNiceHashPriceValue(rawNhData);
                       const hasNhPrice = nhPriceValue > 0;
 
                       const mrrPriceNum = (() => {
-                        let p = rig.price;
-                        if (typeof p === 'object' && p !== null) {
-                          const unit = rig.price_converted || 'BTC';
-                          p = p[unit]?.price ?? p[unit] ?? p.price ?? '0';
+                        let val = mrrComparePriceValue;
+                        if (typeof val === 'string') {
+                          val = parseFloat(val.replace(/,/g, '')) || 0;
                         }
-                        const val = parseFloat(p || 0);
-                        if (isRented) {
-                          const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
-                          if (hours > 0 && adsVal > 0) {
-                            return val / (hours / 24) / adsVal;
-                          }
+                        const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
+                        if (isRented && adsVal > 0) {
+                          if (btcPriceData.isPerHashRate) return val;
+                          if (hours > 0) return val / (hours / 24) / adsVal;
                         }
-                        return val;
+                        return Number.isFinite(val) ? val : 0;
                       })();
 
                       const diffPercent = calculatePriceComparison(
                         mrrPriceNum,
                         rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH',
                         nhPriceValue,
-                        nhData?.speedUnit || 'TH'
+                        nhData?.speedUnit || nhData?.unit || 'TH'
                       );
 
                       return (
@@ -630,9 +662,11 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                                   <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
                                     <span>
                                       NH: <span style={{ fontWeight: 'bold', color: '#cbd5e1' }}>
-                                        {nhPriceValue.toFixed(4)}
+                                        {nhPriceValue.toFixed(8)}
                                       </span>
-                                      <small style={{ marginLeft: '2px', opacity: 0.7 }}>{nhData?.fixedPrice ? 'Fix' : 'Std'}</small>
+                                      <small style={{ marginLeft: '2px', opacity: 0.7 }}>
+                                        {nhData?.fixedPrice ? 'Fix' : 'Std'}{(nhData?.speedUnit || nhData?.unit) ? `/${nhData?.speedUnit || nhData?.unit}` : ''}
+                                      </small>
                                       {diffPercent !== null && (
                                         <span style={{ color: parseFloat(diffPercent) < 0 ? '#34d399' : '#f87171', fontWeight: 'bold', marginLeft: '5px' }}>
                                           ({parseFloat(diffPercent) < 0 ? '' : '+'}{diffPercent}%)
@@ -643,11 +677,8 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                                 {!hasNhPrice && !loading && !loadingInfoIds.has(rig.id) && (
                                   <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px' }}>
                                     <span>
-                                      MRR: <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{displayPrice.toFixed(8)}</span> <small style={{ opacity: 0.7 }}>{displayPriceCurrency}</small>
+                                      NH market price unavailable
                                     </span>
-                                    <small style={{ display: 'block', marginTop: '2px', opacity: 0.7 }}>
-                                      paid converted to {displayPriceCurrency} vs NH: unavailable
-                                    </small>
                                   </div>
                                 )}
                               </div>
@@ -736,6 +767,16 @@ export default function MrrRigs({ mrrClient, onOpenPool, onInfo, endpoint = '/ri
                                   onClick={() => onOpenPool?.(rig, info)}
                                 >
                                   {isRented ? 'Pools' : 'Pools'}
+                                </button>
+                              )}
+
+                              {isRented && info && onOpenCompletionCalculator && (
+                                <button
+                                  className="btn-pro secondary"
+                                  style={{ flex: 1, fontSize: '10px', padding: '4px' }}
+                                  onClick={() => onOpenCompletionCalculator(rig, info)}
+                                >
+                                  Calc
                                 </button>
                               )}
 

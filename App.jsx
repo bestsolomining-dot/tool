@@ -65,9 +65,9 @@ export default function App() {
       setLastCall({ method, path: finalPath, status: 'Pending', durationMs: null });
     }
 
-    const apiBase = window.location.port === '5173'
+    const apiBase = import.meta.env.VITE_API_URL || (window.location.port === '5173'
       ? `${window.location.protocol}//${window.location.hostname}:3000`
-      : '';
+      : '');
 
     const headers = { ...fetchOptions.headers };
     let body = fetchOptions.body;

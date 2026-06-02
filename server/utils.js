@@ -164,13 +164,20 @@ export function extractRentalInfo(rental) {
   const niceAverageHashrate = (hr && typeof hr === 'object' && hr.average?.nice) ||
     (averageHash > 0 ? `${averageHash.toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');
 
+  // If efficiency (percent) is missing or '0' but we have hashrate numbers, calculate it manually
+  let finalPercent = percent;
+  if ((!percent || percent === '0') && advertisedHash > 0) {
+    const calc = (averageHash / advertisedHash) * 100;
+    finalPercent = calc.toFixed(2);
+  }
+
   return {
     algo,
     type,
     duration,
     rigId,
     endTime: rental.end || rental.rig?.status?.end || '',
-    percent,
+    percent: finalPercent,
     hashrate: { current: currentHash, advertised: advertisedHash, average: averageHash, suffix: hashrateSuffix },
     price: {
       paid: priceObj.paid || '0.00',

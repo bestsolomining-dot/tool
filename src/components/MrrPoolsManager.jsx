@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Modal from './Modal';
 import { MrrPoolsTable, CountdownTimer } from './MiningRigRental'; // Import CountdownTimer
+import MonitorDbEditor from './MonitorDbEditor';
 import { poolHelpers as ph } from '../core/poolUtils'; // Import poolHelpers
 
 function formatHashrateValue(rate) {
@@ -20,6 +21,7 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
   const [rentalInfo, setRentalInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMonitorDbOpen, setIsMonitorDbOpen] = useState(false);
   const [mrrMethod, setMrrMethod] = useState('GET');
   const [mrrEndpoint, setMrrEndpoint] = useState('/rig/mine');
   const [mrrBody, setMrrBody] = useState('');
@@ -138,6 +140,9 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
         <h3 style={{ margin: 0 }}>Pool Manager</h3>
         <button className="btn-pro primary" onClick={() => fetchPools('all_rigs')} disabled={loading} title="Fetch pool info for all your personal rigs">
           {loading ? 'Fetching...' : 'Rig Pools'}
+        </button>
+        <button className="btn-pro" style={{ background: '#073681' }} onClick={() => setIsMonitorDbOpen(true)}>
+          Monitor DB
         </button>
         <button className="btn-pro secondary" onClick={handleExportMrrPools} disabled={!poolData || poolData.success === false || loading}>
           Export Pools
@@ -283,6 +288,12 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
           </div>
         )}
       </Modal>
+
+      <MonitorDbEditor 
+        isOpen={isMonitorDbOpen} 
+        onClose={() => setIsMonitorDbOpen(false)} 
+        onCall={onCall} 
+      />
     </div>
   );
 }

@@ -291,16 +291,16 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         const now = Date.now();
 
         // Detect new rentals
-        if (knownRentalIds.current.size > 0) {
-          const fresh = newList.find(r => !knownRentalIds.current.has(String(r.id)));
-          if (fresh) {
-            setNewRentalFound(fresh);
-            // Telegram notification is now handled by the backend heartbeat monitor
+        const fresh = newList.find(r => {
+          const isKnown = knownRentalIds.current.has(String(r.id));
+          const startTime = toUtcTimestamp(r.start);
+          return !isKnown && (now - startTime < 300000); // Trigger if seen first time AND started within 5 mins
+        });
 
-            // Optionally trigger a system notification
-            if (Notification.permission === 'granted') {
-              new Notification(`Rig Rented: ${fresh.name || fresh.id}`, { body: `New rental active for ${fresh.hours}h` });
-            }
+        if (fresh) {
+          setNewRentalFound(fresh);
+          if (Notification.permission === 'granted') {
+            new Notification(`Rig Rented: ${fresh.name || fresh.id}`, { body: `New rental active for ${fresh.hours}h` });
           }
         }
 
@@ -459,11 +459,11 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           Browse Marketplace
         </button> */}
         <button className="btn-pro secondary" onClick={() => openManagementModal('list')}>Rigs Manager</button>
-        <button className="btn-pro secondary" onClick={() => openManagementModal('rentals')}>
+        {/* <button className="btn-pro secondary" onClick={() => openManagementModal('rentals')}>
           Rentals {rentals.length > 0 && `(${rentals.length})`}
         </button>
         <button className="btn-pro secondary" onClick={() => openManagementModal('rental_history')}>Rental History</button>
-        <button className="btn-pro secondary" onClick={() => openManagementModal('mrr_nh_compare')}>MRR vs NiceHash</button>
+        <button className="btn-pro secondary" onClick={() => openManagementModal('mrr_nh_compare')}>MRR vs NiceHash</button> */}
         <button className="btn-pro secondary" onClick={() => onCall('/api/v2/mrr/balance', { query: { client: mrrClient }, showModal: true })}>Balance</button>
         <TelegramManager onCall={onCall} mrrClient={mrrClient} />
       </div>

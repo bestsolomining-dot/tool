@@ -30,11 +30,10 @@ export function initDatabase() {
 }
 
 export async function cleanAllCache() {
-  console.info('[init] Cleaning all cached data (SQLite rentals & database.json)...');
+  console.info('[init] Cleaning JSON cache...');
   try {
-    await new Promise((resolve, reject) => {
-      db.run(`DELETE FROM rentals`, (err) => err ? reject(err) : resolve());
-    });
+    // We no longer wipe the rentals table at startup to maintain 
+    // notification history (last_notified) across server restarts.
 
     try {
       await fs.unlink(DB_FILE);

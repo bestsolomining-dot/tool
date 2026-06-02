@@ -1,5 +1,6 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { calculateRemainingTime as sharedCalculateRemainingTime } from '../core/time';
+import MonitorDbEditor from './MonitorDbEditor';
 
 export function calculateRemainingTime(endTime) {
   if (!endTime) return null;
@@ -120,14 +121,15 @@ export function useTelegram(onCall, mrrClient) {
 
 export default function TelegramManager({ onCall, mrrClient }) {
   const { sendTelegram } = useTelegram(onCall, mrrClient);
+  const [isMonitorDbOpen, setIsMonitorDbOpen] = useState(false);
 
   return (
     <div style={{ display: 'contents' }}>
       <button
         className="btn-pro secondary"
         style={{ border: '1px solid #5472d3', color: '#5472d3' }}
-        onClick={() => onCall('/api/v2/mrr/monitor/snapshot', { showModal: true })}
-        title="View the target hashrate data stored in the server database"
+        onClick={() => setIsMonitorDbOpen(true)}
+        title="Open the interactive monitoring database editor"
       >
         Monitor DB
       </button>
@@ -145,6 +147,12 @@ export default function TelegramManager({ onCall, mrrClient }) {
       >
         Test Bot
       </button>
+
+      <MonitorDbEditor 
+        isOpen={isMonitorDbOpen} 
+        onClose={() => setIsMonitorDbOpen(false)} 
+        onCall={onCall} 
+      />
     </div>
   );
 }

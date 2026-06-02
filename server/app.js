@@ -38,12 +38,14 @@ export async function initializeApp() {
   const syncManager = new SyncManager({ db, nhConfigs, mrrConfigs, mrrApiCall, resolveNhClient, getNiceHashApp });
   syncManager.run();
 
+  // Send initialization notice to Telegram
+  const accts = Object.keys(mrrConfigs).filter(k => mrrConfigs[k].apiKey).join(', ');
+  sendTelegramInternal(`🤖 <b>System Started</b>\nTime: ${new Date().toLocaleString()}\nMonitoring: ${accts || 'None'}\nHeartbeat Interval: 5m\nService is now active.`)
+    .catch(e => console.warn('[init] Telegram startup notice failed:', e.message));
+
+  // Start the monitor
   setInterval(() => runRentalMonitor(), 60000);
   runRentalMonitor();
-
-  // Send initialization notice to Telegram
-  sendTelegramInternal(`🤖 <b>System Started</b>\nTime: ${new Date().toLocaleString()}\nMonitoring is now active.`)
-    .catch(e => console.warn('[init] Telegram startup notice failed:', e.message));
 
   try {
     const { client } = resolveNhClient('BT');

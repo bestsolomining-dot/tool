@@ -26,6 +26,19 @@ export const mrrConfigs = {
   },
 };
 
+// Discover and register additional accounts from environment variables
+Object.keys(process.env).forEach(key => {
+  if (key.startsWith('MRR_KEY_RIG_')) {
+    const acct = key.replace('MRR_KEY_RIG_', '').toUpperCase();
+    if (!mrrConfigs[acct]) {
+      mrrConfigs[acct] = {
+        apiKey: normalizeCredential(process.env[key]),
+        apiSecret: normalizeCredential(process.env[`MRR_SECRET_RIG_${acct}`] || process.env[`MRR_API_SECRET_${acct}`]),
+      };
+    }
+  }
+});
+
 const defaultMrrClientRaw = String(process.env.MRR_DEFAULT_CLIENT || 'VN').trim().toUpperCase();
 export const defaultMrrClient = (function () {
   if (defaultMrrClientRaw === 'VN') return 'VN';
@@ -283,17 +296,38 @@ export async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
 
   for (const clientName of allClientNames) {
     try {
-      const { data, statusCode } = await mrrApiCall({ endpoint: '/rental', method: 'GET', clientNameRaw: clientName, query: mrrQuery });
-      if (statusCode === 200 && data.success) {
-        const rentals = Array.isArray(data.data) ? data.data : (data.data?.rentals || []);
-        if (rentals.length > 0) {
-          rentals.forEach(r => r.mrrClient = clientName);
-          const rentalIds = rentals.map(r => r.id).join(';');
+      const results = [];
+      
+      // If a specific type is requested, use it; otherwise fetch both bought and sold
+      const typesToFetch = mrrQuery.type ? [mrrQuery.type] : ['bought', 'sold'];
+      
+      for (const type of typesToFetch) {
+        const { data, statusCode } = await mrrApiCall({ 
+          endpoint: '/rental', 
+          method: 'GET', 
+          clientNameRaw: clientName, 
+          query: { ...mrrQuery, type } 
+        });
+
+        if (statusCode === 200 && data.success) {
+          const list = Array.isArray(data.data) ? data.data : (data.data?.rentals || []);
+          results.push(...list);
+        } else if (!isAll && typesToFetch.length === 1) {
+          return { statusCode, data, clientName };
+        }
+      }
+
+      if (results.length > 0) {
+        // De-duplicate if fetching multiple types
+        const uniqueList = Array.from(new Map(results.map(r => [String(r.id), r])).values());
+        uniqueList.forEach(r => r.mrrClient = clientName);
+        
+        const rentalIds = uniqueList.map(r => r.id).join(';');
           const { data: poolsData } = await mrrApiCall({ endpoint: `/rental/${rentalIds}/pool`, clientNameRaw: clientName });
           if (poolsData && poolsData.success) {
             const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (Array.isArray(poolsData.data?.result) ? poolsData.data.result : []);
-            const poolMap = new Map(poolItems.map(item => [String(item.rigid || item.id || item.rentalid || item.rental_id || item.rental_id), item.pools]));
-            rentals.forEach(r => {
+            const poolMap = new Map(poolItems.map(item => [String(item.rigid || item.id || item.rentalid || item.rental_id), item.pools]));
+            uniqueList.forEach(r => {
               const pools = poolMap.get(String(r.id));
               if (pools && pools.length > 0) {
                 const p0 = pools.find(p => p.priority === 0 || p.priority === '0') || pools[0];
@@ -303,10 +337,7 @@ export async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
               }
             });
           }
-          allRentals.push(...rentals);
-        }
-      } else if (!isAll) {
-        return { statusCode, data, clientName };
+        allRentals.push(...uniqueList);
       }
     } catch (err) {
       if (!isAll) throw err;

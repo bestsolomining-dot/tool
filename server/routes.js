@@ -321,6 +321,24 @@ export function registerRoutes(app) {
     });
   }));
 
+  app.delete('/api/v2/mrr/monitor/snapshot/:id', asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    db.run(`DELETE FROM rentals WHERE id = ?`, [id], function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, changes: this.changes });
+    });
+  }));
+
+  app.patch('/api/v2/mrr/monitor/snapshot/:id', asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const fields = Object.keys(req.body).filter(k => k !== 'id').map(k => `${k} = ?`).join(', ');
+    const values = [...Object.keys(req.body).filter(k => k !== 'id').map(k => req.body[k]), id];
+    db.run(`UPDATE rentals SET ${fields} WHERE id = ?`, values, function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, changes: this.changes });
+    });
+  }));
+
   app.get('/api/v2/mrr/rigs', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
     const targetEndpoint = req.query.endpoint || '/rig/mine';

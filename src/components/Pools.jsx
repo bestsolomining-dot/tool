@@ -529,7 +529,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
       return {
         'Pool Name': item.label,
         'Algorithm': ph.getVerifyAlgo(item.result),
-        'Status': success ? 'VERIFIED' : 'FAILED',
+        'Status': success ? 'VERIFIED' : 'ERROR',
         'Stratum Host': p.stratumHost || p.stratumHostname || p.host || '',
         'Port': p.stratumPort || p.port || '',
         'Username': p.username || '',
@@ -684,146 +684,139 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
           </div>
 
           {/* Results Section */}
-          {/* <div className="pool-results-main" style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '15px', flex: 1, minHeight: '300px' }}>
-            
-
-            {verifyResults.length > 0 ? (
-              <div className="results-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div className="verify-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px' }}>
-                  <div><span style={{ fontSize: '10px', opacity: 0.6 }}>Total:</span> <strong>{verifyFromFile ? filePools.length : pools.length}</strong></div>
-                  <div><span style={{ fontSize: '10px', opacity: 0.6 }}>Verified:</span> <strong>{completedResults.length}</strong></div>
-                  <div><span style={{ fontSize: '10px', color: '#34d399' }}>Success:</span> <strong>{successCount}</strong></div>
-                  <div><span style={{ fontSize: '10px', color: '#f87171' }}>Fail:</span> <strong>{failCount}</strong></div>
-                </div>
-
-                <div className="verify-list" style={{ maxHeight: '400px', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
-                  {verifyResults.map(item => {
-                    const pending = item.result?.pending
-                    const success = !pending && ph.isVerifySuccess(item.result)
-                    const algorithm = ph.getVerifyAlgo(item.result)
-                    return (
-                      <div key={item.key} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '8px 12px',
-                        background: 'rgba(255,255,255,0.02)',
-                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                        fontSize: '12px',
-                        gap: '12px'
-                      }}>
-                        <div style={{ width: '80px', textAlign: 'center', padding: '2px 0', borderRadius: '4px', fontWeight: 'bold', fontSize: '10px', background: pending ? 'rgba(59, 130, 246, 0.1)' : success ? 'rgba(52, 211, 153, 0.1)' : 'rgba(248, 113, 113, 0.1)', color: pending ? '#3b82f6' : success ? '#34d399' : '#f87171', border: `1px solid ${pending ? '#3b82f644' : success ? '#34d39944' : '#f8717144'}` }}>{pending ? 'PENDING' : success ? 'SUCCESS' : 'FAILED'}</div>
-                        <div style={{ flex: 1, fontWeight: 'bold' }}>{item.label}</div>
-                        <div style={{ width: '120px', opacity: 0.6, fontFamily: 'monospace' }}>{algorithm}</div>
-                        <div style={{ flex: 2, opacity: 0.8, fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pending ? 'Waiting...' : ph.getVerifyMessage(item.result)}</div>
-                        <div style={{ display: 'flex', gap: '5px' }}>
-                          <button className="text-button" style={{ fontSize: '11px' }} onClick={() => setInspectData(item.result)}>Inspect</button>
-                          <button className="text-button" style={{ fontSize: '11px' }} onClick={() => openPoolEditor(item)}>Edit</button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '40px', opacity: 0.5 }}>
-                No verification results yet. Start a manual "Verify All" or "Auto Run" to begin monitoring.
-              </div>
-            )}
-          </div> */}
           {verifyResults.length > 0 ? (
             <div
               className="results-wrapper"
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '15px',
-                minHeight: 0,        // ✅ cho phép co lại khi cha là flex column
-                overflow: 'hidden'   // ✅ ngăn tràn ra ngoài
+                height: '100%',
+                minHeight: 0,
+                overflow: 'hidden',
+                gap: '15px'
               }}
             >
               <div
                 className="verify-summary"
                 style={{
+                  flexShrink: 0,
                   display: 'grid',
                   gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
-                  gap: '10px'
+                  gap: '10px',
+                  paddingBottom: '10px',
+                  borderBottom: '1px solid rgba(255,255,255,0.05)'
                 }}
               >
                 <div>
-                  <span style={{ fontSize: '10px', opacity: 0.6 }}>Total:</span> <strong>{verifyFromFile ? filePools.length : pools.length}</strong>
+                  <span style={{ fontSize: '10px', opacity: 0.6 }}>Total:</span>{' '}
+                  <strong>{verifyFromFile ? filePools.length : pools.length}</strong>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: '10px', opacity: 0.6 }}>Verified:</span>{' '}
+                  <strong>{completedResults.length}</strong>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: '10px', color: '#34d399' }}>Success:</span>{' '}
+                  <strong>{successCount}</strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: '10px', opacity: 0.6 }}>Verified:</span> <strong>{completedResults.length}</strong>
+                  <span style={{ fontSize: '10px', color: '#f87171' }}>Error:</span>{' '}
+                  <strong>{failCount}</strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: '10px', color: '#34d399' }}>Success:</span> <strong>{successCount}</strong>
-                </div>
-                <div>
-                  <span style={{ fontSize: '10px', color: '#f87171' }}>Fail:</span> <strong>{failCount}</strong>
+                  <span style={{ fontSize: '10px', color: '#f87171' }}>Skipped:</span>{' '}
+                  <strong>{skippedCount}</strong>
                 </div>
               </div>
 
               <div
                 className="verify-list"
                 style={{
-                  maxHeight: '400px',
-                  overflowY: 'hiden',
-                  overflowX: 'auto',
-
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.015)',
                   scrollbarWidth: 'thin',
-                  scrollbarColor: 'rgba(255,255,255,0.1) transparent'
+                  scrollbarColor: 'rgba(255,255,255,0.15) transparent'
                 }}
               >
                 {verifyResults.map(item => {
                   const pending = item.result?.pending;
                   const success = !pending && ph.isVerifySuccess(item.result);
                   const algorithm = ph.getVerifyAlgo(item.result);
+
                   return (
                     <div
                       key={item.key}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        padding: '8px 12px',
-                        background: 'rgba(255,255,255,0.02)',
-                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                        fontSize: '12px',
-                        gap: '12px'
+                        gap: '8px',
+                        padding: '5px 5px',
+                        borderBottom: '2px solid rgba(102, 86, 104, 0.07)',
+                        fontSize: '10px'
                       }}
                     >
                       <div
                         style={{
                           width: '80px',
                           textAlign: 'center',
-                          padding: '2px 0',
+                          padding: '4px 0',
                           borderRadius: '4px',
-                          fontWeight: 'bold',
+                          fontWeight: 700,
                           fontSize: '10px',
+                          flexShrink: 0,
                           background: pending
-                            ? 'rgba(59, 130, 246, 0.1)'
+                            ? 'rgba(59,130,246,.1)'
                             : success
-                              ? 'rgba(52, 211, 153, 0.1)'
-                              : 'rgba(248, 113, 113, 0.1)',
-                          color: pending ? '#3b82f6' : success ? '#34d399' : '#f87171',
-                          border: `1px solid ${pending ? '#3b82f644' : success ? '#34d39944' : '#f8717144'
+                              ? 'rgba(52,211,153,.1)'
+                              : 'rgba(248,113,113,.1)',
+                          color: pending
+                            ? '#3b82f6'
+                            : success
+                              ? '#34d399'
+                              : '#f87171',
+                          border: `1px solid ${pending
+                              ? '#3b82f644'
+                              : success
+                                ? '#34d39944'
+                                : '#f8717144'
                             }`
                         }}
                       >
-                        {pending ? 'PENDING' : success ? 'SUCCESS' : 'FAILED'}
+                        {pending ? 'PENDING' : success ? 'SUCCESS' : 'ERROR'}
                       </div>
-                      <div style={{ flex: 1, fontWeight: 'bold' }}>{item.label}</div>
+
+                      <div
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontWeight: 600
+                        }}
+                      >
+                        {item.label}
+                      </div>
+
                       <div
                         style={{
                           width: '120px',
+                          flexShrink: 0,
                           opacity: 0.6,
                           fontFamily: 'monospace'
                         }}
                       >
                         {algorithm}
                       </div>
+
                       <div
                         style={{
                           flex: 2,
+                          minWidth: 0,
                           opacity: 0.8,
                           fontSize: '11px',
                           whiteSpace: 'nowrap',
@@ -831,9 +824,18 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                           textOverflow: 'ellipsis'
                         }}
                       >
-                        {pending ? 'Waiting...' : ph.getVerifyMessage(item.result)}
+                        {pending
+                          ? 'Waiting...'
+                          : ph.getVerifyMessage(item.result)}
                       </div>
-                      <div style={{ display: 'flex', gap: '5px' }}>
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: '6px',
+                          flexShrink: 0
+                        }}
+                      >
                         <button
                           className="text-button"
                           style={{ fontSize: '11px' }}
@@ -841,6 +843,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                         >
                           Inspect
                         </button>
+
                         <button
                           className="text-button"
                           style={{ fontSize: '11px' }}
@@ -855,8 +858,15 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
               </div>
             </div>
           ) : (
-            <div style={{ textAlign: 'center', padding: '40px', opacity: 0.5 }}>
-              No verification results yet. Start a manual "Verify All" or "Auto Run" to begin monitoring.
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '40px',
+                opacity: 0.5
+              }}
+            >
+              No verification results yet. Start a manual "Verify All" or "Auto Run"
+              to begin monitoring.
             </div>
           )}
         </div>
@@ -892,8 +902,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
             </div>
           </div>
         )}
-
-
 
       </div>
 

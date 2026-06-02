@@ -102,8 +102,14 @@ export default function App() {
     const checkConfig = async () => {
       try {
         const status = await callApi('/api/config-status', { silent: true });
-        setConfigStatus({ loading: false, ready: !!status?.nicehash, data: status });
+        if (status) {
+          setConfigStatus({ loading: false, ready: !!status?.nicehash, data: status });
+        } else {
+          // Fallback if API returns empty or invalid
+          setConfigStatus({ loading: false, ready: false });
+        }
       } catch {
+        console.warn("Backend configuration check failed (404 or Network Error). Defaulting to setup mode.");
         setConfigStatus({ loading: false, ready: false });
       }
     };

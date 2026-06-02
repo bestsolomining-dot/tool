@@ -6,7 +6,7 @@ import { nhConfigs, getNiceHashApp, resolveNhClient } from './nh.js';
 import { mrrConfigs, initNonces, syncMrrClock, mrrApiCall } from './mrr.js';
 import { registerRoutes } from './routes.js';
 import { corsMiddleware, logRequestMiddleware } from './utils.js';
-import { runRentalMonitor, sendTelegramInternal } from './monitor.js';
+import { runRentalMonitor, initTelegramNotifications } from './monitor.js';
 
 export function createApp({ distPath }) {
   const app = express();
@@ -30,18 +30,22 @@ export function createApp({ distPath }) {
 }
 
 export async function initializeApp() {
-  await cleanAllCache();
-  await initDatabase();
-  await initNonces();
-  await syncMrrClock();
+  try {
+    console.log('🚀 Initializing system...');
+    await initDatabase();
+    await cleanAllCache();
+    await initNonces();
+    await syncMrrClock();
+  } catch (error) {
+    console.error('❌ Critical Initialization Failure:', error.message);
+    process.exit(1);
+  }
 
   const syncManager = new SyncManager({ db, nhConfigs, mrrConfigs, mrrApiCall, resolveNhClient, getNiceHashApp });
   syncManager.run();
 
-  // Send initialization notice to Telegram
-  const accts = Object.keys(mrrConfigs).filter(k => mrrConfigs[k].apiKey).join(', ');
-  sendTelegramInternal(`🤖 <b>System Started</b>\nTime: ${new Date().toLocaleString()}\nMonitoring: ${accts || 'None'}\nHeartbeat Interval: 5m\nService is now active.`)
-    .catch(e => console.warn('[init] Telegram startup notice failed:', e.message));
+  // Initialize Telegram notifications
+  initTelegramNotifications();
 
   // Start the monitor
   setInterval(() => runRentalMonitor(), 60000);

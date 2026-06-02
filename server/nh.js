@@ -24,14 +24,6 @@ export const isAggregate = (c) => {
   return uc === 'ALL' || uc === AGGREGATE_CLIENT;
 };
 
-const defaultMrrClientRaw = String(process.env.MRR_DEFAULT_CLIENT || 'VN').trim().toUpperCase();
-export const defaultMrrClient = (function () {
-  if (defaultMrrClientRaw === 'VN') return 'VN';
-  if (defaultMrrClientRaw === 'SL') return 'SL';
-  if (defaultMrrClientRaw === 'LN') return 'LN';
-  return nhConfigs[defaultMrrClientRaw] ? defaultMrrClientRaw : 'BT';
-})();
-
 export function resolveNhClient(clientNameRaw) {
   const clientName = isAggregate(clientNameRaw) ? AGGREGATE_CLIENT : String(clientNameRaw || 'BT').trim().toUpperCase();
 

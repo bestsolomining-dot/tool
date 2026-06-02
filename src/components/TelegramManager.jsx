@@ -30,6 +30,64 @@ function getPaidAmount(r) {
   return `${val} ${currency}`;
 }
 
+const TelegramTemplates = {
+  newRental: (account, r, paid, startStr, endStr) => `🚀 <b>[New Rental]</b>\n` +
+    `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+    `<b>Algo:</b> <code>${escapeHtml(r.algo || r.rig?.type || 'N/A')}</code>\n` +
+    `<b>Time:</b> ${startStr} - ${endStr}\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Paid:</b> ${paid}\n` +
+    `<i>Rental has been successfully initialized.</i>`,
+
+  zeroHashrate: (account, r, elapsedMs, paid) => `🚨 <b>[Critical] Zero Hashrate!</b>\n` +
+    `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+    `<b>Duration:</b> ${Math.round(elapsedMs / 1000)}s\n` +
+    `<b>Efficiency:</b> <b>0%</b>\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Paid:</b> ${paid}`,
+
+  lowEfficiency: (account, r, avg, suffix, efficiency, remainingMs, paid) => `⚠️ <b>[Alert] Low Efficiency</b>\n` +
+    `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+    `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
+    `<b>Left:</b> ${Math.round(remainingMs / 60000)}m\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Paid:</b> ${paid}`,
+
+  startup: (account, r, avg, suffix, efficiency, paid) => `🚀 <b>[Startup Alert]</b>\n` +
+    `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+    `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Paid:</b> ${paid}`,
+
+  completion: (account, r, avg, suffix, efficiency, paid) => `🏁 <b>[Completion Alert]</b>\n` +
+    `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+    `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Paid:</b> ${paid}`,
+
+  manualNotice: (r, account, avg, suffix, roi, remStr, progress, paid) => `💎 <b>[RENTED] #${r.id}</b>\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Algo:</b> <code>${escapeHtml(r.rig?.type || r.algo || 'N/A').toUpperCase()}</code>\n` +
+    `<b>Acct:</b> <code>${escapeHtml(account).toUpperCase()}</code>\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<b>Hash:</b> <code>${avg.toFixed(2)} ${suffix}</code>\n` +
+    `<b>ROI:</b> <code>${roi >= 0 ? '+' : ''}${roi}%</code>\n` +
+    `<b>Time:</b> <code>${remStr} left (${progress}%)</code>\n` +
+    `<b>Paid:</b> <code>${paid}</code>\n` +
+    `━━━━━━━━━━━━━━\n` +
+    `<a href="https://www.miningrigrentals.com/rentals/view/${r.id}">[Open in MRR]</a>`
+};
+
 export function useTelegram(onCall, mrrClient) {
   const sendTelegram = useCallback((message, options = {}) => {
     return onCall('/api/v2/notify/telegram', {
@@ -44,29 +102,14 @@ export function useTelegram(onCall, mrrClient) {
     const paid = getPaidAmount(r);
     const startStr = String(r.start || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
     const endStr = String(r.end || '').replace(/:\d{2} UTC/i, '').replace(/^\d{4}-/, '');
-    const msg = `🚀 <b>[New Rental]</b>\n` +
-      `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-      `━━━━━━━━━━━━━━\n` +
-      `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
-      `<b>Algo:</b> <code>${escapeHtml(r.algo || r.rig?.type || 'N/A')}</code>\n` +
-      `<b>Time:</b> ${startStr} - ${endStr}\n` +
-      `━━━━━━━━━━━━━━\n` +
-      `<b>Paid:</b> ${paid}\n` +
-      `<i>Rental has been successfully initialized.</i>`;
+    const msg = TelegramTemplates.newRental(account, r, paid, startStr, endStr);
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
   const notifyZeroHashrate = useCallback((r, elapsedMs) => {
     const account = getTelegramAccount(r, mrrClient);
     const paid = getPaidAmount(r);
-    const msg = `🚨 <b>[Critical] Zero Hashrate!</b>\n` +
-      `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-      `━━━━━━━━━━━━━━\n` +
-      `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
-      `<b>Duration:</b> ${Math.round(elapsedMs / 1000)}s\n` +
-      `<b>Efficiency:</b> <b>0%</b>\n` +
-      `━━━━━━━━━━━━━━\n` +
-      `<b>Paid:</b> ${paid}`;
+    const msg = TelegramTemplates.zeroHashrate(account, r, elapsedMs, paid);
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
@@ -75,14 +118,7 @@ export function useTelegram(onCall, mrrClient) {
     const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0).toFixed(2);
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
     const paid = getPaidAmount(r);
-    const msg = `⚠️ <b>[Alert] Low Efficiency</b>\n` +
-      `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-      `━━━━━━━━━━━━━━\n` +
-      `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
-      `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
-      `<b>Left:</b> ${Math.round(remainingMs / 60000)}m\n` +
-      `━━━━━━━━━━━━━━\n` +
-      `<b>Paid:</b> ${paid}`;
+    const msg = TelegramTemplates.lowEfficiency(account, r, avg, suffix, efficiency, remainingMs, paid);
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
@@ -91,13 +127,7 @@ export function useTelegram(onCall, mrrClient) {
     const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0).toFixed(2);
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
     const paid = getPaidAmount(r);
-    const msg = `🚀 <b>[Startup Alert]</b>\n` +
-      `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-      `━━━━━━━━━━━━━━\n` +
-      `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
-      `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
-      `━━━━━━━━━━━━━━\n` +
-      `<b>Paid:</b> ${paid}`;
+    const msg = TelegramTemplates.startup(account, r, avg, suffix, efficiency, paid);
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
@@ -106,13 +136,7 @@ export function useTelegram(onCall, mrrClient) {
     const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0).toFixed(2);
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
     const paid = getPaidAmount(r);
-    const msg = `🏁 <b>[Completion Alert]</b>\n` +
-      `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-      `━━━━━━━━━━━━━━\n` +
-      `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
-      `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
-      `━━━━━━━━━━━━━━\n` +
-      `<b>Paid:</b> ${paid}`;
+    const msg = TelegramTemplates.completion(account, r, avg, suffix, efficiency, paid);
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
@@ -134,19 +158,9 @@ export function useTelegram(onCall, mrrClient) {
     const progress = totalMs > 0 ? Math.floor((elapsedMs / totalMs) * 100) : 0;
     const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0);
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
+    const paid = getPaidAmount(r);
 
-    const msg = `<b>#${r.id}</b>\n\n` +
-      `[${escapeHtml(r.rig?.type || r.algo || 'N/A').toUpperCase()}] [${escapeHtml(account).toUpperCase()}] [RENTED]\n\n` +
-      `<b>Hashrate</b>\n` +
-      `${avg.toFixed(2)} ${suffix}\n\n` +
-      `<b>ROI</b>\n` +
-      `${roi >= 0 ? '+' : ''}${roi}%\n\n` +
-      `<b>Remaining</b>\n` +
-      `${remStr}\n\n` +
-      `<b>Progress</b>\n` +
-      `${progress}%\n\n` +
-      `<b>Price</b> ${getPaidAmount(r)}\n\n` +
-      `<a href="https://www.miningrigrentals.com/rentals/view/${r.id}">[Details]</a>`;
+    const msg = TelegramTemplates.manualNotice(r, account, avg, suffix, roi, remStr, progress, paid);
 
     return sendTelegram(msg, { showModal: true });
   }, [sendTelegram, mrrClient]);

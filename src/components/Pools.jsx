@@ -302,23 +302,40 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     setProgress({ current: 0, total: source.length })
     if (resetStop) stopRef.current = false
 
+    // Identify active pool IDs from NiceHash orders to avoid interrupting them
+    const activeOrdersList = niceHashData?.list || niceHashData?.myOrders || (Array.isArray(niceHashData) ? niceHashData : []);
+    const activePoolIds = new Set(
+      (Array.isArray(activeOrdersList) ? activeOrdersList : [])
+        .filter(o => (o.status?.code || o.status) === 'ACTIVE')
+        .map(o => String(o.pool?.id || o.pool?.poolId || ''))
+        .filter(Boolean)
+    );
+    const seenNames = new Set();
+
     try {
       for (let i = 0; i < source.length; i++) {
         if (stopRef.current) break
 
         const pool = source[i]
-        if (pool.name?.toLowerCase() === 'active') {
-          const skipKey = ph.getKey(pool, i)
+        const poolId = ph.getId(pool)
+        const poolName = (pool.name || '').trim();
+        const key = ph.getKey(pool, i)
+
+        let skipReason = '';
+        if (pool.name?.toLowerCase() === 'active') skipReason = 'Skipped: Active Pool';
+        else if (poolId && activePoolIds.has(String(poolId))) skipReason = 'Skipped: Active Order';
+        else if (poolName && seenNames.has(poolName)) skipReason = 'Skipped: Duplicate Name';
+
+        if (skipReason) {
           setVerifyResults(prev => [
-            ...prev.filter(item => item.key !== skipKey),
-            { key: skipKey, label: ph.getLabel(pool, i), result: { ok: true, data: { message: 'Skipped: Active Pool' } } },
+            ...prev.filter(item => item.key !== key),
+            { key, label: ph.getLabel(pool, i), result: { ok: true, data: { message: skipReason } } },
           ])
           setProgress({ current: i + 1, total: source.length })
           continue
         }
 
-        const poolId = ph.getId(pool)
-        const key = ph.getKey(pool, i)
+        if (poolName) seenNames.add(poolName);
         const controller = new AbortController()
         activeRequestRef.current = controller
 

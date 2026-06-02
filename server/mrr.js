@@ -26,6 +26,7 @@ export const mrrConfigs = {
   },
 };
 
+
 // Discover and register additional accounts from environment variables
 Object.keys(process.env).forEach(key => {
   if (key.startsWith('MRR_KEY_RIG_')) {

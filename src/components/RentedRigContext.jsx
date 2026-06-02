@@ -35,7 +35,7 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
             account: o.nhClient || nhClient,
             algo: algoCode,
             market: marketCode,
-            poolName: o.pool?.name || o.pool?.stratumHostname || 'N/A'
+            poolName: o.pool?.name || o.pool?.stratumHostname || o.title || o.name || 'N/A'
           };
         });
 

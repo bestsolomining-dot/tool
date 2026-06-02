@@ -1,4 +1,4 @@
-const HASHRATE_UNIT_REGEX = /(EH|PH|LN|TH|GH|MH|KH|H)(?:\/S)?/i;
+const HASHRATE_UNIT_REGEX = /(EH|PH|TH|GH|MH|KH|H)(?:\/S)?/i;
 const DEFAULT_CURRENCY = 'BTC';
 const PREFERRED_CURRENCY_KEYS = ['BTC', 'USD', 'LTC', 'DOGE', 'ETH'];
 

@@ -189,7 +189,7 @@ export const poolHelpers = {
   formatHashrate: (hashrate, algo = '') => {
     if (!hashrate || isNaN(hashrate)) return '0 H/s';
     const val = parseFloat(hashrate);
-    const units = ['H/s', 'KH/s', 'MH/s', 'GH/s', 'TH/s', 'LN/s'];
+    const units = ['H/s', 'KH/s', 'MH/s', 'GH/s', 'TH/s', 'PH/s', 'EH/s'];
     
     // MRR values are often already in higher units depending on the algo,
     // but standard normalization works best:

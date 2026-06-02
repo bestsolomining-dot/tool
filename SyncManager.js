@@ -44,7 +44,7 @@ export class SyncManager {
             const nhAccounts = Object.keys(this.nhConfigs).filter(k => this.nhConfigs[k].apiKey && this.nhConfigs[k].apiSecret);
             await Promise.all(nhAccounts.map(async (acct) => {
                 const { client, clientName } = this.resolveNhClient(acct);
-                if (!client || (acct === 'LN' && clientName === 'BT')) return;
+                if (!client || (acct === 'PH' && clientName === 'BT')) return;
                 try {
                     const result = await this.getNiceHashApp(client).pools.getPools();
                     if (result?.list) {

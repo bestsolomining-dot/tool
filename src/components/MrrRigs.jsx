@@ -7,7 +7,7 @@ import { useRentedRigs } from './RentedRigContext';
 
 /** Power factor mapping for normalization (EH/s base) */
 const UNIT_TO_POWER = {
-  'EH': 0, 'LN': -3, 'TH': -6, 'GH': -9, 'MH': -12,
+  'EH': 0, 'PH': -3, 'TH': -6, 'GH': -9, 'MH': -12,
   'E': 0, 'P': -3, 'T': -6, 'G': -9, 'M': -12,
   'EHS': 0, 'PHS': -3, 'THS': -6, 'GHS': -9, 'MHS': -12
 };

@@ -293,7 +293,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
                 <tr>
                   <th style={{ padding: '8px' }}>Pool</th>
                   <th style={{ padding: '8px' }}>Algo</th>
-                  {nhClient === 'ALL' && <th style={{ padding: '8px' }}>Account</th>}
+                  {nhClient === 'VN' && <th style={{ padding: '8px' }}>Account</th>}
                   <th style={{ padding: '8px' }}>Price</th>
                   <th style={{ padding: '8px' }}>Speed</th>
                   <th style={{ padding: '8px' }}>Status</th>
@@ -303,11 +303,12 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
                 {sortedOrders.map((o, i) => {
                   const id = o.id || o.orderId || o.hashpowerOrderId;
                   const algo = typeof o.algorithm === 'object' ? o.algorithm.algorithm : o.algorithm;
+                  const poolName = o.pool?.name || o.pool?.stratumHostname || o.title || o.name || 'N/A';
                   return (
                     <tr key={id || i} onClick={() => handleOrderSelect(id)} style={{ cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.02)' }} className="hover-row">
-                      <td style={{ padding: '8px' }}>{o.pool?.name || o.pool?.stratumHostname || 'N/A'}</td>
+                      <td style={{ padding: '8px' }}>{poolName}</td>
                       <td style={{ padding: '8px' }}>{algo}</td>
-                      {nhClient === 'ALL' && <td style={{ padding: '8px', opacity: 0.7 }}>{o.nhClient}</td>}
+                      {nhClient === 'VN' && <td style={{ padding: '8px', opacity: 0.7 }}>{o.nhClient}</td>}
                       <td style={{ padding: '8px', color: '#f59e0b' }}>{o.price}</td>
                       <td style={{ padding: '8px' }}>{parseFloat(o.acceptedCurrentSpeed || 0).toFixed(6)}</td>
                       <td style={{ padding: '8px', color: o.status?.code === 'ACTIVE' ? '#10b981' : 'inherit' }}>{o.status?.code}</td>

@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { serve } from '@hono/node-server';
+import 'dotenv/config';
 // Note: NiceHashClient must be updated to use fetch() instead of undici/axios for Workers
 import { NiceHashClient } from './NiceHashClient.js'; 
 
@@ -30,8 +32,9 @@ app.post('/api/update-config', async (c) => {
 });
 
 app.get('/api/config-status', (c) => {
+  const env = c.env || process.env;
   return c.json({
-    nicehash: !!(c.env.NICEHASH_API_KEY && c.env.NICEHASH_API_SECRET),
+    nicehash: !!(env.NICEHASH_API_KEY && env.NICEHASH_API_SECRET),
     envLoaded: true
   });
 });
@@ -39,58 +42,58 @@ app.get('/api/config-status', (c) => {
 let nhInstance = null;
 function resolveNhClient(env) {
   if (nhInstance) return nhInstance;
-  const apiKey = env.NICEHASH_API_KEY;
-  const apiSecret = env.NICEHASH_API_SECRET;
-  const orgId = env.NICEHASH_ORG_ID;
+  const apiKey = env?.NICEHASH_API_KEY || process.env.NICEHASH_API_KEY;
+  const apiSecret = env?.NICEHASH_API_SECRET || process.env.NICEHASH_API_SECRET;
+  const orgId = env?.NICEHASH_ORG_ID || process.env.NICEHASH_ORG_ID;
   if (!apiKey || !apiSecret || !orgId) {
     throw new Error('NiceHash credentials missing.');
   }
   nhInstance = new NiceHashClient({
     apiKey, apiSecret, orgId,
-    environment: env.NICEHASH_ENVIRONMENT || 'production'
+    environment: env?.NICEHASH_ENVIRONMENT || process.env.NICEHASH_ENVIRONMENT || 'production'
   });
   return nhInstance;
 }
 
 const NiceHashApp = {
   public: {
-    getTime: (nh) => nh.public.getServerTime(),
-    getAlgorithms: (nh) => nh.public.getAlgorithms(),
-    getMarkets: (nh) => nh.public.getMarkets(),
+    getTime: (nh) => nh.getServerTime(),
+    getAlgorithms: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/algorithms' }),
+    getMarkets: (nh) => nh.call({ method: 'GET', path: '/main/api/v2/mining/markets' }),
   },
   pools: {
-    getPools: (nh, query) => nh.pools.getPools(query),
-    getPoolDetails: (nh, poolId) => nh.pools.getPoolDetails(poolId),
-    verifyPool: (nh, body) => nh.pools.verifyPool(body),
+    getPools: (nh, query) => nh.call({ method: 'GET', path: '/main/api/v2/pools', query }),
+    getPoolDetails: (nh, poolId) => nh.call({ method: 'GET', path: `/main/api/v2/pool/${poolId}` }),
+    verifyPool: (nh, body) => nh.call({ method: 'POST', path: '/main/api/v2/pools/verify', body }),
   },
   hashpower: {
-    getMyOrders: (nh, query) => nh.hashpower.getMyOrders(query),
+    getMyOrders: (nh, query) => nh.call({ method: 'GET', path: '/main/api/v2/hashpower/myOrders', query }),
   }
 };
 
 // Route Handlers
-app.get('/api/v2/time', async (c) => c.json(await NiceHashApp.public.getTime(resolveNhClient(c.env))));
-app.get('/api/v2/algorithms', async (c) => c.json(await NiceHashApp.public.getAlgorithms(resolveNhClient(c.env))));
-app.get('/api/v2/mining/markets', async (c) => c.json(await NiceHashApp.public.getMarkets(resolveNhClient(c.env))));
+app.get('/api/v2/time', async (c) => c.json(await NiceHashApp.public.getTime(resolveNhClient(c.env || process.env))));
+app.get('/api/v2/algorithms', async (c) => c.json(await NiceHashApp.public.getAlgorithms(resolveNhClient(c.env || process.env))));
+app.get('/api/v2/mining/markets', async (c) => c.json(await NiceHashApp.public.getMarkets(resolveNhClient(c.env || process.env))));
 
 app.get('/api/v2/pools', async (c) => {
-  const nh = resolveNhClient(c.env);
+  const nh = resolveNhClient(c.env || process.env);
   return c.json(await NiceHashApp.pools.getPools(nh, c.req.query()));
 });
 
 app.get('/api/v2/pool/:poolId', async (c) => {
-  const nh = resolveNhClient(c.env);
+  const nh = resolveNhClient(c.env || process.env);
   return c.json(await NiceHashApp.pools.getPoolDetails(nh, c.req.param('poolId')));
 });
 
 app.post('/api/v2/pools/verify', async (c) => {
-  const nh = resolveNhClient(c.env);
+  const nh = resolveNhClient(c.env || process.env);
   const body = await c.req.json();
   return c.json(await NiceHashApp.pools.verifyPool(nh, body));
 });
 
 app.get('/api/v2/hashpower/myOrders', async (c) => {
-  const nh = resolveNhClient(c.env);
+  const nh = resolveNhClient(c.env || process.env);
   return c.json(await NiceHashApp.hashpower.getMyOrders(nh, c.req.query()));
 });
 
@@ -98,5 +101,14 @@ app.onError((err, c) => {
   console.error(err);
   return c.json({ error: err.message }, 500);
 });
+
+if (typeof process !== 'undefined' && process.release?.name === 'node') {
+  const port = 3000;
+  console.log(`\n🚀 Backend proxy running at http://localhost:${port}`);
+  serve({
+    fetch: app.fetch,
+    port,
+  });
+}
 
 export default app;

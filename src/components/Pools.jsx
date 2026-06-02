@@ -241,8 +241,8 @@ export default function Pools({ onCall }) {
 
     const activeIdentifiers = new Set();
     if (skipActiveOrders) {
+      // 1. Fetch active NiceHash orders to identify pools currently in use
       try {
-        // Fetch active NiceHash orders to identify pools currently in use
         const ordersRes = await onCall('/api/v2/hashpower/myOrders', { 
           query: { op: 'ACTIVE' }, 
           silent: true 
@@ -756,28 +756,28 @@ export default function Pools({ onCall }) {
                   <div style={{ marginBottom: '10px', fontSize: '0.95rem', color: '#e2e8f0' }}>
                     Verified {successCount} of {completedResults.length} completed results
                   </div>
-                  <div className="verify-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, auto))', gap: '20px', justifyContent: 'start' }}>
-                    <div style={{ minWidth: '80px' }}>
+                  <div className="verify-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, auto))', gap: '24px', justifyContent: 'start' }}>
+                    <div style={{ minWidth: '100px' }}>
                       <span>Target pools</span>
                       <strong>{pools.length}</strong>
                     </div>
-                    <div style={{ minWidth: '80px' }}>
+                    <div style={{ minWidth: '100px' }}>
                       <span>Verified</span>
                       <strong>{completedResults.length}</strong>
                     </div>
-                    <div style={{ minWidth: '80px' }}>
+                    <div style={{ minWidth: '100px' }}>
                       <span>Success</span>
-                      <strong style={{ color: '#10b981' }}>{successCount}</strong>
+                      <strong>{successCount}</strong>
                     </div>
-                    <div style={{ minWidth: '80px' }}>
+                    <div style={{ minWidth: '100px' }}>
                       <span>Error</span>
-                      <strong style={{ color: '#ef4444' }}>{failCount}</strong>
+                      <strong>{failCount}</strong>
                     </div>
-                    <div style={{ minWidth: '80px' }}>
+                    <div style={{ minWidth: '100px' }}>
                       <span>Skipped</span>
                       <strong>{skippedCount}</strong>
                     </div>
-                    <div className="wide" style={{ gridColumn: '1 / -1', marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div className="wide" style={{ gridColumn: '1 / -1', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                       <span style={{ display: 'block', marginBottom: '4px', opacity: 0.6 }}>Algorithm Breakdown</span>
                       <div style={{ lineHeight: '1.5', fontSize: '0.85rem' }}>
                         {algorithmSummary || 'No completed checks'}

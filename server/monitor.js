@@ -11,6 +11,8 @@ import { extractRentalInfo, extractRigInfo } from './utils.js';
 /** Retrieves the global telegram notification status from the DB */
 export async function getTelegramStatus() {
   try {
+    // Defensive check: ensure table exists
+    await dbRunAsync("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
     const row = await dbGetAsync("SELECT value FROM settings WHERE key = 'telegram_enabled'");
     return { enabled: row ? row.value === 'true' : true }; // Default to true
   } catch (err) {
@@ -22,6 +24,7 @@ export async function getTelegramStatus() {
 /** Updates the global telegram notification status in the DB */
 export async function setTelegramStatus(enabled) {
   const val = enabled ? 'true' : 'false';
+  await dbRunAsync("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
   await dbRunAsync(
     "INSERT INTO settings (key, value) VALUES ('telegram_enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
     [val]
@@ -448,17 +451,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const rawStart = info.startTime;
         const rawEnd = info.endTime;
 
-        const parseToMs = (d) => {
-          if (!d) return 0;
-          if (typeof d === 'number') return d * 1000;
-          const s = String(d).trim();
-          if (/^\d+$/.test(s)) return parseInt(s, 10) * 1000;
-          const normalized = /\bUTC\b/i.test(s) || s.endsWith('Z') ? s : `${s} UTC`;
-          return new Date(normalized).getTime() || 0;
-        };
+        // MRR API provides timestamps in UTC without a suffix. 
+        // Forcing 'Z' or ' UTC' ensures cross-platform consistency.
+        const parseUtc = (d) => d ? new Date(String(d).endsWith('UTC') || String(d).endsWith('Z') ? d : d + ' UTC').getTime() : 0;
 
-        const startT = parseToMs(rawStart);
-        const endT = parseToMs(rawEnd);
+        const startT = parseUtc(rawStart);
+        const endT = parseUtc(rawEnd);
         
         const totalDurationMs = (startT > 0 && endT > 0) ? endT - startT : 0;
         const elapsedMs = startT > 0 ? Math.max(0, Math.min(now - startT, totalDurationMs)) : 0;
@@ -548,10 +546,14 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const remM_s = Math.floor((displayRem_s % 3600000) / 60000);
 
         const remStr_s = remMs <= 0 ? 'Finished' : (remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`);
+        const leftSuffix = remMs > 0 ? ' left' : '';
 
         const perfEmoji = efficiency >= 98 ? '🟢' : (efficiency >= 70 ? '🟡' : '🔴');
         const algoTag = info.algo ? ` <code>${escapeHtml(info.algo).toUpperCase()}</code>` : '';
-        activeRentalLines.push(`${perfEmoji} [${escapeHtml(acct)}] <b>${escapeHtml(r.name || r.id)}</b>${algoTag}\n    ${info.niceAverageHashrate} | ${remStr_s} left | <b>${info.percent}%</b>`);
+        // Only include non-finished rentals in the active summary list to reduce clutter
+        if (remMs > 0) {
+          activeRentalLines.push(`${perfEmoji} [${escapeHtml(acct)}] <b>${escapeHtml(r.name || r.id)}</b>${algoTag}\n    ${info.niceAverageHashrate} | ${remStr_s}${leftSuffix} | <b>${info.percent}%</b>`);
+        }
 
         // Update database
         try {
@@ -637,10 +639,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     const allSummaryMsg = `🏭 <b>Update Overview</b>\n\n` +
       `${barChart}\n\n` +
       `━━━━━━━━━━━━━━\n\n` +
-      `<code>Online      ${String(onlineAll).padStart(4)}</code>\n` +
-      `<code>Rented      ${String(rentedAll).padStart(4)}</code>\n` +
-      `<code>Offline     ${String(offlineAll).padStart(4)}</code>\n` +
-      `<code>Disabled    ${String(disabledAll).padStart(4)}</code>\n\n` +
+      `<code>Online   ${String(onlineAll).padStart(4)} (${rentedAll} Rented)</code>\n` +
+      `<code>Offline  ${String(offlineAll).padStart(4)} (${disabledAll} Disabled)</code>\n\n` +
       `<b>Fleet Total ${totalAll}</b>\n\n` +
       (activeRentalLines.length > 0 ? `━━━━━━━━━━━━━━\n<b>Active Rentals</b>\n` + activeRentalLines.join('\n') : '') +
       `\n<i>Update at ${monitorTime}</i>`;

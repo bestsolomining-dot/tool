@@ -32,8 +32,8 @@ const convertPriceToBaseUnit = (price, priceUnit) => {
 };
 
 const convertPriceBetweenUnits = (price, fromUnit, toUnit) => {
-  const fromPower = UNIT_TO_POWER[clean(fromUnit) || 'TH'] ?? -6;
-  const toPower = UNIT_TO_POWER[clean(toUnit) || 'TH'] ?? -6;
+  const fromPower = UNIT_TO_POWER[clean(fromUnit) || ''] ?? -6;
+  const toPower = UNIT_TO_POWER[clean(toUnit) || ''] ?? -6;
   return price * Math.pow(10, fromPower - toPower);
 };
 
@@ -594,7 +594,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised);
 
                       const displayPriceData = getPriceDataLocal(rig.price || info?.price || rig.min_price);
-                      const displayPrice = displayPriceData.value;
+                      const displayPrice1000 = displayPriceData.value;
+                      const displayPrice = displayPrice1000 * 1000; // Convert from mBTC to BTC if needed
                       const displayPriceCurrency = displayPriceData.currency || 'BTC';
                       const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid);
                       const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || '';
@@ -614,35 +615,41 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       const nhPriceValue = getNiceHashPriceValue(rawNhData);
                       const hasNhPrice = nhPriceValue > 0;
 
+                      // Check if the source price is a total paid amount or a rate
+                      const isTotalCost = info?.price?.paid !== undefined || rig.price?.paid !== undefined;
+
                       const mrrPriceNum = (() => {
                         let val = mrrComparePriceValue;
                         if (typeof val === 'string') {
                           val = parseFloat(val.replace(/,/g, '')) || 0;
                         }
                         const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
-                        if (isRented && adsVal > 0) {
-                          if (btcPriceData.isPerHashRate) return val;
-                          if (hours > 0) return val / (hours / 24) / adsVal;
+                        if (isTotalCost && adsVal > 0 && hours > 0) {
+                          // Convert total BTC cost to BTC/Unit/Day rate for comparison
+                          return val / (hours / 24) / adsVal;
                         }
                         return Number.isFinite(val) ? val : 0;
                       })();
 
                       const diffPercent = calculatePriceComparison(
                         mrrPriceNum,
-                        rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH',
+                        rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || '',
                         nhPriceValue,
-                        nhData?.speedUnit || nhData?.unit || 'TH'
+                        nhData?.speedUnit || nhData?.unit || ''
                       );
 
                       // Find our specific active NiceHash order for this algorithm
                       const myNhOrder = nhOrders.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
                       const myNhOrderPrice = myNhOrder ? parseFloat(myNhOrder.price) : 0;
-                      const myOrderDiff = (myNhOrderPrice > 0) ? calculatePriceComparison(
-                        mrrPriceNum,
-                        rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH',
-                        myNhOrderPrice,
-                        myNhOrder?.marketUnit || 'TH'
-                      ) : null;
+                      // const myOrderDiff = (myNhOrderPrice > 0) ? calculatePriceComparison(
+                      //   mrrPriceNum,
+                      //   rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || '',
+                      //   myNhOrderPrice,
+                      //   myNhOrder?.marketUnit || ''
+                      // ) : null;
+                      const myOrderDiff = myNhOrderPrice > 0
+                          ? ((displayPrice - myNhOrderPrice) / myNhOrderPrice) * 100
+                          : 0;
 
                       return (
                         <div key={rig.id} style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -719,9 +726,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                 </div>
                               </div>
                               <div>
-                                <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Price</div>
+                                <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price</div>
                                 <div style={{ color: '#fbbf24' }}>
-                                  {displayPrice.toFixed(8)}
+                                  {(displayPrice).toFixed(8)}
                                   <small style={{ opacity: 0.5, marginLeft: '2px' }}>{displayPriceCurrency}</small>
                                   {isRented && paidLabel && (
                                     <div style={{ fontSize: '9px', color: '#10b981', marginTop: '1px' }}>
@@ -731,29 +738,17 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                 </div>
                                 {hasNhPrice && (
                                   <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
-
-                                    {diffPercent !== null && (
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                                        <span>Market ({nhData?.speedUnit || nhData?.unit || 'TH'}):</span>
-                                        <span style={{
-                                          color: parseFloat(diffPercent) <= 0 ? '#34d399' : '#f87171',
-                                          fontWeight: 'bold'
-                                        }}>
-                                          {parseFloat(diffPercent) > 0 ? '+' : ''}{diffPercent}%
-                                        </span>
-                                      </div>
-                                    )}
-
+                                    {/* Comparison against your specific active order */}
                                     {myNhOrderPrice > 0 && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
                                         <span>
-                                          My Order ({myNhOrder?.marketUnit || ''}): <span style={{ fontWeight: 'bold' }}>
+                                          Order: <span style={{ fontWeight: 'bold' }}>
                                             {myNhOrderPrice.toFixed(8)} BTC
                                           </span>
                                         </span>
                                         {myOrderDiff !== null && (
-                                          <span style={{ color: parseFloat(myOrderDiff) > 0 ? '#f87171' : '#34d399', fontWeight: 'bold' }}>
-                                            {parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%
+                                          <span style={{ color: parseFloat(myOrderDiff) > 0 ? '#22ff0e' : '#d33434', fontWeight: 'bold' }} title="vs Rental Price">
+                                            {parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%
                                           </span>
                                         )}
                                       </div>

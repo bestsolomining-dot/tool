@@ -19,3 +19,4 @@ mrr_monitor.db
 *.db-wal
 *.db-shm
 database.json
+*.db-wal

@@ -2,8 +2,8 @@ import express from 'express';
 import path from 'path';
 import { SyncManager } from '../SyncManager.js';
 import { db, initDatabase, cleanAllCache } from './db.js';
-import { nhConfigs, getNiceHashApp, resolveNhClient } from './nh.js';
-import { mrrConfigs, initNonces, syncMrrClock, mrrApiCall } from './mrr.js';
+import { initNhConfigs, nhConfigs, getNiceHashApp, resolveNhClient } from './nh.js';
+import { initMrrConfigs, mrrConfigs, initNonces, syncMrrClock, mrrApiCall } from './mrr.js';
 import { registerRoutes } from './routes.js';
 import { corsMiddleware, logRequestMiddleware } from './utils.js';
 import { runRentalMonitor, initTelegramNotifications } from './monitor.js';
@@ -29,9 +29,11 @@ export function createApp({ distPath }) {
   return app;
 }
 
-export async function initializeApp() {
+export async function initializeApp(env) {
   try {
     console.log('🚀 Initializing system...');
+    initNhConfigs(env); // Initialize NiceHash configurations
+    initMrrConfigs(env); // Initialize MiningRigRentals configurations
     await initDatabase();
     await cleanAllCache();
     await initNonces();

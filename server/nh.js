@@ -3,21 +3,40 @@ import { mapNiceHashToMRR, normalizeAlgoForNiceHash } from '../src/core/algoMapp
 import { normalizeCredential } from './utils.js';
 
 export const AGGREGATE_CLIENT = 'VN';
-export { mapNiceHashToMRR, normalizeAlgoForNiceHash };
+export { mapNiceHashToMRR, normalizeAlgoForNiceHash }; // Keep these exports
 
-export const nhConfigs = {
-  BT: {
-    apiKey: normalizeCredential(process.env.NICEHASH_API_KEY),
-    apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET),
-    orgId: normalizeCredential(process.env.NICEHASH_ORG_ID),
-    environment: normalizeCredential(process.env.NICEHASH_ENVIRONMENT || 'production'),
-  },
-  PH: {
-    apiKey: normalizeCredential(process.env.NICEHASH_API_KEY_PH),
-    apiSecret: normalizeCredential(process.env.NICEHASH_API_SECRET_PH),
-    orgId: normalizeCredential(process.env.NICEHASH_ORG_ID_PH || process.env.NICEHASH_ORG_ID),
-  },
-};
+export let nhConfigs = {}; // Declare as mutable
+
+export function initNhConfigs(env) {
+  nhConfigs = {
+    BT: {
+      apiKey: normalizeCredential(env.NICEHASH_API_KEY),
+      apiSecret: normalizeCredential(env.NICEHASH_API_SECRET),
+      orgId: normalizeCredential(env.NICEHASH_ORG_ID),
+      environment: normalizeCredential(env.NICEHASH_ENVIRONMENT || 'production'),
+    },
+    PH: {
+      apiKey: normalizeCredential(env.NICEHASH_API_KEY_PH),
+      apiSecret: normalizeCredential(env.NICEHASH_API_SECRET_PH),
+      orgId: normalizeCredential(env.NICEHASH_ORG_ID_PH || env.NICEHASH_ORG_ID),
+    },
+  };
+
+  // Discover and register additional accounts from environment variables
+  Object.keys(env).forEach(key => {
+    if (key.startsWith('NICEHASH_API_KEY_')) {
+      const acct = key.replace('NICEHASH_API_KEY_', '').toUpperCase();
+      if (!nhConfigs[acct]) {
+        nhConfigs[acct] = {
+          apiKey: normalizeCredential(env[key]),
+          apiSecret: normalizeCredential(env[`NICEHASH_API_SECRET_${acct}`]),
+          orgId: normalizeCredential(env[`NICEHASH_ORG_ID_${acct}`] || env.NICEHASH_ORG_ID),
+          environment: normalizeCredential(env[`NICEHASH_ENVIRONMENT_${acct}`] || env.NICEHASH_ENVIRONMENT || 'production'),
+        };
+      }
+    }
+  });
+}
 
 export const isAggregate = (c) => {
   const uc = String(c || '').trim().toUpperCase();

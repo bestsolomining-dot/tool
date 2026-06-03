@@ -5,48 +5,53 @@ import { normalizeCredential, sanitizeMrrEndpoint } from './utils.js';
 import { isAggregate, resolveNhClient, getNiceHashApp } from './nh.js';
 
 const mrrLastNonceByClient = new Map();
-const mrrQueueByClient = new Map();
-const mrrInstances = new Map();
 let mrrClockOffset = 0n;
 let mrrClockSynced = false;
 let mrrSyncPromise = null;
 
-export const mrrConfigs = {
-  BT: {
-    apiKey: normalizeCredential(process.env.MRR_KEY_RIG_BT),
-    apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_BT),
-  },
-  SL: {
-    apiKey: normalizeCredential(process.env.MRR_KEY_RIG_SL),
-    apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_SL),
-  },
-  LN: {
-    apiKey: normalizeCredential(process.env.MRR_KEY_RIG_LN),
-    apiSecret: normalizeCredential(process.env.MRR_SECRET_RIG_LN),
-  },
-};
+export let mrrConfigs = {}; // Declare as mutable
+export let defaultMrrClient = 'BT'; // Declare as mutable
 
+const mrrQueueByClient = new Map();
+const mrrInstances = new Map(); // This map will store resolved client configs
 
-// Discover and register additional accounts from environment variables
-Object.keys(process.env).forEach(key => {
-  if (key.startsWith('MRR_KEY_RIG_')) {
-    const acct = key.replace('MRR_KEY_RIG_', '').toUpperCase();
-    if (!mrrConfigs[acct]) {
-      mrrConfigs[acct] = {
-        apiKey: normalizeCredential(process.env[key]),
-        apiSecret: normalizeCredential(process.env[`MRR_SECRET_RIG_${acct}`] || process.env[`MRR_API_SECRET_${acct}`]),
+export function initMrrConfigs(env) {
+  mrrConfigs = {
+    BT: {
+      apiKey: normalizeCredential(env.MRR_KEY_RIG_BT),
+      apiSecret: normalizeCredential(env.MRR_SECRET_RIG_BT),
+    },
+    SL: {
+      apiKey: normalizeCredential(env.MRR_KEY_RIG_SL),
+      apiSecret: normalizeCredential(env.MRR_SECRET_RIG_SL),
+    },
+    LN: {
+      apiKey: normalizeCredential(env.MRR_KEY_RIG_LN),
+      apiSecret: normalizeCredential(env.MRR_SECRET_RIG_LN),
+    },
+  };
+
+  // Discover and register additional accounts from environment variables
+  Object.keys(env).forEach(key => {
+    if (key.startsWith('MRR_KEY_RIG_')) {
+      const acct = key.replace('MRR_KEY_RIG_', '').toUpperCase();
+      if (!mrrConfigs[acct]) {
+        mrrConfigs[acct] = {
+          apiKey: normalizeCredential(env[key]),
+          apiSecret: normalizeCredential(env[`MRR_SECRET_RIG_${acct}`] || env[`MRR_API_SECRET_${acct}`]),
+        };
       };
     }
   }
-});
 
-const defaultMrrClientRaw = String(process.env.MRR_DEFAULT_CLIENT || 'VN').trim().toUpperCase();
-export const defaultMrrClient = (function () {
-  if (defaultMrrClientRaw === 'VN') return 'VN';
-  if (defaultMrrClientRaw === 'SL') return 'SL';
-  if (defaultMrrClientRaw === 'LN') return 'LN';
-  return mrrConfigs[defaultMrrClientRaw] ? defaultMrrClientRaw : 'BT';
-})();
+  const defaultMrrClientRaw = String(env.MRR_DEFAULT_CLIENT || 'VN').trim().toUpperCase();
+  defaultMrrClient = (function () {
+    if (defaultMrrClientRaw === 'VN') return 'VN';
+    if (defaultMrrClientRaw === 'SL') return 'SL';
+    if (defaultMrrClientRaw === 'LN') return 'LN';
+    return mrrConfigs[defaultMrrClientRaw] ? defaultMrrClientRaw : 'BT';
+  })();
+}
 
 export async function initNonces() {
   return new Promise((resolve) => {

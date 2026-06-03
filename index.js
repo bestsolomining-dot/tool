@@ -34,7 +34,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 if (process.env.RUN_MAIN !== 'false') {
-  initializeApp().catch((err) => {
+  initializeApp(process.env).catch((err) => {
     console.error('[init] Failed during startup:', err.message);
   });
 }

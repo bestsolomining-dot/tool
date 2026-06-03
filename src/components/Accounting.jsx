@@ -101,16 +101,8 @@ export default function Accounting({ onCall }) {
             ))}
           </select>
         </div>
-        {/* <div className="field">
-          <label className="label">Currency</label>
-          <input className="input-pro" value={currency} onChange={event => setCurrency(event.target.value)} />
-        </div> */}
-      </div>
 
-      {/* <div className="field">
-        <label className="label">Transaction ID</label>
-        <input className="input-pro" value={transactionId} onChange={event => setTransactionId(event.target.value)} />
-      </div> */}
+      </div>
 
       {endpoint.method === 'POST' && (
         <div className="field">

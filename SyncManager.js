@@ -1,6 +1,3 @@
-import fs from 'fs/promises';
-import path from 'path';
-
 /**
  * SyncManager handles the background aggregation of data across all 
  * NiceHash and Mining Rig Rentals accounts.
@@ -13,17 +10,7 @@ export class SyncManager {
         this.mrrApiCall = dependencies.mrrApiCall;
         this.resolveNhClient = dependencies.resolveNhClient;
         this.getNiceHashApp = dependencies.getNiceHashApp;
-        this.dbFile = path.join(process.cwd(), 'database.json');
         this.isSyncing = false;
-    }
-
-    async saveToDb(data) {
-        try {
-            await fs.writeFile(this.dbFile, JSON.stringify(data, null, 2), 'utf-8');
-            console.info(`[sync] Snapshot saved to: ${this.dbFile}`);
-        } catch (err) {
-            console.error(`[sync:error] Failed to save snapshot: ${err.message}`);
-        }
     }
 
     async run() {
@@ -87,8 +74,6 @@ export class SyncManager {
                     });
                 } catch (e) { console.warn(`[sync:mrr] Error for ${acct}: ${e.message}`); }
             }));
-
-            await this.saveToDb(syncSnapshot);
         } finally {
             this.isSyncing = false;
         }

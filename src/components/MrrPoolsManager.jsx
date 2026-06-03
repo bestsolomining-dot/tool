@@ -43,9 +43,9 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
     setLoading(true);
     setRentalInfo(null);
     try {
-      const result = await onCall(`/api/v2/mrr/rental/${encodeURIComponent(targetId)}`, { 
-        query: { client: mrrClient }, 
-        silent: true 
+      const result = await onCall(`/api/v2/mrr/rental/${encodeURIComponent(targetId)}`, {
+        query: { client: mrrClient },
+        silent: true
       });
       if (result && result.success) {
         // The backend /rental/:id endpoint already includes .pools via the aggressive fetcher.
@@ -141,9 +141,6 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
         <button className="btn-pro primary" onClick={() => fetchPools('all_rigs')} disabled={loading} title="Fetch pool info for all your personal rigs">
           {loading ? 'Fetching...' : 'Rig Pools'}
         </button>
-        {/* <button className="btn-pro" style={{ background: '#073681' }} onClick={() => setIsMonitorDbOpen(true)}>
-          Monitor DB
-        </button> */}
         <button className="btn-pro secondary" onClick={handleExportMrrPools} disabled={!poolData || poolData.success === false || loading}>
           Export Pools
         </button>
@@ -236,7 +233,7 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
                   {(() => {
                     const p = rentalInfo?.price || rentalInfo?.rig?.price;
                     const cur = (p && typeof p === 'object' && p.currency) || rentalInfo?.currency || rentalInfo?.price_unit || 'BTC';
-                    
+
                     let val = (p && typeof p === 'object') ? (p.paid || p.price || p.advertised) : p;
                     // Handle rig-style objects where price is nested under currency keys (e.g. p.BTC.price)
                     if (p && typeof p === 'object' && !val && p[cur]) val = p[cur].price || p[cur].paid;
@@ -278,11 +275,10 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
                 })()}
               </div>
             </div>
-
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '6px', fontSize: '11px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
               <div style={{ marginBottom: '8px' }}><span style={{ opacity: 0.8 }}>Rental</span> {rentalInfo.id || rentalInfo.rental_id}</div>
               <div style={{ marginBottom: '14px' }}>
-                <span style={{ opacity: 0.8 }}>Rig ID:</span> 
+                <span style={{ opacity: 0.8 }}>Rig ID:</span>
                 <button className="text-button" onClick={() => fetchPools('rig', rentalInfo.rig?.id || rentalInfo.rigid)} style={{ fontSize: '11px', marginLeft: '5px' }}>
                   #{rentalInfo.normalized?.rigId || rentalInfo.rig?.id || rentalInfo.rigid || 'N/A'}
                 </button>
@@ -303,11 +299,10 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
           </div>
         )}
       </Modal>
-
-      <MonitorDbEditor 
-        isOpen={isMonitorDbOpen} 
-        onClose={() => setIsMonitorDbOpen(false)} 
-        onCall={onCall} 
+      <MonitorDbEditor
+        isOpen={isMonitorDbOpen}
+        onClose={() => setIsMonitorDbOpen(false)}
+        onCall={onCall}
       />
     </div>
   );

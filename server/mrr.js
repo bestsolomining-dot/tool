@@ -108,13 +108,10 @@ export async function nextMrrNonce(clientName) {
   const nowMs = BigInt(Date.now()) + mrrClockOffset;
   let nonce;
 
-  if (cleanName === 'BT' || isAggregate(cleanName) || lastNonce > 100000000000000n) {
-    const now19 = nowMs * 1000000n;
-    nonce = now19 > lastNonce ? now19 : lastNonce + 1n;
-  } else {
-    const now14 = nowMs * 10n;
-    nonce = now14 > lastNonce ? now14 : lastNonce + 1n;
-  }
+  // Use 19-digit high-precision nonces for all clients to ensure compatibility 
+  // with MRR's modern API requirements.
+  const now19 = BigInt(nowMs) * 1000000n;
+  nonce = (now19 > lastNonce) ? now19 : (lastNonce + 1n);
 
   mrrLastNonceByClient.set(cleanName, nonce);
   await new Promise((resolve) => {

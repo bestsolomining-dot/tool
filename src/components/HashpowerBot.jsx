@@ -17,7 +17,7 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
     stepDown: '0.0001',
     limit: '0.00',
   });
-  
+
   const timerRef = useRef(null);
 
   const addLog = (message, type = 'info') => {
@@ -27,13 +27,13 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
 
   const runIteration = async () => {
     addLog(`Checking market for ${algorithm} (${market})...`);
-    
+
     try {
       // 1. Get my active orders to find the one we are managing
       const ordersData = await onCall('/api/v2/hashpower/myOrders', {
-        query: { 
-          op: 'PH', 
-          ts: Date.now(), 
+        query: {
+          op: 'PH',
+          ts: Date.now(),
           active: true,
           limit: 1000,
           client: nhClient
@@ -51,10 +51,10 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
       const myOrder = activeOrders.find(o => {
         const oAlgo = typeof o.algorithm === 'object' ? o.algorithm.algorithm : o.algorithm;
         const oMarket = typeof o.market === 'object' ? o.market.id || o.market.name : o.market;
-        
-        return String(oAlgo || '').toUpperCase() === algorithm.toUpperCase() && 
-               String(oMarket || '').toUpperCase() === market.toUpperCase() &&
-               (o.status?.code === 'ACTIVE' || o.status === 'ACTIVE');
+
+        return String(oAlgo || '').toUpperCase() === algorithm.toUpperCase() &&
+          String(oMarket || '').toUpperCase() === market.toUpperCase() &&
+          (o.status?.code === 'ACTIVE' || o.status === 'ACTIVE');
       });
 
       if (!myOrder) {
@@ -75,7 +75,7 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
       }
 
       const book = (bookData?.list || bookData?.[0]?.list || []).filter(o => o.type === 'STANDARD');
-      
+
       // 3. Compare and Adjust
       const myPrice = parseFloat(myOrder.price);
       const mySpeed = parseFloat(myOrder.acceptedCurrentSpeed);
@@ -118,8 +118,8 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
         await onCall(`/api/v2/hashpower/order/${myOrder.id}/update`, {
           method: 'POST',
           query: { client: nhClient },
-          body: { 
-            price: nextPrice.toFixed(8), 
+          body: {
+            price: nextPrice.toFixed(8),
             limit: targetLimit,
             displayMarketFactor: myOrder.displayMarketFactor || myOrder.algorithm?.displayMarketFactor || book[0]?.displayMarketFactor
           },
@@ -127,7 +127,7 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
         });
       }
 
-      addLog(`Cycle complete. Managed Order: ${myOrder.id.slice(0,8)}...`);
+      addLog(`Cycle complete. Managed Order: ${myOrder.id.slice(0, 8)}...`);
 
     } catch (err) {
       addLog(`Bot Error: ${err.message}`, 'error');
@@ -171,44 +171,44 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
       <div className="field-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
         <div className="field">
           <label className="label">Price Threshold</label>
-          <input 
-            className="input-pro" 
-            type="number" 
+          <input
+            className="input-pro"
+            type="number"
             step="0.0001"
-            value={config.maxPrice} 
+            value={config.maxPrice}
             onChange={e => setConfig(prev => ({ ...prev, maxPrice: e.target.value }))}
             disabled={isRunning}
           />
         </div>
         <div className="field">
           <label className="label">Step Down Delta</label>
-          <input 
-            className="input-pro" 
-            type="number" 
+          <input
+            className="input-pro"
+            type="number"
             step="0.0001"
-            value={config.stepDown} 
+            value={config.stepDown}
             onChange={e => setConfig(prev => ({ ...prev, stepDown: e.target.value }))}
             disabled={isRunning}
           />
         </div>
         <div className="field">
           <label className="label">Speed Limit</label>
-          <input 
-            className="input-pro" 
-            type="number" 
+          <input
+            className="input-pro"
+            type="number"
             step="0.01"
-            value={config.limit} 
+            value={config.limit}
             onChange={e => setConfig(prev => ({ ...prev, limit: e.target.value }))}
             disabled={isRunning}
           />
         </div>
         <div className="field">
           <label className="label">Check Interval (ms)</label>
-          <input 
-            className="input-pro" 
-            type="number" 
+          <input
+            className="input-pro"
+            type="number"
             step="5000"
-            value={config.checkInterval} 
+            value={config.checkInterval}
             onChange={e => setConfig(prev => ({ ...prev, checkInterval: parseInt(e.target.value) || 60000 }))}
             disabled={isRunning}
           />
@@ -216,8 +216,8 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
       </div>
 
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-        <button 
-          className={`btn-pro ${isRunning ? 'secondary' : 'primary'}`} 
+        <button
+          className={`btn-pro ${isRunning ? 'secondary' : 'primary'}`}
           onClick={() => setIsRunning(!isRunning)}
           style={{ flex: 1 }}
         >
@@ -228,12 +228,12 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
 
       <div className="log-viewer">
         <label className="label">Activity Logs</label>
-        <div 
-          className="code-block-content" 
-          style={{ 
-            height: '160px', 
-            overflowY: 'auto', 
-            fontSize: '11px', 
+        <div
+          className="code-block-content"
+          style={{
+            height: '160px',
+            overflowY: 'auto',
+            fontSize: '11px',
             background: 'rgba(0,0,0,0.2)',
             padding: '10px',
             borderRadius: '4px',
@@ -244,8 +244,8 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
             <span style={{ opacity: 0.4 }}>Bot inactive. Press start to begin.</span>
           ) : (
             logs.map((log, i) => (
-              <div key={i} style={{ 
-                fontFamily: 'monospace', 
+              <div key={i} style={{
+                fontFamily: 'monospace',
                 marginBottom: '4px',
                 color: log.includes('[ERROR]') ? '#f87171' : log.includes('[SUCCESS]') ? '#34d399' : '#94a3b8'
               }}>

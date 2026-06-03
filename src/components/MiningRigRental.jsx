@@ -302,7 +302,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           if (Notification.permission === 'granted') {
             new Notification(`Rig Rented: ${fresh.name || fresh.id}`, { body: `New rental active for ${fresh.hours}h` });
           }
-          tg.notifyNewRental(fresh).catch(() => {});
+          tg.notifyNewRental(fresh).catch(() => { });
         }
 
         // Monitoring Logic for Telegram Alerts
@@ -450,7 +450,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           <option value="BT">MRR Client: BT</option>
           <option value="SL">MRR Client: SL</option>
           <option value="LN">MRR Client: LN</option>
-          
+
         </select>
       </div>
 

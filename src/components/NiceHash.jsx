@@ -121,11 +121,11 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     if (nhClient && typeof onCall === 'function') {
       fetchOrders();
     }
-  }, [nhClient, fetchOrders, onCall]); 
+  }, [nhClient, fetchOrders, onCall]);
 
   // Find market comparison data for the currently selected order
-  const matchingOrderInfo = useMemo(() => 
-    rentedRigs.find(r => r.id === String(selectedOrderId)), 
+  const matchingOrderInfo = useMemo(() =>
+    rentedRigs.find(r => r.id === String(selectedOrderId)),
     [rentedRigs, selectedOrderId]
   );
 
@@ -133,7 +133,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     <div className="rig-section nh-theme" style={{ marginLeft: '5px', marginRight: '5px', marginTop: '5px', paddingTop: '5px', paddingBottom: '5px' }}>
       <h2 className="section-title" style={{ paddingBottom: '10px' }}>NiceHash</h2>
 
-      
+
 
       <div className="market-inputs" style={{ marginBottom: '15px' }}>
         <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
@@ -244,14 +244,14 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>ALGO</span> <strong>{typeof orderDetail.algorithm === 'object' ? orderDetail.algorithm.algorithm : orderDetail.algorithm}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>MARKET</span> <strong>{orderDetail.market}</strong></div>
             <div>
-              <span style={{ opacity: 0.8, display: 'block', fontSize: '9px' }}>PRICE</span> 
+              <span style={{ opacity: 0.8, display: 'block', fontSize: '9px' }}>PRICE</span>
               <strong style={{ color: '#f59e0b' }}>{orderDetail.price}</strong>
               {matchingOrderInfo?.priceDiff && (
-                <span style={{ 
-                  marginLeft: '6px', 
-                  fontSize: '9px', 
+                <span style={{
+                  marginLeft: '6px',
+                  fontSize: '9px',
                   fontWeight: 'bold',
-                  color: parseFloat(matchingOrderInfo.priceDiff) <= 0 ? '#10b981' : '#f87171' 
+                  color: parseFloat(matchingOrderInfo.priceDiff) <= 0 ? '#10b981' : '#f87171'
                 }}>
                   ({parseFloat(matchingOrderInfo.priceDiff) > 0 ? '+' : ''}{matchingOrderInfo.priceDiff}%)
                 </span>

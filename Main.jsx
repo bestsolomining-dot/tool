@@ -51,11 +51,11 @@ export default function App() {
   };
 
   const inferUnitValue = (source) => {
-    const unitMap = { EH: 1e18, PH: 1e15, LN: 1e15, TH: 1e12, GH: 1e9, MH: 1e6, KH: 1e3, H: 1 };
+    const unitMap = { EH: 1e18, PH: 1e15, TH: 1e12, GH: 1e9, MH: 1e6, KH: 1e3, H: 1 };
     if (source === undefined || source === null) return 1e12;
     if (typeof source === 'number' && Number.isFinite(source)) return source;
     const normalized = String(source).toUpperCase().replace(/\s+/g, '');
-    const match = normalized.match(/(EH|PH|LN|TH|GH|MH|KH|H)(?:\/S)?$/) || normalized.match(/(EH|PH|LN|TH|GH|MH|KH|H)/);
+    const match = normalized.match(/(EH|PH|TH|GH|MH|KH|H)(?:\/S)?$/) || normalized.match(/(EH|PH|TH|GH|MH|KH|H)/);
     if (match && match[1]) return unitMap[match[1]] || 1e12;
     return 1e12;
   };

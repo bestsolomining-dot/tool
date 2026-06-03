@@ -60,43 +60,47 @@ export const TelegramManager = {
       `<b>Count:</b> <b>${count}</b> rigs\n` +
       `Please check your rig connectivity.`,
 
-    efficiency: (acct, r, efficiency, displayTarget, suffix) => `⚠️ <b>[Efficiency Alert]</b>\n` +
+    efficiency: (acct, r, info, efficiency, displayTarget) => `⚠️ <b>[Efficiency Alert]</b>\n` +
       `<b>Account:</b> <code>${escapeHtml(acct)}</code>\n` +
       `━━━━━━━━━━━━━━\n` +
       `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+      `<b>Algo:</b> <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
       `<b>Efficiency:</b> <b>${efficiency.toFixed(1)}%</b> (&lt; 50% for 15m)\n` +
-      `<b>Target:</b> ${displayTarget.toFixed(2)} ${suffix}`,
+      `<b>Target:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}`,
 
     zeroHashrate: (acct, r, info) => `🚨 <b>[Critical Alert]</b>\n` +
       `<b>Account:</b> <code>${escapeHtml(acct)}</code>\n` +
       `━━━━━━━━━━━━━━\n` +
       `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+      `<b>Algo:</b> <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
       `<b>Status:</b> <b>ZERO HASHRATE</b> (> 5m)\n` +
-      `<b>Paid:</b> <code>${info.price.paid} ${info.price.currency}</code>`,
+      `<b>Paid:</b> <code>${info.price?.paid || '0.00'} ${info.price?.currency || 'BTC'}</code>`,
 
-    startup: (acct, r, efficiency, displayTarget, suffix) => `🚀 <b>[Startup Alert]</b>\n` +
+    startup: (acct, r, info, efficiency, displayTarget) => `🚀 <b>[Startup Alert]</b>\n` +
       `<b>Account:</b> <code>${escapeHtml(acct)}</code>\n` +
       `━━━━━━━━━━━━━━\n` +
       `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+      `<b>Algo:</b> <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
       `<b>Efficiency:</b> <b>${efficiency.toFixed(1)}%</b> (&lt; 70% in 1st hour)\n` +
-      `<b>Target:</b> ${displayTarget.toFixed(2)} ${suffix}`,
+      `<b>Target:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}`,
 
-    completion: (acct, r, efficiency, displayTarget, suffix) => `🏁 <b>[Completion Alert]</b>\n` +
+    completion: (acct, r, info, efficiency, displayTarget) => `🏁 <b>[Completion Alert]</b>\n` +
       `<b>Account:</b> <code>${escapeHtml(acct)}</code>\n` +
       `━━━━━━━━━━━━━━\n` +
       `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+      `<b>Algo:</b> <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
       `<b>Efficiency:</b> <b>${efficiency.toFixed(1)}%</b> (&lt; 70% in last hour)\n` +
-      `<b>Target:</b> ${displayTarget.toFixed(2)} ${suffix}`,
+      `<b>Target:</b> ${displayTarget.toFixed(2)} ${info.hashrate.suffix}`,
 
-    rentedNotice: (hbType, r, info, acct, roi, remStr, timeProgress) => `💎 <b>[${hbType}] #${r.id}</b>\n` +
+    rentedNotice: (hbType, r, info, acct, roi, remStr) => `💎 <b>[${hbType}] #${r.id}</b>\n` +
       `━━━━━━━━━━━━━━\n` +
       `<b>Algo:</b> <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
       `<b>Acct:</b> <code>${escapeHtml(acct).toUpperCase()}</code>\n` +
       `━━━━━━━━━━━━━━\n` +
-      `<b>Hash:</b> <code>${info.niceAverageHashrate}</code>\n` +
+      `<b>Hash:</b> <code>${info.niceAverageHashrate} (AVD: ${info.niceHashrate})</code>\n` +
       `<b>ROI:</b> <code>${roi >= 0 ? '+' : ''}${roi}%</code>\n` +
-      `<b>Time:</b> <code>${remStr} left (${timeProgress}%)</code>\n` +
-      `<b>Paid:</b> <code>${info.price.paid} ${info.price.currency}</code>\n` +
+      `<b>Time:</b> <code>${remStr} left (Eff: ${info.percent}%)</code>\n` +
+      `<b>Paid:</b> <code>${info.price?.paid || '0.00'} ${info.price?.currency || 'BTC'}</code>\n` +
       `━━━━━━━━━━━━━━\n` +
       `<a href="https://www.miningrigrentals.com/rentals/view/${r.id}">[Open in MRR]</a>`,
 
@@ -275,6 +279,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   const activeRentalLines = [];
   const accountMetrics = [];
   const allRentedRigs = [];
+  const successfulAccts = [];
 
   let totalAll = 0;
   let availableAll = 0;
@@ -301,7 +306,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     try {
       // 1) Fetch rig list
       const rigsRes = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: acct });
-      if (rigsRes.data?.success) {
+      if (rigsRes.statusCode === 200 && rigsRes.data?.success) {
         const rigList = extractArray(rigsRes.data);
         const rentedRigs = [];
         let availableCount = 0;
@@ -390,8 +395,10 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         warningAll += warningCount;
         onlineAll += onlineCount;
         allRentedRigs.push(...rentedRigs.map(r => ({ ...r, acct })));
+        successfulAccts.push(acct);
       } else if (rigsRes.data) {
-        console.warn(`[${monitorTime}] Account ${acct} rig list failed: ${rigsRes.data.message || 'Unknown'}`);
+        const errMsg = rigsRes.data.data?.message || rigsRes.data.message || rigsRes.data.error || 'Unknown';
+        console.warn(`[${monitorTime}] Account ${acct} rig list failed: ${errMsg}`);
       }
 
       // 2) Fetch bought + sold rentals
@@ -491,7 +498,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             const alertKey = `${r.id}_low_50`;
             const lastAlert = lastAlertTimes.get(alertKey) || 0;
             if (now - lastAlert > ALERT_COOLDOWN_MS) {
-              const msg = TelegramManager.Templates.efficiency(acct, r, efficiency, displayTarget, info.hashrate.suffix);
+              const msg = TelegramManager.Templates.efficiency(acct, r, info, efficiency, displayTarget);
               await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Low hashrate alert failed: ${e.message}`));
               lastAlertTimes.set(alertKey, now);
             }
@@ -521,7 +528,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const startupKey = `${r.id}_startup_70`;
           const lastAlert = lastAlertTimes.get(startupKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
-            const msg = TelegramManager.Templates.startup(acct, r, efficiency, displayTarget, info.hashrate.suffix);
+            const msg = TelegramManager.Templates.startup(acct, r, info, efficiency, displayTarget);
             await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Startup alert failed: ${e.message}`));
             lastAlertTimes.set(startupKey, now);
           }
@@ -532,39 +539,36 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const completionKey = `${r.id}_completion_70`;
           const lastAlert = lastAlertTimes.get(completionKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
-            const msg = TelegramManager.Templates.completion(acct, r, efficiency, displayTarget, info.hashrate.suffix);
+            const msg = TelegramManager.Templates.completion(acct, r, info, efficiency, displayTarget);
             await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Completion alert failed: ${e.message}`));
             lastAlertTimes.set(completionKey, now);
           }
         }
 
         // Build line for summary heartbeat
-        const remMs = endT > 0 ? (endT - now) : 0;
-        const displayRem_s = Math.max(0, remMs);
-        const remD_s = Math.floor(displayRem_s / 86400000);
-        const remH_s = Math.floor((displayRem_s % 86400000) / 3600000);
-        const remM_s = Math.floor((displayRem_s % 3600000) / 60000);
+        const isFinished_s = remainingMs <= 0 || (endT > 0 && now >= endT);
+        const remD_s = Math.floor(remainingMs / 86400000);
+        const remH_s = Math.floor((remainingMs % 86400000) / 3600000);
+        const remM_s = Math.floor((remainingMs % 3600000) / 60000);
 
-        const remStr_s = remMs <= 0 ? 'Finished' : (remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`);
-        const leftSuffix = remMs > 0 ? ' left' : '';
-
+        const remStr_s = isFinished_s ? 'Finished' : (remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`);
         const perfEmoji = efficiency >= 98 ? '🟢' : (efficiency >= 70 ? '🟡' : '🔴');
         const algoTag = info.algo ? ` <code>${escapeHtml(info.algo).toUpperCase()}</code>` : '';
-        // Only include non-finished rentals in the active summary list to reduce clutter
-        if (remMs > 0) {
-          activeRentalLines.push(`${perfEmoji} [${escapeHtml(acct)}] <b>${escapeHtml(r.name || r.id)}</b>${algoTag}\n    ${info.niceAverageHashrate} | ${remStr_s}${leftSuffix} | <b>${info.percent}%</b>`);
+        // Only include active rentals in the summary list to reduce clutter
+        if (!isFinished_s) {
+          activeRentalLines.push(`${perfEmoji} [${escapeHtml(acct)}] <b>${escapeHtml(r.name || r.id)}</b>${algoTag}\n    ${info.niceAverageHashrate} | ${remStr_s} left | <b>${info.percent}%</b>`);
         }
 
         // Update database
         try {
           await dbRunAsync(
-            `INSERT INTO rentals (id, name, client, algo, target_100, last_updated, low_hashrate_start, zero_hashrate_start) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO rentals (id, name, client, start_time, end_time, algo, target_100, last_updated, low_hashrate_start, zero_hashrate_start) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET 
                name=excluded.name, client=excluded.client, algo=excluded.algo, 
-               target_100=excluded.target_100, last_updated=excluded.last_updated,
+               start_time=excluded.start_time, end_time=excluded.end_time, target_100=excluded.target_100, last_updated=excluded.last_updated,
                low_hashrate_start=excluded.low_hashrate_start, zero_hashrate_start=excluded.zero_hashrate_start`,
-            [String(r.id), r.name || r.id, acct, info.algo, displayTarget, now, lowHashStart, zeroHashStart]
+            [String(r.id), r.name || r.id, acct, startT, endT, info.algo, displayTarget, now, lowHashStart, zeroHashStart]
           );
         } catch (err) {
           console.error(`[monitor:db] Upsert error for ${r.id}: ${err.message}`);
@@ -587,7 +591,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const remM = Math.floor((displayRemN % 3600000) / 60000);
           const remStr = displayRemN <= 0 ? 'Finished' : (remD > 0 ? `${remD}d ${remH}h` : `${remH}h ${remM}m`);
 
-          const msg = TelegramManager.Templates.rentedNotice(hbType, r, info, acct, roi, remStr, timeProgress);
+          const msg = TelegramManager.Templates.rentedNotice(hbType, r, info, acct, roi, remStr);
 
           try {
             await sendTelegramInternal(msg);
@@ -608,12 +612,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   // ------------------------------------------------------------------
   //  Detect and notify finished rentals (no longer present in API)
   // ------------------------------------------------------------------
-  if (mrrAccts.length > 0) {
+  if (successfulAccts.length > 0) {
     // Parameterised query to prevent SQL injection
-    const placeholders = mrrAccts.map(() => '?').join(',');
+    const placeholders = successfulAccts.map(() => '?').join(',');
     const finishedRentals = await dbAllAsync(
       `SELECT * FROM rentals WHERE last_updated < ? AND client IN (${placeholders})`,
-      [now, ...mrrAccts]
+      [now, ...successfulAccts]
     );
 
     for (const fr of finishedRentals) {

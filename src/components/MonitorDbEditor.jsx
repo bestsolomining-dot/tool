@@ -78,7 +78,7 @@ export default function MonitorDbEditor({ onCall, isOpen, onClose }) {
       <div className="panel-body" style={{ padding: '1rem', overflowX: 'auto', minHeight: '400px' }}>
         {loading && <div style={{ textAlign: 'center', opacity: 0.6 }}>Loading database...</div>}
         {!loading && data.length === 0 && <div style={{ textAlign: 'center', opacity: 0.4, padding: '2rem' }}>No active monitoring records found.</div>}
-        
+
         {data.length > 0 && (
           <table className="select-dropdown-pro" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
             <thead>
@@ -98,13 +98,13 @@ export default function MonitorDbEditor({ onCall, isOpen, onClose }) {
                   <td style={{ padding: '10px', fontFamily: 'monospace' }}>{row.id}</td>
                   <td style={{ padding: '10px', fontWeight: 'bold' }}>
                     {editingId === row.id ? (
-                      <input className="input-pro" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
+                      <input className="input-pro" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
                     ) : row.name}
                   </td>
                   <td style={{ padding: '10px' }}>{row.client}</td>
                   <td style={{ padding: '10px' }}>
                     {editingId === row.id ? (
-                      <input type="number" className="input-pro" value={editForm.last_notified} onChange={e => setEditForm({...editForm, last_notified: Number(e.target.value)})} title="Epoch MS" />
+                      <input type="number" className="input-pro" value={editForm.last_notified} onChange={e => setEditForm({ ...editForm, last_notified: Number(e.target.value) })} title="Epoch MS" />
                     ) : (row.last_notified > 0 ? new Date(row.last_notified).toLocaleTimeString() : 'Never')}
                   </td>
                   <td style={{ padding: '10px' }}>

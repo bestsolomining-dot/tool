@@ -60,13 +60,13 @@ export default function MrrPoolManager({ rentalIds, onCall, onClose }) {
       <div className="panel-body" style={{ padding: '1rem' }}>
         {loading && <div style={{ textAlign: 'center', opacity: 0.6, padding: '2rem' }}>Loading rig pool data...</div>}
         {error && <div style={{ color: '#f87171', padding: '1rem', textAlign: 'center' }}>{error}</div>}
-        
+
         {!loading && !error && rigs.map((rig) => (
           <div key={rig.rigid} style={{ marginBottom: '2rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px' }}>
             <div style={{ marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
               <h3 style={{ margin: 0, fontSize: '1rem', color: '#60a5fa' }}>Rig ID: {rig.rigid}</h3>
             </div>
-            
+
             <div className="pool-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {rig.pools.map((pool, idx) => (
                 <div key={idx} className="pool-item" style={{ display: 'grid', gridTemplateColumns: '50px 100px 1fr 200px 80px', gap: '1rem', alignItems: 'center', fontSize: '0.85rem' }}>
@@ -82,9 +82,9 @@ export default function MrrPoolManager({ rentalIds, onCall, onClose }) {
         ))}
 
         {editorState && (
-          <PoolEditorPopup 
-            editor={editorState} 
-            onClose={() => setEditorState(null)} 
+          <PoolEditorPopup
+            editor={editorState}
+            onClose={() => setEditorState(null)}
             onSaveSuccess={() => { setEditorState(null); fetchPools(); }}
           />
         )}

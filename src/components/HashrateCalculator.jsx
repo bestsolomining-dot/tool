@@ -31,7 +31,7 @@ export default function HashrateCalculator() {
 
   return (
     <div className="hashrate-calculator nh-theme">
-      <h2 className="section-title" style={{ paddingBottom: '15px', padding: '15px 15px 15px 0'}}>Hashrate Calculator</h2>
+      <h2 className="section-title" style={{ paddingBottom: '15px', padding: '15px 15px 15px 0' }}>Hashrate Calculator</h2>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {units.map((unit) => (
           <div key={unit.name} style={{ display: 'grid', gridTemplateColumns: '80px 1fr', alignItems: 'center' }}>

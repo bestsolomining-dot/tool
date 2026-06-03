@@ -106,6 +106,7 @@ const getClientBadgeStyle = (client) => {
     'BT': { background: '#2563eb', color: '#fff' }, // Blue
     'SL': { background: '#d97706', color: '#fff' }, // Orange
     'LN': { background: '#0891b2', color: '#fff' }, // Cyan
+    'VN': { background: '#10b981', color: '#fff' }, // Green
   };
   return styles[c] || { background: 'rgba(255,255,255,0.1)', color: '#94a3b8' };
 };
@@ -649,6 +650,11 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                             <span style={{ background: isMine ? '#5c005f' : 'rgba(255,255,255,0.05)', color: 'white', fontSize: '8px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
                               {idLabel}: #{displayId}
                             </span>
+                            {(mrrClient === 'VN' || rig.mrrClient) && (
+                              <span style={{ ...getClientBadgeStyle(rig.mrrClient || mrrClient), fontSize: '8px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                {String(rig.mrrClient || mrrClient).toUpperCase()}
+                              </span>
+                            )}
                           </div>
                           <div className="rig-card" style={{
                             background: isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)',
@@ -729,9 +735,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                     {diffPercent !== null && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
                                         <span>Market:</span>
-                                        <span style={{ 
-                                          color: parseFloat(diffPercent) <= 0 ? '#34d399' : '#f87171', 
-                                          fontWeight: 'bold' 
+                                        <span style={{
+                                          color: parseFloat(diffPercent) <= 0 ? '#34d399' : '#f87171',
+                                          fontWeight: 'bold'
                                         }}>
                                           {parseFloat(diffPercent) > 0 ? '+' : ''}{diffPercent}%
                                         </span>
@@ -822,7 +828,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                               <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
                                               <div style={{ marginTop: '2px', opacity: 0.9 }}>
                                                 {rentalPriceDiff !== null && rentalMyOrderDiff !== null && <span style={{ margin: '0 4px', opacity: 0.3 }}></span>}
-                                                
+
                                               </div>
                                             </div>
                                             <div style={{ fontSize: '9px', textAlign: 'right' }}>

@@ -2,11 +2,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { getPriceData, getBtcPriceData, parsePriceValue } from '../core/priceUtils';
 
 function resolveUnit(value) {
-  const map = { EH: 1e18, PH: 1e15, LN: 1e15, TH: 1e12, GH: 1e9, MH: 1e6, KH: 1e3, H: 1 };
+  const map = { EH: 1e18, PH: 1e15, TH: 1e12, GH: 1e9, MH: 1e6, KH: 1e3, H: 1 };
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (!value) return 1e12;
   const normalized = String(value).toUpperCase().replace(/\s+/g, '').replace(/\/S$/, '');
-  const match = normalized.match(/(EH|PH|LN|TH|GH|MH|KH|H)(?:\/S)?$/) || normalized.match(/(EH|PH|LN|TH|GH|MH|KH|H)/);
+  const match = normalized.match(/(EH|PH|TH|GH|MH|KH|H)(?:\/S)?$/) || normalized.match(/(EH|PH|TH|GH|MH|KH|H)/);
   return match && map[match[1]] ? map[match[1]] : 1e12;
 }
 
@@ -255,7 +255,6 @@ export default function HashCompletionCalculator({
               <div style={{ fontSize: '9px', opacity: 0.7 }}>Needed for remaining {results.remainingHrs}h to reach 100% total</div>
             </div>
           </div>
-
           <div style={{ marginTop: '20px', fontSize: '11px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px' }}>
             <h4 style={{ margin: '0 0 10px 0', fontSize: '10px', opacity: 0.5, textTransform: 'uppercase' }}>NiceHash vs MRR Comparison</h4>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
@@ -266,7 +265,6 @@ export default function HashCompletionCalculator({
               <span style={{ opacity: 0.6 }}>NH Estimated Cost:</span>
               <span style={{ fontFamily: 'monospace' }}>{results.nhEstimatedCost.toFixed(8)} BTC</span>
             </div>
-
             <h4 style={{ margin: '0 0 10px 0', fontSize: '10px', opacity: 0.5, textTransform: 'uppercase' }}>Rental Cost Breakdown</h4>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
               <span style={{ opacity: 0.6 }}>Hashes Delivered:</span>

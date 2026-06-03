@@ -3,7 +3,7 @@ import path from 'path';
 import { asyncHandler, maskSensitive, extractAlgorithmItems, extractRentalInfo, extractRigInfo } from './utils.js';
 import { mrrApiCall, mrrRequest, fetchAggregatedRentals, mrrConfigs, defaultMrrClient } from './mrr.js';
 import { resolveNhClient, getNiceHashApp, nhConfigs, isAggregate, normalizeAlgoForNiceHash, mapNiceHashToMRR } from './nh.js';
-import { sendTelegramInternal, runRentalMonitor } from './monitor.js';
+import { sendTelegramInternal, runRentalMonitor, getTelegramStatus, setTelegramStatus } from './monitor.js';
 import { db } from './db.js';
 
 export function registerRoutes(app) {
@@ -334,6 +334,7 @@ export function registerRoutes(app) {
   app.patch('/api/v2/mrr/monitor/snapshot/:id', asyncHandler(async (req, res) => {
     const { id } = req.params;
     const fields = Object.keys(req.body).filter(k => k !== 'id').map(k => `${k} = ?`).join(', ');
+    if (!fields) return res.status(400).json({ success: false, error: 'No fields provided for update' });
     const values = [...Object.keys(req.body).filter(k => k !== 'id').map(k => req.body[k]), id];
     db.run(`UPDATE rentals SET ${fields} WHERE id = ?`, values, function(err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -651,6 +652,15 @@ export function registerRoutes(app) {
       console.warn(`[telegram] ${err.message}`);
       res.status(400).json({ success: false, error: err.message });
     }
+  }));
+
+  app.get('/api/v2/notify/telegram/status', asyncHandler(async (req, res) => {
+    res.json(await getTelegramStatus());
+  }));
+
+  app.post('/api/v2/notify/telegram/status', asyncHandler(async (req, res) => {
+    const { enabled } = req.body;
+    res.json(await setTelegramStatus(enabled));
   }));
 
   app.get('/api/v2/notify/telegram/health', asyncHandler(async (req, res) => {

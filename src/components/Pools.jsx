@@ -28,6 +28,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   const [inspectData, setInspectData] = useState(null)
   const [filePools, setFilePools] = useState([])
   const [verifyFromFile, setVerifyFromFile] = useState(false)
+  const [lastRunSummary, setLastRunSummary] = useState(null)
 
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false)
@@ -115,6 +116,25 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     }
     return () => clearInterval(interval);
   }, [running, currentRunStartTime]);
+
+  // Automatically update the last run summary when a cycle completes during automation
+  useEffect(() => {
+    if (!playing && running && verifyResults.length > 0) {
+      const completed = verifyResults.filter(item => !item.result?.pending);
+      if (completed.length > 0) {
+        const skipped = completed.filter(item => item.result?.data?.message?.includes('Skipped')).length;
+        const success = completed.filter(item => ph.isVerifySuccess(item.result) && !item.result?.data?.message?.includes('Skipped')).length;
+        const failed = completed.length - success - skipped;
+
+        setLastRunSummary({
+          verified: completed.length,
+          success,
+          failed,
+          skipped
+        });
+      }
+    }
+  }, [playing, running, verifyResults]);
 
   // Automatically clear MRR results when client changes to prevent data mixing
   useEffect(() => {
@@ -310,7 +330,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         .map(o => String(o.pool?.id || o.pool?.poolId || ''))
         .filter(Boolean)
     );
-    const seenNames = new Set();
+    const seenPoolAlgos = new Set();
 
     try {
       for (let i = 0; i < source.length; i++) {
@@ -319,12 +339,14 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         const pool = source[i]
         const poolId = ph.getId(pool)
         const poolName = (pool.name || '').trim();
+        const poolAlgo = ph.getAlgo(pool);
+        const nameAlgoKey = `${poolName}|${poolAlgo}`;
         const key = ph.getKey(pool, i)
 
         let skipReason = '';
         if (pool.name?.toLowerCase() === 'active') skipReason = 'Skipped: Active Pool';
         else if (poolId && activePoolIds.has(String(poolId))) skipReason = 'Skipped: Active Order';
-        else if (poolName && seenNames.has(poolName)) skipReason = 'Skipped: Duplicate Name';
+        else if (poolName && seenPoolAlgos.has(nameAlgoKey)) skipReason = 'Skipped: Duplicate Pool Name & Algo';
 
         if (skipReason) {
           setVerifyResults(prev => [
@@ -332,10 +354,12 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
             { key, label: ph.getLabel(pool, i), result: { ok: true, data: { message: skipReason } } },
           ])
           setProgress({ current: i + 1, total: source.length })
+          // Mark as seen so duplicates are skipped even if the first occurrence was skipped for other reasons
+          if (skipReason !== 'Skipped: Duplicate Pool Name & Algo' && poolName) seenPoolAlgos.add(nameAlgoKey);
           continue
         }
 
-        if (poolName) seenNames.add(poolName);
+        if (poolName) seenPoolAlgos.add(nameAlgoKey);
         const controller = new AbortController()
         activeRequestRef.current = controller
 
@@ -570,17 +594,36 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
   const selectedLabel = selected ? ph.getLabel(selected) : 'Select a pool'
   const completedResults = verifyResults.filter(item => !item.result?.pending)
-  const skippedCount = completedResults.filter(item => item.result?.data?.message?.includes('Skipped')).length
-  const successCount = completedResults.filter(item => ph.isVerifySuccess(item.result) && !item.result?.data?.message?.includes('Skipped')).length
-  const failCount = completedResults.length - successCount - skippedCount
-  const algorithmCounts = completedResults.reduce((counts, item) => {
-    const algorithm = ph.getVerifyAlgo(item.result)
-    counts[algorithm] = (counts[algorithm] || 0) + 1
-    return counts
-  }, {})
-  const algorithmSummary = Object.entries(algorithmCounts)
-    .map(([algorithm, count]) => `${algorithm}: ${count}`)
-    .join(', ')
+
+  const getAlgoCountsSummary = (results) => {
+    const counts = results.reduce((acc, item) => {
+      const algorithm = ph.getVerifyAlgo(item.result)
+      acc[algorithm] = (acc[algorithm] || 0) + 1
+      return acc
+    }, {})
+    return Object.entries(counts)
+      .map(([algo, count]) => `${algo}: ${count}`)
+      .join(', ')
+  }
+
+  const skippedResults = completedResults.filter(item => item.result?.data?.message?.includes('Skipped'))
+  const successResults = completedResults.filter(item => ph.isVerifySuccess(item.result) && !item.result?.data?.message?.includes('Skipped'))
+  const failResults = completedResults.filter(item => !ph.isVerifySuccess(item.result) && !item.result?.data?.message?.includes('Skipped'))
+
+  const successCount = successResults.length
+  const failCount = failResults.length
+  const skippedCount = skippedResults.length
+
+  const verifiedSummary = getAlgoCountsSummary(completedResults)
+  const successSummary = getAlgoCountsSummary(successResults)
+  const failSummary = getAlgoCountsSummary(failResults)
+  const skippedSummary = getAlgoCountsSummary(skippedResults)
+
+  const lastRunVerified = lastRunSummary ? ` (Last: ${lastRunSummary.verified})` : ''
+  const lastRunSuccess = lastRunSummary ? ` (Last: ${lastRunSummary.success})` : ''
+  const lastRunFailed = lastRunSummary ? ` (Last: ${lastRunSummary.failed})` : ''
+  const lastRunSkipped = lastRunSummary ? ` (Last: ${lastRunSummary.skipped})` : ''
+
   const activePoolSource = verifyFromFile ? filePools : pools
   const poolAlgorithmGroups = Object.entries(
     activePoolSource.reduce((groups, pool) => {
@@ -711,23 +754,25 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                   <span style={{ fontSize: '10px', opacity: 0.6 }}>Total:</span>{' '}
                   <strong>{verifyFromFile ? filePools.length : pools.length}</strong>
                 </div>
-
                 <div>
                   <span style={{ fontSize: '10px', opacity: 0.6 }}>Verified:</span>{' '}
                   <strong>{completedResults.length}</strong>
+                  <span style={{ fontSize: '10px', opacity: 0.6 }}> ({verifiedSummary}){lastRunVerified}</span>
                 </div>
-
                 <div>
                   <span style={{ fontSize: '10px', color: '#34d399' }}>Success:</span>{' '}
                   <strong>{successCount}</strong>
+                  <span style={{ fontSize: '10px', opacity: 0.6 }}> ({successSummary}){lastRunSuccess}</span>
                 </div>
                 <div>
                   <span style={{ fontSize: '10px', color: '#f87171' }}>Error:</span>{' '}
                   <strong>{failCount}</strong>
+                  <span style={{ fontSize: '10px', opacity: 0.6 }}> ({failSummary}){lastRunFailed}</span>
                 </div>
                 <div>
                   <span style={{ fontSize: '10px', color: '#f87171' }}>Skipped:</span>{' '}
                   <strong>{skippedCount}</strong>
+                  <span style={{ fontSize: '10px', opacity: 0.6 }}> ({skippedSummary}){lastRunSkipped}</span>
                 </div>
               </div>
 
@@ -782,10 +827,10 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                               ? '#34d399'
                               : '#f87171',
                           border: `1px solid ${pending
-                              ? '#3b82f644'
-                              : success
-                                ? '#34d39944'
-                                : '#f8717144'
+                            ? '#3b82f644'
+                            : success
+                              ? '#34d39944'
+                              : '#f8717144'
                             }`
                         }}
                       >

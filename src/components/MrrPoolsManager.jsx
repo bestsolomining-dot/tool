@@ -82,7 +82,7 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
       }
 
       const result = await onCall(path, { query: { client: mrrClient }, silent: true });
-      // setPoolData(result);
+      setPoolData(result);
     } catch (err) {
       setPoolData({ success: false, message: err.message });
     } finally {
@@ -141,9 +141,9 @@ export default function MrrPoolsManager({ onCall, mrrClient, externalPoolData = 
         <button className="btn-pro primary" onClick={() => fetchPools('all_rigs')} disabled={loading} title="Fetch pool info for all your personal rigs">
           {loading ? 'Fetching...' : 'Rig Pools'}
         </button>
-        <button className="btn-pro" style={{ background: '#073681' }} onClick={() => setIsMonitorDbOpen(true)}>
+        {/* <button className="btn-pro" style={{ background: '#073681' }} onClick={() => setIsMonitorDbOpen(true)}>
           Monitor DB
-        </button>
+        </button> */}
         <button className="btn-pro secondary" onClick={handleExportMrrPools} disabled={!poolData || poolData.success === false || loading}>
           Export Pools
         </button>

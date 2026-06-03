@@ -5,6 +5,34 @@ import { resolveNhClient, getNiceHashApp, isAggregate } from './nh.js';
 import { extractRentalInfo, extractRigInfo } from './utils.js';
 
 // ==========================
+//  Global State (Persisted in DB)
+// ==========================
+
+/** Retrieves the global telegram notification status from the DB */
+export async function getTelegramStatus() {
+  try {
+    // Defensive check: ensure table exists
+    await dbRunAsync("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
+    const row = await dbGetAsync("SELECT value FROM settings WHERE key = 'telegram_enabled'");
+    return { enabled: row ? row.value === 'true' : true }; // Default to true
+  } catch (err) {
+    console.warn('[monitor:db] Failed to fetch telegram status:', err.message);
+    return { enabled: true };
+  }
+}
+
+/** Updates the global telegram notification status in the DB */
+export async function setTelegramStatus(enabled) {
+  const val = enabled ? 'true' : 'false';
+  await dbRunAsync("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
+  await dbRunAsync(
+    "INSERT INTO settings (key, value) VALUES ('telegram_enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    [val]
+  );
+  return { enabled: !!enabled };
+}
+
+// ==========================
 //  Constants
 // ==========================
 export const TelegramManager = {
@@ -132,6 +160,12 @@ function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'ite
 //  Telegram sender (with retries)
 // ==========================
 export async function sendTelegramInternal(message) {
+  const status = await getTelegramStatus();
+  if (!status.enabled) {
+    console.log('[telegram] Notifications are globally disabled, skipping message.');
+    return { ok: true, description: 'Notifications disabled' };
+  }
+
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!botToken || !chatId) {
@@ -174,6 +208,9 @@ export async function sendTelegramInternal(message) {
 
 /** Sends the initial startup message to Telegram */
 export async function initTelegramNotifications() {
+  const status = await getTelegramStatus();
+  if (!status.enabled) return;
+
   const accts = Object.keys(mrrConfigs).filter(k => mrrConfigs[k].apiKey).join(', ');
   const message = `🤖 <b>System Started</b>\n` +
     `Time: ${new Date().toLocaleString()}\n` +

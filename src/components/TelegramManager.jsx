@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { calculateRemainingTime as sharedCalculateRemainingTime } from '../core/time';
 import MonitorDbEditor from './MonitorDbEditor';
 
@@ -179,17 +179,47 @@ export function useTelegram(onCall, mrrClient) {
 export default function TelegramManager({ onCall, mrrClient }) {
   const { sendTelegram } = useTelegram(onCall, mrrClient);
   const [isMonitorDbOpen, setIsMonitorDbOpen] = useState(false);
+  const [isTelegramOn, setIsTelegramOn] = useState(true);
+
+  // Fetch current notification status from server on mount
+  useEffect(() => {
+    onCall('/api/v2/notify/telegram/status', { method: 'GET', silent: true })
+      .then(res => {
+        if (res && typeof res.enabled === 'boolean') setIsTelegramOn(res.enabled);
+      })
+      .catch(() => {});
+  }, [onCall]);
+
+  const handleToggle = async () => {
+    const target = !isTelegramOn;
+    const res = await onCall('/api/v2/notify/telegram/status', {
+      method: 'POST',
+      body: { enabled: target },
+      silent: true
+    });
+    if (res && typeof res.enabled === 'boolean') {
+      setIsTelegramOn(res.enabled);
+    }
+  };
 
   return (
     <div style={{ display: 'contents' }}>
       <button
+        className="btn-pro secondary"
+        style={{ border: `1px solid ${isTelegramOn ? '#4caf50' : '#f44336'}`, color: isTelegramOn ? '#4caf50' : '#f44336', minWidth: '100px' }}
+        onClick={handleToggle}
+        title={isTelegramOn ? "Telegram alerts are active" : "Telegram alerts are disabled"}
+      >
+        TG: {isTelegramOn ? 'ON' : 'OFF'}
+      </button>
+      {/* <button
         className="btn-pro secondary"
         style={{ border: '1px solid #5472d3', color: '#5472d3' }}
         onClick={() => setIsMonitorDbOpen(true)}
         title="Open the interactive monitoring database editor"
       >
         Monitor DB
-      </button>
+      </button> */}
       <button
         className="btn-pro secondary"
         style={{ border: '1px solid #24A1DE', color: '#24A1DE' }}
@@ -205,11 +235,11 @@ export default function TelegramManager({ onCall, mrrClient }) {
         Test Bot
       </button>
 
-      <MonitorDbEditor 
+      {/* <MonitorDbEditor 
         isOpen={isMonitorDbOpen} 
         onClose={() => setIsMonitorDbOpen(false)} 
         onCall={onCall} 
-      />
+      /> */}
     </div>
   );
 }

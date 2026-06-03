@@ -648,8 +648,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       //   myNhOrder?.marketUnit || ''
                       // ) : null;
                       const myOrderDiff = myNhOrderPrice > 0
-                          ? ((displayPrice - myNhOrderPrice) / myNhOrderPrice) * 100
-                          : 0;
+                        ? ((displayPrice - myNhOrderPrice) / myNhOrderPrice) * 100
+                        : 0;
 
                       return (
                         <div key={rig.id} style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -753,13 +753,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                         )}
                                       </div>
                                     )}
-                                  </div>
-                                )}
-                                {!hasNhPrice && !loading && !loadingInfoIds.has(rig.id) && (
-                                  <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '2px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '2px' }}>
-                                    <span>
-                                      NH market rate N/A
-                                    </span>
                                   </div>
                                 )}
                               </div>

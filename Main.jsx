@@ -67,6 +67,13 @@ export default function App() {
     const adsHashrate = parseHashrateValue(info?.advertised || rig?.hashrate?.advertised || rig?.advertised || rig?.hashrate?.hash || rig?.hash || '');
     const avgHashrate = parseHashrateValue(info?.average || rig?.hashrate?.average || rig?.average || rig?.hash || '');
     const unit = inferUnitValue(info?.advertised || info?.average || rig?.hashrate?.advertised || rig?.hashrate?.average || rig?.hashrate?.suffix || rig?.hashrate_unit || rig?.hashrate?.type || '');
+    const nhPriceData = info?.nicehashPrice || rig?.nicehashPrice;
+    const rawPrice = info?.price || rig?.price || rig?.min_price || null;
+    const priceSource = rawPrice?.paid !== undefined
+      ? { paid: rawPrice.paid, currency: rawPrice.currency || rawPrice.price_unit || 'BTC' }
+      : rawPrice;
+    const btcPriceSource = info?.price_converted || rig?.price_converted || info?.price?.BTC || rig?.price?.BTC || priceSource;
+    const priceUnit = rig?.hashrate_unit || rig?.hashrate?.advertised?.type || rig?.hashrate?.suffix || rig?.hashrate?.type || 'TH';
 
     setCompletionCalculatorContext({
       initialAlgo: algo,
@@ -75,6 +82,10 @@ export default function App() {
       initialAdsHashrate: adsHashrate,
       initialAvgHashrate: avgHashrate,
       initialUnit: unit,
+      initialPriceSource: priceSource,
+      initialBtcPriceSource: btcPriceSource,
+      initialPriceUnit: priceUnit,
+      initialNhPriceData: nhPriceData,
     });
     setCompletionModalOpen(true);
   }, []);

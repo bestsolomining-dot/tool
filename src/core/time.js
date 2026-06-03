@@ -1,7 +1,17 @@
 export function toUtcTimestamp(value) {
   if (!value) return NaN;
-  const text = String(value);
-  const normalized = /\bUTC\b/i.test(text) ? text : `${text} UTC`;
+  if (typeof value === 'number') return value * 1000;
+
+  let text = String(value).trim();
+  // If it's a pure numeric string, treat as Unix seconds
+  if (/^\d+$/.test(text)) return parseInt(text, 10) * 1000;
+
+  // Convert space format "YYYY-MM-DD HH:mm:ss" to ISO "YYYY-MM-DDTHH:mm:ss"
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) {
+    text = text.replace(' ', 'T');
+  }
+  // Append Z if missing to force UTC interpretation
+  const normalized = /\bUTC\b/i.test(text) || text.endsWith('Z') ? text : `${text}Z`.replace(' UTCZ', 'Z');
   return new Date(normalized).getTime();
 }
 

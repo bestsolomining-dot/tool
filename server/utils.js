@@ -120,7 +120,7 @@ export function extractRentalInfo(rental) {
   const type = rental.price_type || rental.price?.type || rental.type || 'Day';
   const duration = rental.length || rental.hours || rental.rig?.hours || '0';
   const rigId = rental.rig?.id || rental.rigid || rental.rig_id || rental.rigId || 'N/A';
-  const percent = rental.hashrate?.average?.percent || rental.rig?.hashrate?.average?.percent || '0';
+  const percent = rental.hashrate?.average?.percent || rental.rig?.hashrate?.average?.percent || rental.percent || '0';
   const priceObj = rental.price || rental.rig?.price || {};
   const currency = priceObj.currency || rental.currency || rental.price_unit || 'BTC';
 
@@ -176,7 +176,8 @@ export function extractRentalInfo(rental) {
     type,
     duration,
     rigId,
-    endTime: rental.end || rental.rig?.status?.end || '',
+    startTime: rental.start || rental.start_time || rental.rig?.status?.start || rental.rig?.start || '',
+    endTime: rental.end || rental.end_time || rental.rig?.status?.end || rental.rig?.end || '',
     percent: finalPercent,
     hashrate: { current: currentHash, advertised: advertisedHash, average: averageHash, suffix: hashrateSuffix },
     price: {

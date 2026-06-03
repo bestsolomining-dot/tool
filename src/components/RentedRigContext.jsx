@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { normalizeAlgoForNiceHash } from '../core/algoMapping';
+import { normalizeAlgoForNiceHash, calculatePriceComparison } from '../core/algoMapping';
 
 const RentedRigContext = createContext();
 
@@ -61,16 +61,19 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
                 silent: true 
               });
             }
-            const priceValue = parseFloat(priceData?.price || priceData?.fixedPrice || priceData?.standardPrice?.fast || priceData?.standardPrice || 0);
-            marketPrices[key] = priceValue;
-          } catch (e) { marketPrices[key] = 0; }
+          const rawPrice = priceData?.price || priceData;
+          const priceValue = parseFloat(rawPrice?.fixedPrice || rawPrice?.standardPrice?.fast || rawPrice?.standardPrice || rawPrice?.price || 0);
+          const priceUnit = rawPrice?.speedUnit || rawPrice?.unit || 'TH';
+          marketPrices[key] = { value: priceValue, unit: priceUnit };
+        } catch (e) { marketPrices[key] = { value: 0, unit: 'TH' }; }
         }));
 
         const processed = tempProcessed.map(p => {
-          const mkt = marketPrices[`${p.algo}:${p.market}`] || 0;
+        const mktData = marketPrices[`${p.algo}:${p.market}`] || { value: 0, unit: 'TH' };
+        const mkt = mktData.value;
           const cur = parseFloat(p.price);
-          const diff = mkt > 0 ? ((cur - mkt) / mkt * 100).toFixed(1) : null;
-          return { ...p, marketPrice: mkt, priceDiff: diff };
+        const diff = mkt > 0 ? calculatePriceComparison(cur, 'TH', mkt, mktData.unit) : null;
+        return { ...p, marketPrice: mkt, marketUnit: mktData.unit, priceDiff: diff };
         });
 
         const totalPaid = activeOrders.reduce((sum, o) => sum + parseFloat(o.payedAmount || 0), 0).toFixed(8);

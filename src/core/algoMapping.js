@@ -1,6 +1,6 @@
 /** Power factor mapping for normalization (EH/s base) */
 export const UNIT_TO_POWER = {
-  'EH': 0, 'LN': -3, 'TH': -6, 'GH': -9, 'MH': -12, 'KH': -15, 'H': -18,
+  'EH': 0, 'PH': -3, 'TH': -6, 'GH': -9, 'MH': -12, 'KH': -15, 'H': -18,
   'E': 0, 'P': -3, 'T': -6, 'G': -9, 'M': -12,
   'EHS': 0, 'PHS': -3, 'THS': -6, 'GHS': -9, 'MHS': -12
 };
@@ -26,6 +26,7 @@ export const algoMap = {
   // Common ASIC Algorithms
   'SHA256': 'SHA256',
   'SHA256ASICBOOST': 'SHA256ASICBOOST',
+  'SHA256AB': 'SHA256ASICBOOST',
   'BTC': 'SHA256',
   'SCRYPT': 'SCRYPT',
   'LTC': 'SCRYPT',
@@ -60,7 +61,7 @@ export const algoMap = {
  */
 export function normalizeAlgoForNiceHash(algo) {
   if (!algo) return '';
-  const cleanAlgo = String(algo).toUpperCase().replace(/\s*\(.*\)/g, '').replace(/[^A-Z0-9]/g, '');
+  const cleanAlgo = String(algo).toUpperCase().trim().replace(/\s*\(.*\)/g, '').replace(/[^A-Z0-9]/g, '');
   return algoMap[cleanAlgo] || cleanAlgo;
 }
 
@@ -93,11 +94,11 @@ export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
 
   // Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH')
   const clean = (u) => {
-    const m = String(u || '').toUpperCase().match(/(EH|LN|TH|GH|MH|KH|H|E|P|T|G|M|K)/);
+    const m = String(u || '').toUpperCase().match(/(EH|PH|TH|GH|MH|KH|H|E|P|T|G|M|K)/);
     if (!m) return 'TH';
     let unit = m[0];
     // Normalize single letters to standard 2-letter codes for mapping
-    const singleMap = { 'E': 'EH', 'P': 'LN', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };
+    const singleMap = { 'E': 'EH', 'P': 'PH', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };
     return singleMap[unit] || unit;
   };
 

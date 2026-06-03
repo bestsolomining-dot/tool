@@ -448,11 +448,20 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         }
 
         const info = extractRentalInfo(r);
-        const startTime = r.start ? new Date(r.start + (String(r.start).endsWith('UTC') ? '' : ' UTC')).getTime() : 0;
-        const endTime = r.end ? new Date(r.end + (String(r.end).endsWith('UTC') ? '' : ' UTC')).getTime() : 0;
-        const elapsedMs = startTime > 0 ? now - startTime : 0;
-        const remainingMs = endTime > 0 ? endTime - now : 0;
-        const totalDurationMs = (startTime > 0 && endTime > 0) ? endTime - startTime : 0;
+        const rawStart = info.startTime;
+        const rawEnd = info.endTime;
+
+        // MRR API provides timestamps in UTC without a suffix. 
+        // Forcing 'Z' or ' UTC' ensures cross-platform consistency.
+        const parseUtc = (d) => d ? new Date(String(d).endsWith('UTC') || String(d).endsWith('Z') ? d : d + ' UTC').getTime() : 0;
+
+        const startT = parseUtc(rawStart);
+        const endT = parseUtc(rawEnd);
+        
+        const totalDurationMs = (startT > 0 && endT > 0) ? endT - startT : 0;
+        const elapsedMs = startT > 0 ? Math.max(0, Math.min(now - startT, totalDurationMs)) : 0;
+        const remainingMs = endT > 0 ? Math.max(0, endT - now) : 0;
+
         const advertised = parseFloat(info.hashrate.advertised);
         const average = parseFloat(info.hashrate.average);
         const totalExpectedHashes = advertised * (totalDurationMs / 1000);
@@ -530,10 +539,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         }
 
         // Build line for summary heartbeat
-        const remD_s = Math.floor(remainingMs / 86400000);
-        const remH_s = Math.floor((remainingMs % 86400000) / 3600000);
-        const remM_s = Math.floor((remainingMs % 3600000) / 60000);
-        const remStr_s = remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`;
+        const displayRem_s = Math.max(0, endT - now);
+        const remD_s = Math.floor(displayRem_s / 86400000);
+        const remH_s = Math.floor((displayRem_s % 86400000) / 3600000);
+        const remM_s = Math.floor((displayRem_s % 3600000) / 60000);
+        
+        const remStr_s = displayRem_s <= 0 ? 'Finished' : (remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`);
 
         const perfEmoji = efficiency >= 98 ? '🟢' : (efficiency >= 70 ? '🟡' : '🔴');
         const algoTag = info.algo ? ` <code>${escapeHtml(info.algo).toUpperCase()}</code>` : '';
@@ -565,10 +576,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const roi = (efficiency - 100).toFixed(1);
           const timeProgress = totalDurationMs > 0 ? Math.floor((elapsedMs / totalDurationMs) * 100) : 0;
 
-          const remD = Math.floor(remainingMs / 86400000);
-          const remH = Math.floor((remainingMs % 86400000) / 3600000);
-          const remM = Math.floor((remainingMs % 3600000) / 60000);
-          const remStr = remD > 0 ? `${remD}d ${remH}h` : `${remH}h ${remM}m`;
+          const displayRemN = Math.max(0, remainingMs);
+          const remD = Math.floor(displayRemN / 86400000);
+          const remH = Math.floor((displayRemN % 86400000) / 3600000);
+          const remM = Math.floor((displayRemN % 3600000) / 60000);
+          const remStr = displayRemN <= 0 ? 'Finished' : (remD > 0 ? `${remD}d ${remH}h` : `${remH}h ${remM}m`);
 
           const msg = TelegramManager.Templates.rentedNotice(hbType, r, info, acct, roi, remStr, timeProgress);
 

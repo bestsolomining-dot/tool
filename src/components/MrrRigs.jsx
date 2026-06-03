@@ -18,10 +18,10 @@ const MRR_BASE_POWER = UNIT_TO_POWER[MRR_BASE_UNIT];
 
 /** Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH') */
 const clean = (u) => {
-  const m = String(u || '').toUpperCase().match(/(EH|LN|TH|GH|MH|KH|H|E|P|T|G|M|K)/);
+  const m = String(u || '').toUpperCase().trim().match(/(EH|PH|TH|GH|MH|KH|H|E|P|T|G|M|K)/);
   if (!m) return 'TH';
   let unit = m[0];
-  const singleMap = { 'E': 'EH', 'P': 'LN', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };
+  const singleMap = { 'E': 'EH', 'P': 'PH', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH', 'EHS': 'EH', 'PHS': 'PH', 'THS': 'TH', 'GHS': 'GH', 'MHS': 'MH' };
   return singleMap[unit] || unit;
 };
 
@@ -441,7 +441,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             isRental: true,
             nicehashPrice: nhPriceData,
             price: rental.price, // Add rental price from the API response
-            currency: rental.currency || '' // Add rental currency from the API response
+            currency: rental.currency || '', // Add rental currency from the API response
+            duration: rental.hours || rental.length || rental.duration || 0
           };
         } else {
           // For rig info, the data is already structured correctly by the backend's extractRigInfo
@@ -633,13 +634,13 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       );
 
                       // Find our specific active NiceHash order for this algorithm
-                      const myNhOrder = nhOrders.find(o => o.algo === algoName.toUpperCase());
+                      const myNhOrder = nhOrders.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
                       const myNhOrderPrice = myNhOrder ? parseFloat(myNhOrder.price) : 0;
                       const myOrderDiff = (myNhOrderPrice > 0) ? calculatePriceComparison(
                         mrrPriceNum,
                         rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH',
                         myNhOrderPrice,
-                        'TH' // NH orders for major algos are BTC/TH/Day
+                        myNhOrder?.marketUnit || 'TH'
                       ) : null;
 
                       return (
@@ -725,16 +726,28 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                 {hasNhPrice && (
                                   <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
 
+                                    {diffPercent !== null && (
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                        <span>Market:</span>
+                                        <span style={{ 
+                                          color: parseFloat(diffPercent) <= 0 ? '#34d399' : '#f87171', 
+                                          fontWeight: 'bold' 
+                                        }}>
+                                          {parseFloat(diffPercent) > 0 ? '+' : ''}{diffPercent}%
+                                        </span>
+                                      </div>
+                                    )}
+
                                     {myNhOrderPrice > 0 && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
                                         <span>
-                                          Current: <span style={{ fontWeight: 'bold' }}>
+                                          My Order: <span style={{ fontWeight: 'bold' }}>
                                             {myNhOrderPrice.toFixed(8)} BTC
                                           </span>
                                         </span>
                                         {myOrderDiff !== null && (
-                                          <span style={{ color: parseFloat(myOrderDiff) < 0 ? '#d33434' : '#2eff4a', fontWeight: 'bold' }}>
-                                            {parseFloat(myOrderDiff) < 0 ? '' : '+'}{myOrderDiff}%
+                                          <span style={{ color: parseFloat(myOrderDiff) > 0 ? '#f87171' : '#34d399', fontWeight: 'bold' }}>
+                                            {parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%
                                           </span>
                                         )}
                                       </div>

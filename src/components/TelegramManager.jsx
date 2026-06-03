@@ -206,22 +206,6 @@ export default function TelegramManager({ onCall, mrrClient }) {
     <div style={{ display: 'contents' }}>
       <button
         className="btn-pro secondary"
-        style={{ border: `1px solid ${isTelegramOn ? '#4caf50' : '#f44336'}`, color: isTelegramOn ? '#4caf50' : '#f44336', minWidth: '100px' }}
-        onClick={handleToggle}
-        title={isTelegramOn ? "Telegram alerts are active" : "Telegram alerts are disabled"}
-      >
-        TG: {isTelegramOn ? 'ON' : 'OFF'}
-      </button>
-      {/* <button
-        className="btn-pro secondary"
-        style={{ border: '1px solid #5472d3', color: '#5472d3' }}
-        onClick={() => setIsMonitorDbOpen(true)}
-        title="Open the interactive monitoring database editor"
-      >
-        Monitor DB
-      </button> */}
-      <button
-        className="btn-pro secondary"
         style={{ border: '1px solid #24A1DE', color: '#24A1DE' }}
         onClick={() => onCall('/api/v2/mrr/monitor/run', { method: 'POST', query: { client: mrrClient }, showModal: false })}
         title="Manually trigger heartbeat status for all active rentals"
@@ -234,12 +218,6 @@ export default function TelegramManager({ onCall, mrrClient }) {
       >
         Test Bot
       </button>
-
-      {/* <MonitorDbEditor 
-        isOpen={isMonitorDbOpen} 
-        onClose={() => setIsMonitorDbOpen(false)} 
-        onCall={onCall} 
-      /> */}
     </div>
   );
 }

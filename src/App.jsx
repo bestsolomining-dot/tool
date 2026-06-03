@@ -61,6 +61,7 @@ export default function App() {
     const adsHashrate = parseHashrateValue(info?.advertised || rig?.hashrate?.advertised || rig?.advertised || rig?.hashrate?.hash || rig?.hash || '');
     const avgHashrate = parseHashrateValue(info?.average || rig?.hashrate?.average || rig?.average || rig?.hash || '');
     const unit = inferUnitValue(info?.advertised || info?.average || rig?.hashrate?.advertised || rig?.hashrate?.average || rig?.hashrate?.suffix || rig?.hashrate_unit || rig?.hashrate?.type || '');
+    const nhPriceData = info?.nicehashPrice || rig?.nicehashPrice;
     const rawPrice = info?.price || rig?.price || rig?.min_price || null;
     const priceSource = rawPrice?.paid !== undefined
       ? { paid: rawPrice.paid, currency: rawPrice.currency || rawPrice.price_unit || 'BTC' }
@@ -78,6 +79,7 @@ export default function App() {
       initialPriceSource: priceSource,
       initialBtcPriceSource: btcPriceSource,
       initialPriceUnit: priceUnit,
+      initialNhPriceData: nhPriceData,
     });
     setCompletionModalOpen(true);
   }, []);

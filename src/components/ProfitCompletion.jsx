@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { getPriceData as getPriceDataUtils, getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils';
+import { getPriceData, getBtcPriceData, parsePriceValue } from '../core/priceUtils';
 
 function resolveUnit(value) {
   const map = { EH: 1e18, PH: 1e15, LN: 1e15, TH: 1e12, GH: 1e9, MH: 1e6, KH: 1e3, H: 1 };
@@ -16,65 +16,6 @@ function normalizeToDateTimeLocal(value) {
   if (Number.isNaN(date.getTime())) return '';
   const offsetMs = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
-}
-
-function parsePriceValue(price) {
-  if (price === undefined || price === null) return 0;
-  if (typeof price === 'number') return price;
-  if (typeof price === 'string') {
-    const cleaned = price.replace(/,/g, '').replace(/[^\d.-]/g, '');
-    return parseFloat(cleaned) || 0;
-  }
-  if (typeof price === 'object') {
-    const candidate = price.price ?? price.paid ?? price.advertised ?? price.amount ?? price.total;
-    if (candidate !== undefined) return parsePriceValue(candidate);
-    const nested = Object.values(price).find(val => typeof val === 'object' && (val.price !== undefined || val.paid !== undefined));
-    if (nested) return parsePriceValue(nested.price ?? nested.paid);
-  }
-  return 0;
-}
-
-function getPriceData(source) {
-  if (source === undefined || source === null) return { value: 0, currency: 'BTC' };
-  if (typeof source === 'number') return { value: source, currency: 'BTC' };
-  if (typeof source === 'string') return { value: parsePriceValue(source), currency: 'BTC' };
-
-  const obj = source;
-  if (typeof obj === 'object') {
-    const currency = String(obj.currency || obj.price_unit || 'BTC').toUpperCase();
-    if (obj.paid !== undefined) {
-      return { value: parsePriceValue(obj.paid), currency };
-    }
-    const directValue = obj.price ?? obj.advertised ?? obj.amount ?? obj.total;
-    if (directValue !== undefined) return { value: parsePriceValue(directValue), currency };
-
-    for (const key of Object.keys(obj)) {
-      if (key === 'currency' || key === 'price_unit') continue;
-      const value = parsePriceValue(obj[key]);
-      if (value > 0) return { value, currency: key.toUpperCase() };
-    }
-  }
-  return { value: 0, currency: 'BTC' };
-}
-
-function getBtcPriceData(source) {
-  const candidate = getPriceData(source);
-  if (candidate.currency === 'BTC' && candidate.value > 0) return candidate;
-  if (!source || typeof source !== 'object') return { value: candidate.value, currency: candidate.currency };
-
-  const nestedBtc = source.BTC || source.btc || source['BTC'] || source['btc'];
-  if (nestedBtc) {
-    const nestedData = getPriceData(nestedBtc);
-    if (nestedData.currency === 'BTC' && nestedData.value > 0) return nestedData;
-  }
-
-  const explicitSource = source.price ?? source.advertised ?? source.amount ?? source.total;
-  if (explicitSource) {
-    const fallback = getPriceData(explicitSource);
-    if (fallback.currency === 'BTC' && fallback.value > 0) return fallback;
-  }
-
-  return { value: candidate.value, currency: candidate.currency };
 }
 
 function parseHashrateValue(value) {
@@ -99,6 +40,7 @@ export default function HashCompletionCalculator({
   initialEndTime = '',
   initialPriceSource = null,
   initialBtcPriceSource = null,
+  initialNhPriceData = null,
   initialPriceUnit = 'TH',
 }) {
   const [algo, setAlgo] = useState(initialAlgo);
@@ -107,6 +49,7 @@ export default function HashCompletionCalculator({
   const [adsHashrate, setAdsHashrate] = useState(initialAdsHashrate);
   const [avgHashrate, setAvgHashrate] = useState(initialAvgHashrate);
   const [unit, setUnit] = useState(resolveUnit(initialUnit));
+  const [nhPriceData, setNhPriceData] = useState(initialNhPriceData);
 
   const units = [
     { label: 'EH/s', value: 1e18 },
@@ -140,6 +83,10 @@ export default function HashCompletionCalculator({
     setAvgHashrate(initialAvgHashrate || '');
   }, [initialAvgHashrate]);
 
+  useEffect(() => {
+    setNhPriceData(initialNhPriceData);
+  }, [initialNhPriceData]);
+
   const results = useMemo(() => {
     const start = new Date(startTime);
     const end = new Date(endTime);
@@ -164,8 +111,8 @@ export default function HashCompletionCalculator({
     const actualHashesDone = avg * (elapsedMs / 1000);
     const remainingHashesNeeded = Math.max(0, totalExpectedHashes - actualHashesDone);
 
-    const priceData = getPriceDataUtils(initialPriceSource);
-    const btcPriceData = getBtcPriceDataUtils(initialBtcPriceSource || initialPriceSource);
+    const priceData = getPriceData(initialPriceSource);
+    const btcPriceData = getBtcPriceData(initialBtcPriceSource || initialPriceSource);
     const adsValueTh = adsValue * (unit / 1e12);
     const durationDays = totalDurationMs / 86400000;
     const totalBtcCost = btcPriceData.isTotalCost
@@ -182,6 +129,25 @@ export default function HashCompletionCalculator({
 
     const currentOverallCompletion = totalExpectedHashes > 0 ? (actualHashesDone / totalExpectedHashes) * 100 : 0;
     const timeProgress = (elapsedMs / totalDurationMs) * 100;
+
+    // NiceHash Comparison logic
+    const nhMarketInfo = (() => {
+      const raw = nhPriceData?.price || nhPriceData || {};
+      const val = raw.fixedPrice ?? raw.standardPrice?.fast ?? raw.standardPrice ?? raw.price ?? 0;
+      const rate = typeof val === 'string' ? parseFloat(val) : val;
+      const unitStr = (raw.speedUnit || raw.unit || 'TH').toUpperCase();
+
+      // Normalize BTC/Unit/Day to BTC/TH/Day for consistent math
+      const normalizationMap = { EH: 1e6, PH: 1000, TH: 1, GH: 0.001, MH: 0.000001 };
+      const factor = normalizationMap[unitStr] || 1;
+
+      return { rate: rate / factor, displayRate: rate, unit: unitStr };
+    })();
+
+    const nhMarketRate = nhMarketInfo.rate;
+    const nhEstimatedCost = nhMarketRate * adsValueTh * durationDays;
+    const savingsBtc = nhEstimatedCost > 0 ? nhEstimatedCost - totalBtcCost : 0;
+    const savingsPercent = nhEstimatedCost > 0 ? (savingsBtc / nhEstimatedCost * 100) : 0;
 
     const remainingSeconds = remainingMs / 1000;
     const requiredHashrateRaw = remainingSeconds > 0 ? remainingHashesNeeded / remainingSeconds : 0;
@@ -201,10 +167,15 @@ export default function HashCompletionCalculator({
       rentalBtcCost: totalBtcCost,
       rentalBtcPerThPerDay,
       rentalBtcPerHash,
+      nhMarketRate,
+      nhMarketInfo,
+      nhEstimatedCost,
+      savingsBtc,
+      savingsPercent,
       priceUnit: initialPriceUnit || 'TH',
-      isBehind: currentOverallCompletion < 100 && elapsedMs > 0
+      isBehind: currentOverallCompletion < timeProgress && elapsedMs > 0
     };
-  }, [startTime, endTime, adsHashrate, avgHashrate, unit]);
+  }, [startTime, endTime, adsHashrate, avgHashrate, unit, nhPriceData, initialPriceSource, initialBtcPriceSource, initialPriceUnit]);
 
   return (
     <div className="hash-completion-calculator nh-theme" style={{ padding: '15px' }}>
@@ -257,8 +228,27 @@ export default function HashCompletionCalculator({
                 {results.currentOverallCompletion}%
               </div>
             </div>
-            <div className="stat-box" style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-              <div style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold', textTransform: 'uppercase' }}>Required Hashrate</div>
+            <div className="stat-box" style={{
+              background: results.savingsBtc >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              padding: '10px', borderRadius: '6px',
+              border: `1px solid ${results.savingsBtc >= 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
+            }}>
+              <div style={{
+                fontSize: '10px',
+                color: results.savingsBtc >= 0 ? '#34d399' : '#f87171',
+                fontWeight: 'bold', textTransform: 'uppercase'
+              }}>
+                {results.savingsBtc >= 0 ? 'Potential Savings' : 'Cost Overage'}
+              </div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+                {results.savingsPercent.toFixed(1)}%
+              </div>
+              <div style={{ fontSize: '9px', opacity: 0.7 }}>
+                {results.savingsBtc >= 0 ? 'Cheaper than NiceHash' : 'More expensive than NH'}
+              </div>
+            </div>
+            <div className="stat-box" style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(59, 130, 246, 0.2)', gridColumn: 'span 2' }}>
+              <div style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold', textTransform: 'uppercase' }}>Target Required Hashrate</div>
               <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#fff' }}>
                 {results.requiredHashrateFormatted} <span style={{ fontSize: '0.8rem' }}>{units.find(u => u.value === unit).label}</span>
               </div>
@@ -266,7 +256,18 @@ export default function HashCompletionCalculator({
             </div>
           </div>
 
-          <div style={{ marginTop: '20px', fontSize: '11px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '15px' }}>
+          <div style={{ marginTop: '20px', fontSize: '11px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '15px' }}>
+            <h4 style={{ margin: '0 0 10px 0', fontSize: '10px', opacity: 0.5, textTransform: 'uppercase' }}>NiceHash vs MRR Comparison</h4>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+              <span style={{ opacity: 0.6 }}>NH Market Rate:</span>
+              <span style={{ fontFamily: 'monospace' }}>{results.nhMarketInfo.displayRate.toFixed(8)} BTC/{results.nhMarketInfo.unit}/day</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ opacity: 0.6 }}>NH Estimated Cost:</span>
+              <span style={{ fontFamily: 'monospace' }}>{results.nhEstimatedCost.toFixed(8)} BTC</span>
+            </div>
+
+            <h4 style={{ margin: '0 0 10px 0', fontSize: '10px', opacity: 0.5, textTransform: 'uppercase' }}>Rental Cost Breakdown</h4>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
               <span style={{ opacity: 0.6 }}>Hashes Delivered:</span>
               <span style={{ fontFamily: 'monospace' }}>{(results.actualHashesDone / 1e12).toFixed(6)} T-Hashes</span>

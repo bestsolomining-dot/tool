@@ -734,7 +734,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
                                     {diffPercent !== null && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                                        <span>Market:</span>
+                                        <span>Market ({nhData?.speedUnit || nhData?.unit || 'TH'}):</span>
                                         <span style={{
                                           color: parseFloat(diffPercent) <= 0 ? '#34d399' : '#f87171',
                                           fontWeight: 'bold'
@@ -747,7 +747,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                     {myNhOrderPrice > 0 && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
                                         <span>
-                                          My Order: <span style={{ fontWeight: 'bold' }}>
+                                          My Order ({myNhOrder?.marketUnit || 'TH'}): <span style={{ fontWeight: 'bold' }}>
                                             {myNhOrderPrice.toFixed(8)} BTC
                                           </span>
                                         </span>

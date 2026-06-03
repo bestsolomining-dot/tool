@@ -42,7 +42,7 @@ export function initMrrConfigs(env) {
         };
       };
     }
-  }
+  });
 
   const defaultMrrClientRaw = String(env.MRR_DEFAULT_CLIENT || 'VN').trim().toUpperCase();
   defaultMrrClient = (function () {

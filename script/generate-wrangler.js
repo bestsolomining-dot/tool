@@ -27,6 +27,14 @@ const vars = {
   RIG_API_SECRET_BT: process.env.RIG_API_SECRET_BT,
   RIG_API_KEY_SL: process.env.RIG_API_KEY_SL,
   RIG_API_SECRET_SL: process.env.RIG_API_SECRET_SL,
+  MRR_KEY_RIG_BT: process.env.MRR_KEY_RIG_BT,
+  MRR_SECRET_RIG_BT: process.env.MRR_SECRET_RIG_BT,
+  MRR_KEY_RIG_SL: process.env.MRR_KEY_RIG_SL,
+  MRR_SECRET_RIG_SL: process.env.MRR_SECRET_RIG_SL,
+  MRR_KEY_RIG_LN: process.env.MRR_KEY_RIG_LN,
+  MRR_SECRET_RIG_LN: process.env.MRR_SECRET_RIG_LN,
+  MRR_DEFAULT_CLIENT: process.env.MRR_DEFAULT_CLIENT,
+  NH_DEFAULT_CLIENT: process.env.NH_DEFAULT_CLIENT,
 }
 
 const missingKeys = Object.entries(vars)

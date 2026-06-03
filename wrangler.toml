@@ -1,7 +1,7 @@
 # wrangler.toml
 name = "nh-tool"          # Change to your Worker's name
-main = "src/index.js"              # Path to your Worker script
-compatibility_date = "2025-03-01"  # Use a recent date
+main = "worker/index.js"              # Path to your Worker script
+compatibility_date = "2026-05-26"  # Use a recent date
 
 # Environment variables (plain text – not encrypted)
 [vars]

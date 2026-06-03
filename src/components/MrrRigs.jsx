@@ -747,7 +747,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                     {myNhOrderPrice > 0 && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
                                         <span>
-                                          My Order ({myNhOrder?.marketUnit || 'TH'}): <span style={{ fontWeight: 'bold' }}>
+                                          My Order ({myNhOrder?.marketUnit || ''}): <span style={{ fontWeight: 'bold' }}>
                                             {myNhOrderPrice.toFixed(8)} BTC
                                           </span>
                                         </span>

@@ -9,11 +9,6 @@ function escapeHtml(text) {
     .replace(/>/g, '&gt;');
 }
 
-export function calculateRemainingTime(endTime) {
-  if (!endTime) return null;
-  return sharedCalculateRemainingTime(endTime);
-}
-
 function getTelegramAccount(r, mrrClient) {
   const account = r?.mrrClient || r?.client || r?.account || mrrClient;
   if (!account) return 'N/A';
@@ -182,6 +177,10 @@ export default function TelegramManager({ onCall, mrrClient }) {
   const [isTelegramOn, setIsTelegramOn] = useState(true);
   const [health, setHealth] = useState(null);
 
+  const previewTestMessage = `⚡️ <b>Test Connection</b>\nTime: ${new Date().toLocaleTimeString()}\nClient: ${mrrClient}`;
+  const isConfigured = health?.configured !== false;
+  const statusLabel = health?.configured === false ? 'Missing Telegram credentials' : (isTelegramOn ? 'Notifications enabled' : 'Notifications disabled');
+
   // Fetch current notification status from server on mount
   useEffect(() => {
     onCall('/api/v2/notify/telegram/status', { method: 'GET', silent: true })
@@ -210,36 +209,72 @@ export default function TelegramManager({ onCall, mrrClient }) {
   };
 
   return (
-    <div style={{ display: 'contents' }}>
-      <button
-        className={`btn-pro ${isTelegramOn ? 'primary' : 'secondary'}`}
-        onClick={handleToggle}
-        title={health?.configured === false ? "Telegram not configured in .env" : (isTelegramOn ? "Notifications are ON" : "Notifications are OFF")}
-        style={{
-          background: !health?.configured ? 'rgba(100, 116, 139, 0.1)' : (isTelegramOn ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'),
-          borderColor: !health?.configured ? '#64748b' : (isTelegramOn ? '#10b981' : '#f87171'),
-          color: !health?.configured ? '#64748b' : (isTelegramOn ? '#10b981' : '#f87171'),
-          minWidth: '85px',
-          opacity: !health?.configured ? 0.5 : 1
-        }}
-        disabled={health?.configured === false}
-      >
-        {isTelegramOn ? '🔔 ON' : '🔕 OFF'}
-      </button>
-      <button
-        className="btn-pro secondary"
-        style={{ border: '1px solid #24A1DE', color: '#24A1DE' }}
-        onClick={() => onCall('/api/v2/mrr/monitor/run', { method: 'POST', query: { client: mrrClient }, showModal: false })}
-        title="Manually trigger heartbeat status for all active rentals"
-      >
-        Force Heartbeat
-      </button>
-      <button
-        className="btn-pro secondary"
-        onClick={() => sendTelegram(`⚡️ <b>Test Connection</b>\nTime: ${new Date().toLocaleTimeString()}\nClient: ${mrrClient}`, { showModal: true })}
-      >
-        Test Bot
-      </button>
+    <div style={{
+      display: 'grid',
+      gap: '10px',
+      minWidth: '300px',
+      padding: '14px',
+      borderRadius: '14px',
+      border: '1px solid rgba(148, 163, 184, 0.15)',
+      background: 'rgba(15, 23, 42, 0.8)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px' }}>Telegram Notifications</div>
+          <div style={{ fontSize: '12px', opacity: 0.7 }}>{statusLabel}</div>
+        </div>
+        <button
+          className={`btn-pro ${isTelegramOn ? 'primary' : 'secondary'}`}
+          onClick={handleToggle}
+          title={health?.configured === false ? 'Telegram not configured in .env' : (isTelegramOn ? 'Notifications are ON' : 'Notifications are OFF')}
+          style={{
+            background: !isConfigured ? 'rgba(100, 116, 139, 0.1)' : (isTelegramOn ? 'rgba(16, 185, 129, 0.14)' : 'rgba(239, 68, 68, 0.12)'),
+            borderColor: !isConfigured ? '#64748b' : (isTelegramOn ? '#10b981' : '#f87171'),
+            color: !isConfigured ? '#64748b' : (isTelegramOn ? '#10b981' : '#f87171'),
+            minWidth: '95px',
+            opacity: !isConfigured ? 0.55 : 1,
+          }}
+          disabled={!isConfigured}
+        >
+          {isTelegramOn ? '🔔 ON' : '🔕 OFF'}
+        </button>
+      </div>
+
+      <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}>
+        <button
+          className="btn-pro secondary"
+          style={{ border: '1px solid #24A1DE', color: '#24A1DE' }}
+          onClick={() => onCall('/api/v2/mrr/monitor/run', { method: 'POST', query: { client: mrrClient }, showModal: false })}
+          title="Manually trigger heartbeat status for active rentals"
+        >
+          Force Heartbeat
+        </button>
+        <button
+          className="btn-pro secondary"
+          onClick={() => sendTelegram(previewTestMessage, { showModal: true })}
+          title="Send a test Telegram message"
+        >
+          Test Bot
+        </button>
+        <button
+          className="btn-pro secondary"
+          onClick={() => setIsMonitorDbOpen(true)}
+          title="Inspect tracked rentals and reset monitor state"
+        >
+          Monitor DB
+        </button>
+      </div>
+
+      <div style={{ borderRadius: '10px', padding: '12px', background: 'rgba(71, 85, 105, 0.16)', fontSize: '12px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
+        {previewTestMessage}
+      </div>
+
+      <div style={{ display: 'grid', gap: '6px', fontSize: '12px', opacity: 0.8 }}>
+        <div><b>Configured:</b> {health?.tokenPresent ? 'Bot token OK' : 'Missing token'} · {health?.chatIdPresent ? 'Chat ID OK' : 'Missing chat ID'}</div>
+        <div>Notifications are sent for: <b>new rental</b>, <b>rental completion</b>, <b>low efficiency</b>, <b>zero hashrate</b>, and <b>end-of-rental</b> summaries.</div>
+      </div>
+
+      <MonitorDbEditor isOpen={isMonitorDbOpen} onClose={() => setIsMonitorDbOpen(false)} onCall={onCall} />
     </div>
   );
 }

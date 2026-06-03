@@ -115,13 +115,19 @@ export default function HashCompletionCalculator({
     const btcPriceData = getBtcPriceData(initialBtcPriceSource || initialPriceSource);
     const adsValueTh = adsValue * (unit / 1e12);
     const durationDays = totalDurationMs / 86400000;
+
+    const btcPriceUnitFactor = resolveUnit(btcPriceData.unit || initialPriceUnit || 'TH');
+    const btcPerThPerDay = btcPriceData.isPerHashRate
+      ? btcPriceData.value * (1e12 / btcPriceUnitFactor)
+      : 0;
+
     const totalBtcCost = btcPriceData.isTotalCost
       ? btcPriceData.value
       : (btcPriceData.isPerHashRate && adsValueTh > 0 && durationDays > 0)
-        ? btcPriceData.value * adsValueTh * durationDays
+        ? btcPerThPerDay * adsValueTh * durationDays
         : 0;
     const rentalBtcPerThPerDay = btcPriceData.isPerHashRate
-      ? btcPriceData.value
+      ? btcPerThPerDay
       : (adsValueTh > 0 && durationDays > 0)
         ? totalBtcCost / (adsValueTh * durationDays)
         : 0;

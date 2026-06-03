@@ -144,18 +144,24 @@ const TelegramManager = {
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
       `🔗 <a href="https://www.miningrigrentals.com/rentals/view/${r.id}">Open Rental</a>`,
 
-    finished: (fr) =>
+    finished: (fr, info) =>
       `🏁 <b>RENTAL COMPLETED</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
       `🏢 <b>Account</b>   <code>${escapeHtml(fr.client)}</code>\n` +
       `🖥 <b>Rig</b>       ${escapeHtml(fr.name || fr.id)}\n` +
       `🆔 <b>ID</b>        <code>${fr.id}</code>\n` +
-      `⚙️ <b>Algo</b>      <code>${escapeHtml(fr.algo)}</code>\n` +
+      `⚙️ <b>Algo</b>      <code>${escapeHtml(info?.algo || fr.algo || '')}</code>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `🎯 <b>Final Target</b>\n` +
-      `<code>${fr.target_100 ? fr.target_100.toFixed(2) : 'N/A'}</code>\n` +
+      `⚡ <b>Hashrate (avg / cur)</b>\n` +
+      `<code>${info?.niceAverageHashrate || 'N/A'} / ${info?.niceHashrate || 'N/A'}</code>\n` +
+      `\n` +
+      `🎯 <b>Efficiency</b>\n` +
+      `<b>${typeof info?.percent !== 'undefined' ? info.percent + '%' : 'N/A'}</b>\n` +
+      `\n` +
+      `💸 <b>Paid</b>\n` +
+      `<code>${info?.price?.paid || fr.price || '0.00'} ${info?.price?.currency || fr.currency || 'BTC'}</code>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `✅ Rental finished successfully.`,
+      `(Details may be partial if API did not return full rental info.)`,
   },
 };
 
@@ -666,7 +672,19 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     );
 
     for (const fr of finishedRentals) {
-      const finishMsg = TelegramManager.Templates.finished(fr);
+      let enriched = { ...fr };
+      try {
+        const res = await mrrApiCall({ endpoint: `/rental/${fr.id}`, clientNameRaw: fr.client });
+        if (res && res.statusCode === 200 && res.data) {
+          const d = res.data.data || res.data;
+          if (d && typeof d === 'object') enriched = { ...enriched, ...d };
+        }
+      } catch (e) {
+        // ignore API enrichment errors; still notify with DB info
+      }
+
+      const info = extractRentalInfo(enriched);
+      const finishMsg = TelegramManager.Templates.finished(enriched, info);
       await sendTelegramInternal(finishMsg).catch(e => console.warn(`[monitor] Finish notice failed: ${e.message}`));
       await dbRunAsync(`DELETE FROM rentals WHERE id = ?`, [fr.id]);
     }

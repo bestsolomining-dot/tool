@@ -11,8 +11,6 @@ import { extractRentalInfo, extractRigInfo } from './utils.js';
 /** Retrieves the global telegram notification status from the DB */
 export async function getTelegramStatus() {
   try {
-    // Defensive check: ensure table exists
-    await dbRunAsync("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
     const row = await dbGetAsync("SELECT value FROM settings WHERE key = 'telegram_enabled'");
     return { enabled: row ? row.value === 'true' : true }; // Default to true
   } catch (err) {
@@ -24,7 +22,6 @@ export async function getTelegramStatus() {
 /** Updates the global telegram notification status in the DB */
 export async function setTelegramStatus(enabled) {
   const val = enabled ? 'true' : 'false';
-  await dbRunAsync("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
   await dbRunAsync(
     "INSERT INTO settings (key, value) VALUES ('telegram_enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
     [val]
@@ -451,12 +448,17 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const rawStart = info.startTime;
         const rawEnd = info.endTime;
 
-        // MRR API provides timestamps in UTC without a suffix. 
-        // Forcing 'Z' or ' UTC' ensures cross-platform consistency.
-        const parseUtc = (d) => d ? new Date(String(d).endsWith('UTC') || String(d).endsWith('Z') ? d : d + ' UTC').getTime() : 0;
+        const parseToMs = (d) => {
+          if (!d) return 0;
+          if (typeof d === 'number') return d * 1000;
+          const s = String(d).trim();
+          if (/^\d+$/.test(s)) return parseInt(s, 10) * 1000;
+          const normalized = /\bUTC\b/i.test(s) || s.endsWith('Z') ? s : `${s} UTC`;
+          return new Date(normalized).getTime() || 0;
+        };
 
-        const startT = parseUtc(rawStart);
-        const endT = parseUtc(rawEnd);
+        const startT = parseToMs(rawStart);
+        const endT = parseToMs(rawEnd);
         
         const totalDurationMs = (startT > 0 && endT > 0) ? endT - startT : 0;
         const elapsedMs = startT > 0 ? Math.max(0, Math.min(now - startT, totalDurationMs)) : 0;
@@ -539,12 +541,13 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         }
 
         // Build line for summary heartbeat
-        const displayRem_s = Math.max(0, endT - now);
+        const remMs = endT > 0 ? (endT - now) : 0;
+        const displayRem_s = Math.max(0, remMs);
         const remD_s = Math.floor(displayRem_s / 86400000);
         const remH_s = Math.floor((displayRem_s % 86400000) / 3600000);
         const remM_s = Math.floor((displayRem_s % 3600000) / 60000);
-        
-        const remStr_s = displayRem_s <= 0 ? 'Finished' : (remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`);
+
+        const remStr_s = remMs <= 0 ? 'Finished' : (remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`);
 
         const perfEmoji = efficiency >= 98 ? '🟢' : (efficiency >= 70 ? '🟡' : '🔴');
         const algoTag = info.algo ? ` <code>${escapeHtml(info.algo).toUpperCase()}</code>` : '';

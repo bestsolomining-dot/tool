@@ -180,12 +180,19 @@ export default function TelegramManager({ onCall, mrrClient }) {
   const { sendTelegram } = useTelegram(onCall, mrrClient);
   const [isMonitorDbOpen, setIsMonitorDbOpen] = useState(false);
   const [isTelegramOn, setIsTelegramOn] = useState(true);
+  const [health, setHealth] = useState(null);
 
   // Fetch current notification status from server on mount
   useEffect(() => {
     onCall('/api/v2/notify/telegram/status', { method: 'GET', silent: true })
       .then(res => {
         if (res && typeof res.enabled === 'boolean') setIsTelegramOn(res.enabled);
+      })
+      .catch(() => {});
+
+    onCall('/api/v2/notify/telegram/health', { method: 'GET', silent: true })
+      .then(res => {
+        setHealth(res);
       })
       .catch(() => {});
   }, [onCall]);
@@ -204,6 +211,21 @@ export default function TelegramManager({ onCall, mrrClient }) {
 
   return (
     <div style={{ display: 'contents' }}>
+      <button
+        className={`btn-pro ${isTelegramOn ? 'primary' : 'secondary'}`}
+        onClick={handleToggle}
+        title={health?.configured === false ? "Telegram not configured in .env" : (isTelegramOn ? "Notifications are ON" : "Notifications are OFF")}
+        style={{
+          background: !health?.configured ? 'rgba(100, 116, 139, 0.1)' : (isTelegramOn ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'),
+          borderColor: !health?.configured ? '#64748b' : (isTelegramOn ? '#10b981' : '#f87171'),
+          color: !health?.configured ? '#64748b' : (isTelegramOn ? '#10b981' : '#f87171'),
+          minWidth: '85px',
+          opacity: !health?.configured ? 0.5 : 1
+        }}
+        disabled={health?.configured === false}
+      >
+        {isTelegramOn ? '🔔 ON' : '🔕 OFF'}
+      </button>
       <button
         className="btn-pro secondary"
         style={{ border: '1px solid #24A1DE', color: '#24A1DE' }}

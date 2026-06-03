@@ -34,6 +34,13 @@ export function initDatabase() {
         }
       });
 
+      db.run(`CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      )`, (err) => {
+        if (err) console.error(`[db] Failed to create settings table: ${err.message}`);
+      });
+
       db.run(`CREATE TABLE IF NOT EXISTS mrr_nonces (
         client TEXT PRIMARY KEY,
         last_nonce TEXT

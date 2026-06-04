@@ -40,7 +40,7 @@ const TelegramManager = {
   CONFIG: {
     ALERT_COOLDOWN_MS: 3600000,     // 1 hour cooldown for same alert type
     WARNING_RIG_THRESHOLD: 3,       // Threshold for multi-rig alert
-    RENTED_HEARTBEAT_MS: 300000,    // 5 minutes summary heartbeat
+    RENTED_HEARTBEAT_MS: 1800000,   // 30 minutes summary heartbeat
   },
   Templates: {
     rigStatusWarning: (acct, rig) =>
@@ -126,12 +126,12 @@ const TelegramManager = {
     rentedNotice: (hbType, r, info, acct, roi, remStr) =>
       `🟢 <b>${escapeHtml(hbType).toUpperCase()}</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `🆔 <b>Rental</b>    <code>#${r.id}</code>\n` +
+      `🆔 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
       `🏢 <b>Account</b>   <code>${escapeHtml(acct).toUpperCase()}</code>\n` +
       `⚙️ <b>Algo</b>      <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
       `⚡ <b>Hashrate</b>\n` +
-      `AVG : <code>${info.niceAverageHashrate}</code>\n` +
+      `ADV : <code>${info.niceAdvertisedHashrate}</code>\n` +
       `CUR : <code>${info.niceHashrate}</code>\n\n` +
       `🎯 <b>Efficiency</b>\n` +
       `<b>${info.percent}%</b>\n\n` +
@@ -162,6 +162,23 @@ const TelegramManager = {
       `<code>${info?.price?.paid || fr.price || '0.00'} ${info?.price?.currency || fr.currency || 'BTC'}</code>\n` +
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
       `(Details may be partial if API did not return full rental info.)`,
+
+    systemStarted: (accts) =>
+      `🤖 <b>System Started</b>\n` +
+      `Time: ${new Date().toLocaleString()}\n` +
+      `Monitoring: ${accts || 'None'}\n` +
+      `Heartbeat Interval: 30m\n` +
+      `Service is now active.`,
+
+    heartbeatSummary: (barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime) =>
+      `🏭 <b>Update Overview</b>\n\n` +
+      `${barChart}\n\n` +
+      `━━━━━━━━━━━━━━\n\n` +
+      `<code>❇️Online    ${String(onlineAll).padStart(4)} (💵 ${rentedAll} Rented )</code>\n` +
+      `<code>🛑Offline   ${String(offlineAll).padStart(4)} (${disabledAll} Disabled)</code>\n\n` +
+      `<b>Total ${totalAll}</b>\n\n` +
+      (activeRentalLines.length > 0 ? `━━━━━━━━━━━━━━\n<b>Active Rentals</b>\n\n` + activeRentalLines.join('\n\n') : '') +
+      `\n<i>Update at ${monitorTime}</i>`,
   },
 };
 
@@ -267,11 +284,7 @@ export async function initTelegramNotifications() {
   if (!status.enabled) return;
 
   const accts = Object.keys(mrrConfigs).filter(k => mrrConfigs[k].apiKey).join(', ');
-  const message = `🤖 <b>System Started</b>\n` +
-    `Time: ${new Date().toLocaleString()}\n` +
-    `Monitoring: ${accts || 'None'}\n` +
-    `Heartbeat Interval: 5m\n` +
-    `Service is now active.`;
+  const message = TelegramManager.Templates.systemStarted(accts);
 
   try {
     await sendTelegramInternal(message);
@@ -603,11 +616,15 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const remM_s = Math.floor((remainingMs % 3600000) / 60000);
 
         const remStr_s = isFinished_s ? 'Finished' : (remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`);
-        const perfEmoji = efficiency >= 98 ? '🟢' : (efficiency >= 70 ? '🟡' : '🔴');
-        const algoTag = info.algo ? ` <code>${escapeHtml(info.algo).toUpperCase()}</code>` : '';
+        const perfEmoji = efficiency >= 90 ? '🟢' : (efficiency >= 70 ? '🟡' : '🔴');
         // Only include active rentals in the summary list to reduce clutter
         if (!isFinished_s) {
-          activeRentalLines.push(`${perfEmoji} [${escapeHtml(acct)}] <b>${escapeHtml(r.name || r.id)}</b>${algoTag}\n    ${info.niceAverageHashrate} | ${remStr_s} left | <b>${info.percent}%</b>`);
+          activeRentalLines.push(
+            `${perfEmoji} [${escapeHtml(acct)}] 🧬 <code>${escapeHtml(info.algo)}</code>\n` +
+            `<b>${escapeHtml(r.name || r.id)}</b>\n` +
+            `<code>${info.niceHashrate} 🛜 ${info.niceAverageHashrate} 🛜 ${info.niceAdvertisedHashrate}</code>\n` +
+            `<b>${info.percent}%</b> 🚦 <b>${displayTarget.toUpperCase().toFixed(2)} ${info.hashrate.suffix}</b> 🚦 ${remStr_s}`
+          );
         }
 
         // Update database
@@ -652,7 +669,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             notifications.push({ id: r.id, status: 'Failed', error: tgErr.message });
           }
         } else {
-          notifications.push({ id: r.id, status: 'Skipped', reason: 'Throttle (10m)' });
+          notifications.push({ id: r.id, status: 'Skipped', reason: 'Already notified' });
         }
       }
     } catch (err) {
@@ -703,14 +720,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       return `<code>${am.name.padEnd(4)}${bar.padEnd(maxBarLen + 2)}${am.total}</code>`;
     }).join('\n');
 
-    const allSummaryMsg = `🏭 <b>Update Overview</b>\n\n` +
-      `${barChart}\n\n` +
-      `━━━━━━━━━━━━━━\n\n` +
-      `<code>Online   ${String(onlineAll).padStart(4)} (${rentedAll} Rented)</code>\n` +
-      `<code>Offline  ${String(offlineAll).padStart(4)} (${disabledAll} Disabled)</code>\n\n` +
-      `<b>Total ${totalAll}</b>\n\n` +
-      (activeRentalLines.length > 0 ? `━━━━━━━━━━━━━━\n<b>Active Rentals</b>\n` + activeRentalLines.join('\n') : '') +
-      `\n<i>Update at ${monitorTime}</i>`;
+    const allSummaryMsg = TelegramManager.Templates.heartbeatSummary(barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime);
 
     try {
       await sendTelegramInternal(allSummaryMsg);

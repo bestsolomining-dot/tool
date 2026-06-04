@@ -37,3 +37,13 @@ orders.csv
 wrangler.toml
 mrr_monitor.db-wal
 *.db-wal
+mrr_monitor.db
+mrr_monitor.db-shm
+mrr_monitor.db-wal
+node_modules/.vite/deps/_metadata.json
+orders.csv
+orders.csv
+node_modules/.vite/deps/_metadata.json
+mrr_monitor.db-wal
+mrr_monitor.db-shm
+mrr_monitor.db

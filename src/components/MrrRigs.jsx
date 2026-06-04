@@ -595,7 +595,11 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
                       const displayPriceData = getPriceDataLocal(rig.price || info?.price || rig.min_price);
                       const displayPrice1000 = displayPriceData.value;
-                      const displayPrice = displayPrice1000 * 1000; // Convert from mBTC to BTC if needed
+                      const BASE_UNIT_FACTOR = 1000; // API returns price per 1000 hashes for most algos
+                      const isEquihash = algoName.toLowerCase() === 'equihash';
+                      const displayPrice = isEquihash 
+                        ? displayPrice1000 
+                        : displayPrice1000 * BASE_UNIT_FACTOR;//
                       const displayPriceCurrency = displayPriceData.currency || 'BTC';
                       const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid);
                       const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || '';
@@ -641,12 +645,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       // Find our specific active NiceHash order for this algorithm
                       const myNhOrder = nhOrders.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
                       const myNhOrderPrice = myNhOrder ? parseFloat(myNhOrder.price) : 0;
-                      // const myOrderDiff = (myNhOrderPrice > 0) ? calculatePriceComparison(
-                      //   mrrPriceNum,
-                      //   rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || '',
-                      //   myNhOrderPrice,
-                      //   myNhOrder?.marketUnit || ''
-                      // ) : null;
+                      
                       const myOrderDiff = myNhOrderPrice > 0
                         ? ((displayPrice - myNhOrderPrice) / myNhOrderPrice) * 100
                         : 0;
@@ -874,7 +873,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                   {loadingInfoIds.has(rig.id) ? '...' : '↻'}
                                 </button>
                               )}
-
                               <button
                                 className="btn-pro"
                                 style={{ flex: 1, fontSize: '10px', padding: '4px' }}

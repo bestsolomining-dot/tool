@@ -135,7 +135,13 @@ export function extractRentalInfo(rental) {
   let hashrateSuffix = '';
 
   if (hr && typeof hr === 'object') {
-    currentHash = parseFloat(hr.hashrate || hr.current || hr.hash || 0);
+    // Prioritize specific MRR time windows if standard 'current' is missing
+    currentHash = parseFloat(
+      hr.hashrate || 
+      hr.current || 
+      hr.hash || 
+      (hr.last_15min && typeof hr.last_15min === 'object' ? hr.last_15min.hash : hr.last_15min) || 
+      0);
 
     if (hr.advertised && typeof hr.advertised === 'object') {
       advertisedHash = parseFloat(hr.advertised.hash || hr.advertised.hashrate || 0);
@@ -156,10 +162,12 @@ export function extractRentalInfo(rental) {
     currentHash = parseFloat(hr);
   }
 
+  const niceAdvertisedHashrate = (hr && typeof hr === 'object' && hr.advertised?.nice) ||
+    (advertisedHash > 0 ? `${advertisedHash} ${hashrateSuffix}`.trim() : '0 N/A');
+
   const niceHashrate = (hr && typeof hr === 'object' && hr.nice) ||
-    (hr && typeof hr === 'object' && hr.advertised?.nice) ||
-    (advertisedHash > 0 ? `${advertisedHash} ${hashrateSuffix}`.trim() :
-      (currentHash > 0 ? `${currentHash} ${hashrateSuffix}`.trim() : '0 N/A'));
+    (hr && typeof hr === 'object' && hr.last_15min?.nice) ||
+    (currentHash > 0 ? `${currentHash} ${hashrateSuffix}`.trim() : '0 N/A');
 
   const niceAverageHashrate = (hr && typeof hr === 'object' && hr.average?.nice) ||
     (averageHash > 0 ? `${averageHash.toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');
@@ -187,6 +195,7 @@ export function extractRentalInfo(rental) {
     },
     niceHashrate,
     niceAverageHashrate,
+    niceAdvertisedHashrate,
   };
 }
 

@@ -496,24 +496,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     return '';
   };
 
-  const getRoiColor = (value) => {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return '#94a3b8';
-
-    const clamped = Math.max(-100, Math.min(100, num));
-    if (clamped === 0) return '#fbbf24';
-
-    if (clamped > 0) {
-      const t = Math.min(1, clamped / 100);
-      const hue = 48 + (72 * t);
-      return `hsl(${hue}, 95%, 58%)`;
-    }
-
-    const t = Math.min(1, Math.abs(clamped) / 100);
-    const hue = 8 + (40 * (1 - t));
-    return `hsl(${hue}, 92%, 58%)`;
-  };
-
   return (
     <div className="mrr-rigs-dashboard">
       <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '15px' }}>
@@ -772,12 +754,15 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                     {myNhOrderPrice > 0 && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
                                         <span>
-                                          ROI: <span style={{ fontWeight: 'bold' }}>
-                                            <span style={{ color: getRoiColor(myOrderDiff) }}>
-                                              {myOrderDiff > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%
-                                            </span>
+                                          Order: <span style={{ fontWeight: 'bold' }}>
+                                            {myNhOrderPrice.toFixed(8)} BTC
                                           </span>
                                         </span>
+                                        {myOrderDiff !== null && (
+                                          <span style={{ color: parseFloat(myOrderDiff) > 0 ? '#22ff0e' : '#d33434', fontWeight: 'bold' }} title="vs Rental Price">
+                                            {parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%
+                                          </span>
+                                        )}
                                       </div>
                                     )}
                                   </div>

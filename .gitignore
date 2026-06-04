@@ -35,3 +35,5 @@ mrr_monitor.db-wal
 node_modules/.vite/deps/_metadata.json
 orders.csv
 wrangler.toml
+mrr_monitor.db-wal
+*.db-wal

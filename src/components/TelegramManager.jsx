@@ -25,61 +25,203 @@ function getPaidAmount(r) {
   return `${val} ${currency}`;
 }
 
+const divider = '━━━━━━━━━━━━━━━━━━━━━━';
 const TelegramTemplates = {
   newRental: (account, r, paid, startStr, endStr) => `🚀 <b>[New Rental]</b>\n` +
     `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
     `<b>Algo:</b> <code>${escapeHtml(r.algo || r.rig?.type || 'N/A')}</code>\n` +
     `<b>Time:</b> ${startStr} - ${endStr}\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Paid:</b> ${paid}\n` +
     `<i>Rental has been successfully initialized.</i>`,
 
   zeroHashrate: (account, r, elapsedMs, paid) => `🚨 <b>[Critical] Zero Hashrate!</b>\n` +
     `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
     `<b>Duration:</b> ${Math.round(elapsedMs / 1000)}s\n` +
     `<b>Efficiency:</b> <b>0%</b>\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Paid:</b> ${paid}`,
 
   lowEfficiency: (account, r, avg, suffix, efficiency, remainingMs, paid) => `⚠️ <b>[Alert] Low Efficiency</b>\n` +
     `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
     `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
     `<b>Left:</b> ${Math.round(remainingMs / 60000)}m\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Paid:</b> ${paid}`,
 
   startup: (account, r, avg, suffix, efficiency, paid) => `🚀 <b>[Startup Alert]</b>\n` +
     `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
     `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Paid:</b> ${paid}`,
 
   completion: (account, r, avg, suffix, efficiency, paid) => `🏁 <b>[Completion Alert]</b>\n` +
     `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
     `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Paid:</b> ${paid}`,
 
+  systemStarted: (accts) =>
+    `🤖 <b>System Started</b>\n` +
+    `Time: ${new Date().toLocaleString()}\n` +
+    `Monitoring: ${accts || 'None'}\n` +
+    `Heartbeat Interval: 30m\n` +
+    `Service is now active.`,
+
+  rigStatusWarning: (acct, rig) =>
+    `🟠 <b>RIG WARNING</b>\n` +
+    `${divider}\n` +
+    `🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n` +
+    `🖥 <b>${escapeHtml(rig.name)}</b>\n` +
+    `🆔 <code>${rig.id}</code>\n` +
+    `⚙️ <code>${escapeHtml(rig.algo || rig.type)}</code>\n` +
+    `📡 <b>Status</b> <b>WARNING</b>\n` +
+    `${divider}\n` +
+    `⚠️ Connectivity issue detected.\n` +
+    `Please verify miner, pool, network and local machine status.`,
+
+  highWarningCount: (acct, count) =>
+    `🚨 <b>MULTI-RIG ALERT</b>\n` +
+    `${divider}\n` +
+    `🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n` +
+    `📊 <b>Affected</b>  <b>${count}</b> rigs\n` +
+    `${divider}\n` +
+    `⚠️ Large number of rigs are reporting warnings.\n` +
+    `Immediate investigation recommended.`,
+
+  efficiency: (acct, r, info, efficiency, displayTarget) =>
+    `🟠 <b>ALERT < 50% efficiency for more than 15 minutes</b>\n` +
+    `${divider}\n` +
+    `🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n` +
+    `🖥 ${escapeHtml(r.name || r.id)}\n` +
+    `🆔<code>${r.id}</code>\n` +
+    `⚙️<code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+    `${divider}\n` +
+    `🎯 <b>Target</b>\n` +
+    `<code>${displayTarget.toFixed(2)} ${info.hashrate.suffix}</code>\n\n` +
+    `📉 <b>Efficiency</b>\n` +
+    `<b>${efficiency.toFixed(1)}%</b>`,
+
+  zeroHashrate: (acct, r, info) =>
+    `🔴 <b>CRITICAL HASHRATE LOSS</b>\n` +
+    `${divider}\n` +
+    `🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n` +
+    `🖥  ${escapeHtml(r.name || r.id)}\n` +
+    `🆔 <code>${r.id}</code>\n` +
+    `⚙️ <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+    `${divider}\n` +
+    `💸 <b>Paid</b>\n` +
+    `<code>${info.price?.paid || '0.00'} ${info.price?.currency || 'BTC'}</code>\n` +
+    `${divider}\n` +
+    `❌ Zero accepted hashrate detected for over 5 minutes.\n` +
+    `Immediate action required.`,
+
+  startup: (acct, r, info, efficiency, displayTarget) =>
+    `🟠 <b>STARTUP PERFORMANCE ALERT</b>\n` +
+    `${divider}\n` +
+    `🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n` +
+    `🖥 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
+    `🆔 <b>ID</b>  <code>${r.id}</code>\n` +
+    `⚙️  <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+    `${divider}\n` +
+    `🎯 <b>Target</b>\n` +
+    `<code>${displayTarget.toFixed(2)} ${info.hashrate.suffix}</code>\n\n` +
+    `📉 <b>Efficiency</b>\n` +
+    `<b>${efficiency.toFixed(1)}%</b>\n` +
+    `${divider}\n` +
+    `⚠️ Below 70% efficiency during first rental hour.`,
+
+  completionAlert: (acct, r, info, efficiency, displayTarget) =>
+    `🟠 <b>FINAL HOUR ALERT</b>\n` +
+    `${divider}\n` +
+    `🏢 <b>Account</b> <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n` +
+    `🖥 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
+    `🆔 <b>ID</b>  <code>${r.id}</code>\n` +
+    `⚙️  <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+    `${divider}\n` +
+    `🎯 <b>Target</b>\n` +
+    `<code>${displayTarget.toFixed(2)} ${info.hashrate.suffix}</code>\n\n` +
+    `📉 <b>Efficiency</b>\n` +
+    `<b>${efficiency.toFixed(1)}%</b>\n` +
+    `${divider}\n` +
+    `⚠️ Efficiency dropped below 70% during the final hour.`,
+
+  rentedNotice: (hbType, r, info, acct, roi, remStr) =>
+    `🟢 <b>${escapeHtml(hbType).toUpperCase()}</b>\n` +
+    `${divider}\n` +
+    `🆔 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
+    `🏢 <b>Account</b> <b><u>[<code>${escapeHtml(acct).toUpperCase()}</code>]</u></b>\n` +
+    `⚙️  <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+    `${divider}\n` +
+    `⚡ <b>Hashrate</b>\n` +
+    `ADV : <code>${info.niceAdvertisedHashrate}</code>\n` +
+    `AVG : <code>${info.niceAverageHashrate}</code>\n` +
+    `CUR : <code>${info.niceHashrate}</code>\n\n` +
+    `🎯 <b>Efficiency</b>\n` +
+    `<b>${info.percent}%</b>\n\n` +
+    `${roi >= 0 ? '🟢' : '🔴'} <b>ROI</b>\n` +
+    `<b>${roi >= 0 ? '+' : ''}${roi}%</b>\n\n` +
+    `⏳ <b>Remaining</b>\n` +
+    `<code>${remStr}</code>\n\n` +
+    `💸 <b>Paid</b>\n` +
+    `<code>${info.price?.paid || '0.00'} ${info.price?.currency || 'BTC'}</code>\n` +
+    `${divider}\n` +
+    `🔗 <a href="https://www.miningrigrentals.com/rentals/view/${r.id}">Open Rental</a>`,
+
+  finished: (fr, info) =>
+    `🏁 <b>RENTAL COMPLETED</b>\n` +
+    `${divider}\n` +
+    `🏢<code>${escapeHtml(fr.client)}</code>\n` +
+    `🖥 <b>Effect</b>${escapeHtml(fr.name || fr.id)}\n` +
+    `🆔<code>${fr.id}</code>\n` +
+    `⚙️<code>${escapeHtml(info?.algo || fr.algo || '')}</code>\n` +
+    `${divider}\n` +
+    `⚡ <b>Hashrate (avg / cur)</b>\n` +
+    `<code>${info?.niceAverageHashrate || 'N/A'} / ${info?.niceHashrate || 'N/A'}</code>\n` +
+    `\n` +
+    `🎯 <b>Efficiency</b>\n` +
+    `<b>${typeof info?.percent !== 'undefined' ? info.percent + '%' : 'N/A'}</b>\n` +
+    `\n` +
+    `💸 <b>Paid</b>\n` +
+    `<code>${info?.price?.paid || fr.price || '0.00'} ${info?.price?.currency || fr.currency || 'BTC'}</code>\n` +
+    `${divider}\n` +
+    `(Details may be partial if API did not return full rental info.)`,
+
+  heartbeatSummary: (barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime) =>
+    `📊 <b>[Summary]</b>\n` +
+    `<b>Time:</b> <code>${escapeHtml(monitorTime || 'N/A')}</code>\n` +
+    `${divider}\n` +
+    `<b>Total</b> <code>${String(totalAll).padStart(4)}</code> ` +
+    `(<b>Disabled</b> <code>${String(disabledAll).padStart(4)}</code>)\n` +
+    `<b>Online</b> <code>${String(onlineAll).padStart(4)}</code> ` +
+    `(<b>Offline</b> <code>${String(offlineAll).padStart(4)}</code>)\n` +
+    `♻️ <b>Rented</b> <code>${String(rentedAll).padStart(4)}</code>\n` +
+    `${barChart ? `${barChart}\n` : ''}` +
+    `${divider}\n` +
+    `<b>Active Rentals</b>\n` +
+    `${activeRentalLines.length > 0 ? activeRentalLines.join('\n') : '<i>No active rentals</i>'}\n` +
+    `<i>Update at ${monitorTime}</i>`,
+
   manualNotice: (r, account, avg, suffix, roi, remStr, progress, paid) => `💎 <b>[RENTED] #${r.id}</b>\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Algo:</b> <code>${escapeHtml(r.rig?.type || r.algo || 'N/A').toUpperCase()}</code>\n` +
     `<b>Acct:</b> <code>${escapeHtml(account).toUpperCase()}</code>\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<b>Hash:</b> <code>${avg.toFixed(2)} ${suffix}</code>\n` +
-    `<b>ROI:</b> <code>${roi >= 0 ? '+' : ''}${roi}%</code>\n` +
+    `${roi >= 0 ? '🟢' : '🔴'} <b>ROI:</b> <code>${roi >= 0 ? '+' : ''}${roi}%</code>\n` +
     `<b>Time:</b> <code>${remStr} left (${progress}%)</code>\n` +
     `<b>Paid:</b> <code>${paid}</code>\n` +
-    `━━━━━━━━━━━━━━\n` +
+    `${divider}\n` +
     `<a href="https://www.miningrigrentals.com/rentals/view/${r.id}">[Open in MRR]</a>`
 };
 
@@ -175,152 +317,11 @@ export default function TelegramManager({ onCall, mrrClient }) {
 
   const Manager = {
     CONFIG: {
-      ALERT_COOLDOWN_MS: 3600000,     // 1 hour cooldown for same alert type
-      WARNING_RIG_THRESHOLD: 3,       // Threshold for multi-rig alert
-      RENTED_HEARTBEAT_MS: 1800000,   // 30 minutes summary heartbeat
+      ALERT_COOLDOWN_MS: 3600000,
+      WARNING_RIG_THRESHOLD: 3,
+      RENTED_HEARTBEAT_MS: 1800000,
     },
-    Templates: {
-      rigStatusWarning: (acct, rig) =>
-        `🟠 <b>RIG WARNING</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🏢 <b>Account</b>  <code>${escapeHtml(acct)}</code>\n` +
-        `🖥 <b>Rig</b>      ${escapeHtml(rig.name)}\n` +
-        `🆔 <b>ID</b>       <code>${rig.id}</code>\n` +
-        `⚙️ <b>Algo</b>     <code>${escapeHtml(rig.algo || rig.type)}</code>\n` +
-        `📡 <b>Status</b>   <b>WARNING</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `⚠️ Connectivity issue detected.\n` +
-        `Please verify miner, pool, network and local machine status.`,
-
-      highWarningCount: (acct, count) =>
-        `🚨 <b>MULTI-RIG ALERT</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🏢 <b>Account</b>   <code>${escapeHtml(acct)}</code>\n` +
-        `📊 <b>Affected</b>  <b>${count}</b> rigs\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `⚠️ Large number of rigs are reporting warnings.\n` +
-        `Immediate investigation recommended.`,
-
-      efficiency: (acct, r, info, efficiency, displayTarget) =>
-        `🟠 <b>ALERT < 50% efficiency for more than 15 minutes</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🏢 <b>Account</b>   <code>${escapeHtml(acct)}</code>\n` +
-        `🖥 ${escapeHtml(r.name || r.id)}\n` +
-        `🆔<code>${r.id}</code>\n` +
-        `⚙️<code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🎯 <b>Target</b>\n` +
-        `<code>${displayTarget.toFixed(2)} ${info.hashrate.suffix}</code>\n\n` +
-        `📉 <b>Efficiency</b>\n` +
-        `<b>${efficiency.toFixed(1)}%</b>`,
-
-      zeroHashrate: (acct, r, info) =>
-        `🔴 <b>CRITICAL HASHRATE LOSS</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🏢 <b>Account</b>   <code>${escapeHtml(acct)}</code>\n` +
-        `🖥 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
-        `🆔 <b>ID</b>        <code>${r.id}</code>\n` +
-        `⚙️ <b>Algo</b>      <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `💸 <b>Paid</b>\n` +
-        `<code>${info.price?.paid || '0.00'} ${info.price?.currency || 'BTC'}</code>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `❌ Zero accepted hashrate detected for over 5 minutes.\n` +
-        `Immediate action required.`,
-
-      startup: (acct, r, info, efficiency, displayTarget) =>
-        `🟠 <b>STARTUP PERFORMANCE ALERT</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🏢 <b>Account</b>   <code>${escapeHtml(acct)}</code>\n` +
-        `🖥 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
-        `🆔 <b>ID</b>        <code>${r.id}</code>\n` +
-        `⚙️ <b>Algo</b>      <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🎯 <b>Target</b>\n` +
-        `<code>${displayTarget.toFixed(2)} ${info.hashrate.suffix}</code>\n\n` +
-        `📉 <b>Efficiency</b>\n` +
-        `<b>${efficiency.toFixed(1)}%</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `⚠️ Below 70% efficiency during first rental hour.`,
-
-      completion: (acct, r, info, efficiency, displayTarget) =>
-        `🟠 <b>FINAL HOUR ALERT</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🏢 <b>Account</b>   <code>${escapeHtml(acct)}</code>\n` +
-        `🖥 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
-        `🆔 <b>ID</b>        <code>${r.id}</code>\n` +
-        `⚙️ <b>Algo</b>      <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🎯 <b>Target</b>\n` +
-        `<code>${displayTarget.toFixed(2)} ${info.hashrate.suffix}</code>\n\n` +
-        `📉 <b>Efficiency</b>\n` +
-        `<b>${efficiency.toFixed(1)}%</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `⚠️ Efficiency dropped below 70% during the final hour.`,
-
-      rentedNotice: (hbType, r, info, acct, roi, remStr) =>
-        `🟢 <b>${escapeHtml(hbType).toUpperCase()}</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🆔 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
-        `🏢 <b>Account</b>   <code>${escapeHtml(acct).toUpperCase()}</code>\n` +
-        `⚙️ <b>Algo</b>      <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `⚡ <b>Hashrate</b>\n` +
-        `ADV : <code>${info.niceAdvertisedHashrate}</code>\n` +
-        `AVG : <code>${info.niceAverageHashrate}</code>\n` +
-        `CUR : <code>${info.niceHashrate}</code>\n\n` +
-        `🎯 <b>Efficiency</b>\n` +
-        `<b>${info.percent}%</b>\n\n` +
-        `💰 <b>ROI</b>\n` +
-        `<b>${roi >= 0 ? '+' : ''}${roi}%</b>\n\n` +
-        `⏳ <b>Remaining</b>\n` +
-        `<code>${remStr}</code>\n\n` +
-        `💸 <b>Paid</b>\n` +
-        `<code>${info.price?.paid || '0.00'} ${info.price?.currency || 'BTC'}</code>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🔗 <a href="https://www.miningrigrentals.com/rentals/view/${r.id}">Open Rental</a>`,
-
-      finished: (fr, info) =>
-        `🏁 <b>RENTAL COMPLETED</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `🏢<code>${escapeHtml(fr.client)}</code>\n` +
-        `🖥 <b>Effect</b>${escapeHtml(fr.name || fr.id)}\n` +
-        `🆔<code>${fr.id}</code>\n` +
-        `⚙️<code>${escapeHtml(info?.algo || fr.algo || '')}</code>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `⚡ <b>Hashrate (avg / cur)</b>\n` +
-        `<code>${info?.niceAverageHashrate || 'N/A'} / ${info?.niceHashrate || 'N/A'}</code>\n` +
-        `\n` +
-        `🎯 <b>Efficiency</b>\n` +
-        `<b>${typeof info?.percent !== 'undefined' ? info.percent + '%' : 'N/A'}</b>\n` +
-        `\n` +
-        `💸 <b>Paid</b>\n` +
-        `<code>${info?.price?.paid || fr.price || '0.00'} ${info?.price?.currency || fr.currency || 'BTC'}</code>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `(Details may be partial if API did not return full rental info.)`,
-
-      systemStarted: (accts) =>
-        `🤖 <b>System Started</b>\n` +
-        `Time: ${new Date().toLocaleString()}\n` +
-        `Monitoring: ${accts || 'None'}\n` +
-        `Heartbeat Interval: 30m\n` +
-        `Service is now active.`,
-
-      heartbeatSummary: (barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime) =>
-        `📊 <b>[Heartbeat Summary]</b>\n` +
-        `<b>Time:</b> <code>${escapeHtml(monitorTime || 'N/A')}</code>\n` +
-        `━━━━━━━━━━━━━━\n` +
-        `<b>Total</b> <code>${String(totalAll).padStart(4)}</code> ` +
-        `(<b>Disabled</b> <code>${String(disabledAll).padStart(4)}</code>)\n` +
-        `<b>Online</b> <code>${String(onlineAll).padStart(4)}</code> ` +
-        `(<b>Offline</b> <code>${String(offlineAll).padStart(4)}</code>)\n` +
-        `♻️ <b>Rented</b> <code>${String(rentedAll).padStart(4)}</code>\n` +
-        `${barChart ? `${barChart}\n` : ''}` +
-        `━━━━━━━━━━━━━━\n` +
-        `<b>Active Rentals</b>\n` +
-        `${activeRentalLines.length > 0 ? activeRentalLines.join('\n\n━━━━━━━━━━━━━━\n') : '<i>No active rentals</i>'}\n` +
-        `<i>Update at ${monitorTime}</i>`,
-    },
+    Templates: TelegramTemplates,
   };
   const { sendTelegram } = useTelegram(onCall, mrrClient);
   const [isMonitorDbOpen, setIsMonitorDbOpen] = useState(false);

@@ -22,7 +22,8 @@
 	"bin": "index.js",
 	"pkg": {
 		"assets": [
-			"dist/client/**/*"
+			"dist/client/**/*",
+			"src/components/TelegramManager.jsx"
 		],
 		"targets": [
 			"node18-win-x64"

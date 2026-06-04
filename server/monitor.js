@@ -485,12 +485,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         // Only include active rentals in the summary list to reduce clutter
         if (!isFinished_s) {
           activeRentalLines.push(
-            `${divider}\n` +
-            `${perfEmoji} [${escapeHtml(acct)}] 🧬 <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+            `${perfEmoji} [<b><u>${escapeHtml(acct)}</u></b>] 🧬 <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
             `<b>${escapeHtml(r.name || r.id)}</b>\n\n` +
-            `<b>📊AVG ${info.niceAverageHashrate}</b>\n` +
-            `<b>🎯ADS ${info.niceAdvertisedHashrate} | ${info.percent}% </b>\n` +
-            `🛜<b>15M {info.niceHashrate}H</b> 🚦 <b>${displayTarget.toFixed(2)} ${info.hashrate.suffix.toUpperCase()}</b> 🚦 ${remStr_s} to end...\n` +
+            `<b><b>🎯Effect ${info.percent}%</b>\n` +
+            `📊Avg ${info.niceAverageHashrate}H | Ads ${info.niceAdvertisedHashrate}H</b>\n` +
+            `🛜<b>15M ${info.niceHashrate}H</b> 🧲 <b>Target ${displayTarget.toFixed(2)} ${info.hashrate.suffix.toUpperCase()}</b>\n` +
+            `⏰<b>${remStr_s} to end </b>\n` +
             `${divider}\n`
           );
         }

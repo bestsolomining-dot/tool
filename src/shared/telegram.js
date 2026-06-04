@@ -1,7 +1,11 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 export const TELEGRAM_CONFIG = {
-  ALERT_COOLDOWN_MS: 15 * 60 * 1000,
+  ALERT_COOLDOWN_MS: 10 * 60 * 1000,
   WARNING_RIG_THRESHOLD: 3,
-  RENTED_HEARTBEAT_MS: 15 * 60 * 1000,
+  RENTED_HEARTBEAT_MS: 60 * 60 * 1000,
 };
 
 export function escapeHtml(text) {
@@ -11,158 +15,65 @@ export function escapeHtml(text) {
     .replace(/>/g, '&gt;');
 }
 
-function formatAccount(account) {
+export function formatAccount(account) {
   return escapeHtml(account || 'N/A');
 }
 
-function formatRig(r) {
+export function formatRig(r) {
   return `${escapeHtml(r?.name || r?.id || 'N/A')} (<code>${escapeHtml(r?.id || 'N/A')}</code>)`;
 }
 
-function formatHashrate(value, suffix) {
+export function formatHashrate(value, suffix) {
   const num = Number.parseFloat(value || 0);
   if (!Number.isFinite(num) || num <= 0) return '0 N/A';
   return `${num.toFixed(2)} ${suffix || ''}`.trim();
 }
 
-function formatTimeRange(start, end) {
+export function formatTimeRange(start, end) {
   return `${start || 'N/A'} - ${end || 'N/A'}`;
 }
 
-export const TelegramTemplates = {
-  systemStarted(accts) {
-    const accounts = accts || 'N/A';
-    return `🚀 <b>[System Started]</b>\n` +
-      `<b>Accounts:</b> <code>${escapeHtml(accounts)}</code>\n` +
-      `All monitoring services are now active.`;
-  },
+const telegramManagerPath = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../components/TelegramManager.jsx'
+);
 
-  rigStatusWarning(account, rig) {
-    return `⚠️ <b>[Rig Warning]</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Rig:</b> ${formatRig(rig)}\n` +
-      `<i>Rig status changed to WARNING.</i>`;
-  },
+const TELEGRAM_TEMPLATE_START = 'const TelegramTemplates = {';
+const TELEGRAM_TEMPLATE_END_MARKERS = [
+  '\r\n};\r\n\r\nexport function useTelegram',
+  '\n};\n\nexport function useTelegram',
+];
 
-  highWarningCount(account, warningCount) {
-    return `⚠️ <b>[High Warning Count]</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Warnings:</b> <code>${Number(warningCount || 0)}</code>\n` +
-      `<i>Multiple rigs are reporting warnings.</i>`;
-  },
+let cachedTelegramTemplates = null;
 
-  efficiency(account, r, info, efficiency, displayTarget) {
-    return `⚠️ <b>[Alert] Low Efficiency</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Rig:</b> ${formatRig(r)}\n` +
-      `<b>Algo:</b> <code>${escapeHtml(info?.algo || 'N/A')}</code>\n` +
-      `<b>Avg:</b> ${formatHashrate(info?.niceAverageHashrate, info?.hashrate?.suffix)} (<b>${Number(efficiency || 0).toFixed(1)}%</b>)\n` +
-      `<b>Target:</b> <code>${displayTarget ? Number(displayTarget).toFixed(2) : '0.00'} ${escapeHtml(info?.hashrate?.suffix || '')}</code>`;
-  },
+function loadTelegramTemplatesFromManager() {
+  if (cachedTelegramTemplates) return cachedTelegramTemplates;
 
-  zeroHashrate(account, r, info) {
-    return `🚨 <b>[Critical] Zero Hashrate!</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Rig:</b> ${formatRig(r)}\n` +
-      `<b>Algo:</b> <code>${escapeHtml(info?.algo || 'N/A')}</code>\n` +
-      `<b>Current:</b> <b>0%</b>`;
-  },
+  const source = fs.readFileSync(telegramManagerPath, 'utf8');
+  const startIndex = source.indexOf(TELEGRAM_TEMPLATE_START);
+  if (startIndex < 0) {
+    throw new Error('Unable to locate TelegramTemplates in src/components/TelegramManager.jsx');
+  }
 
-  startup(account, r, info, efficiency, displayTarget) {
-    return `🚀 <b>[Startup Alert]</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Rig:</b> ${formatRig(r)}\n` +
-      `<b>Algo:</b> <code>${escapeHtml(info?.algo || 'N/A')}</code>\n` +
-      `<b>Avg:</b> ${formatHashrate(info?.niceAverageHashrate, info?.hashrate?.suffix)} (<b>${Number(efficiency || 0).toFixed(1)}%</b>)\n` +
-      `<b>Target:</b> <code>${displayTarget ? Number(displayTarget).toFixed(2) : '0.00'} ${escapeHtml(info?.hashrate?.suffix || '')}</code>`;
-  },
+  let endIndex = -1;
+  for (const marker of TELEGRAM_TEMPLATE_END_MARKERS) {
+    endIndex = source.indexOf(marker, startIndex);
+    if (endIndex >= 0) break;
+  }
+  if (endIndex < 0) {
+    throw new Error('Unable to locate TelegramTemplates terminator in src/components/TelegramManager.jsx');
+  }
 
-  completion(account, r, info, efficiency, displayTarget) {
-    return `🏁 <b>[Completion Alert]</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Rig:</b> ${formatRig(r)}\n` +
-      `<b>Algo:</b> <code>${escapeHtml(info?.algo || 'N/A')}</code>\n` +
-      `<b>Avg:</b> ${formatHashrate(info?.niceAverageHashrate, info?.hashrate?.suffix)} (<b>${Number(efficiency || 0).toFixed(1)}%</b>)\n` +
-      `<b>Target:</b> <code>${displayTarget ? Number(displayTarget).toFixed(2) : '0.00'} ${escapeHtml(info?.hashrate?.suffix || '')}</code>`;
-  },
+  const bodyStart = startIndex + TELEGRAM_TEMPLATE_START.length;
+  const bodyEnd = endIndex;
+  if (bodyEnd <= bodyStart) {
+    throw new Error('Unable to parse TelegramTemplates block in src/components/TelegramManager.jsx');
+  }
 
-  rentedNotice(hbType, r, info, account, roi, remStr) {
-    return `💎 <b>[${escapeHtml(hbType || 'RENTED')}] #${escapeHtml(r?.id || 'N/A')}</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Rig:</b> ${formatRig(r)}\n` +
-      `<b>Algo:</b> <code>${escapeHtml(info?.algo || r?.algo || r?.rig?.type || 'N/A')}</code>\n` +
-      `<b>Hash:</b> <code>${formatHashrate(info?.niceAverageHashrate, info?.hashrate?.suffix)}</code>\n` +
-      `<b>ROI:</b> <code>${Number(roi || 0) >= 0 ? '+' : ''}${Number(roi || 0).toFixed(1)}%</code>\n` +
-      `<b>Time:</b> <code>${escapeHtml(remStr || 'N/A')} left</code>`;
-  },
+  const divider = '━━━━━━━━━━━━━━';
+  const templateFactory = new Function('escapeHtml', 'divider', `return ({${source.slice(bodyStart, bodyEnd)}});`);
+  cachedTelegramTemplates = templateFactory(escapeHtml, divider);
+  return cachedTelegramTemplates;
+}
 
-  finished(enriched, info) {
-    return `✅ <b>[Rental Finished]</b>\n` +
-      `<b>Rig:</b> ${formatRig(enriched)}\n` +
-      `<b>Algo:</b> <code>${escapeHtml(info?.algo || 'N/A')}</code>\n` +
-      `<b>Duration:</b> <code>${escapeHtml(info?.duration || 'N/A')}</code>`;
-  },
-
-  heartbeatSummary(barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, finishTime) {
-    const active = Array.isArray(activeRentalLines) ? activeRentalLines.join('\n') : String(activeRentalLines || '');
-    const divider = '━━━━━━━━━━━━━━━━━━━';
-    return `📊 <b>[Heartbeat Summary]</b>\n` +
-      `<b>Time:</b>  <code>${escapeHtml(finishTime || 'N/A')}</code>\n` +
-      `${divider}\n` +
-      `<b>Total</b>  <code>${Number(totalAll || 0)}</code>`  +
-      ` | (<b>Disabled</b>  <code>${Number(disabledAll || 0)}</code>)\n` +
-      `<b>Online</b>  <code>${Number(onlineAll || 0)}</code> `  +
-      ` | (<b>Offline</b>  <code>${Number(offlineAll || 0)}</code>)\n` +
-      `♻️ <b>Rented</b> <code>${Number(rentedAll || 0)}</code>\n` +
-      // `${divider}\n` +
-      // `${barChart ? `${barChart}\n` : ''}` +
-      // `${divider}\n` +
-      `${divider}\n` +
-      `<b>Active Rentals</b>\n` +
-      `${active || '<i>No active rentals</i>'}`;
-  },
-
-  newRental(account, r, paid, startStr, endStr) {
-    return `🚀 <b>[New Rental]</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Rig:</b> ${formatRig(r)}\n` +
-      `<b>Algo:</b> <code>${escapeHtml(r?.algo || r?.rig?.type || 'N/A')}</code>\n` +
-      `<b>Time:</b> ${formatTimeRange(startStr, endStr)}\n` +
-      `<b>Paid:</b> ${escapeHtml(paid || '0.00')}\n` +
-      `<i>Rental has been successfully initialized.</i>`;
-  },
-
-  zeroHashrateAlert(account, r, elapsedMs, paid) {
-    return `🚨 <b>[Critical] Zero Hashrate!</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Rig:</b> ${formatRig(r)}\n` +
-      `<b>Duration:</b> ${Math.round(Number(elapsedMs || 0) / 1000)}s\n` +
-      `<b>Paid:</b> ${escapeHtml(paid || '0.00')}`;
-  },
-
-  lowEfficiency(account, r, avg, suffix, efficiency, remainingMs, paid) {
-    return `⚠️ <b>[Alert] Low Efficiency</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Rig:</b> ${formatRig(r)}\n` +
-      `<b>Avg:</b> ${escapeHtml(avg)} ${escapeHtml(suffix || '')} (<b>${Number(efficiency || 0).toFixed(1)}%</b>)\n` +
-      `<b>Left:</b> ${Math.round(Number(remainingMs || 0) / 60000)}m\n` +
-      `<b>Paid:</b> ${escapeHtml(paid || '0.00')}`;
-  },
-
-  startupNotice(account, r, avg, suffix, efficiency, paid) {
-    return `🚀 <b>[Startup Alert]</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Rig:</b> ${formatRig(r)}\n` +
-      `<b>Avg:</b> ${escapeHtml(avg)} ${escapeHtml(suffix || '')} (<b>${Number(efficiency || 0).toFixed(1)}%</b>)\n` +
-      `<b>Paid:</b> ${escapeHtml(paid || '0.00')}`;
-  },
-
-  completionNotice(account, r, avg, suffix, efficiency, paid) {
-    return `🏁 <b>[Completion Alert]</b>\n` +
-      `<b>Account:</b> <code>${formatAccount(account)}</code>\n` +
-      `<b>Rig:</b> ${formatRig(r)}\n` +
-      `<b>Avg:</b> ${escapeHtml(avg)} ${escapeHtml(suffix || '')} (<b>${Number(efficiency || 0).toFixed(1)}%</b>)\n` +
-      `<b>Paid:</b> ${escapeHtml(paid || '0.00')}`;
-  },
-};
-
+export const TelegramTemplates = loadTelegramTemplatesFromManager();

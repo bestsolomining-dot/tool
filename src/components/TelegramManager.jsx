@@ -142,7 +142,7 @@ export function useTelegram(onCall, mrrClient) {
     const totalMs = endT - startT;
     const elapsedMs = Math.max(0, Math.min(now - startT, totalMs));
     const remainingMs = Math.max(0, endT - now);
-    
+
     const remD = Math.floor(remainingMs / 86400000);
     const remH = Math.floor((remainingMs % 86400000) / 3600000);
     const remStr = remD > 0 ? `${remD}d ${remH}h` : `${remH}h`;
@@ -172,12 +172,162 @@ export function useTelegram(onCall, mrrClient) {
 }
 
 export default function TelegramManager({ onCall, mrrClient }) {
+
+  const Manager = {
+    CONFIG: {
+      ALERT_COOLDOWN_MS: 3600000,     // 1 hour cooldown for same alert type
+      WARNING_RIG_THRESHOLD: 3,       // Threshold for multi-rig alert
+      RENTED_HEARTBEAT_MS: 1800000,   // 30 minutes summary heartbeat
+    },
+    Templates: {
+      rigStatusWarning: (acct, rig) =>
+        `🟠 <b>RIG WARNING</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏢 <b>Account</b>  <code>${escapeHtml(acct)}</code>\n` +
+        `🖥 <b>Rig</b>      ${escapeHtml(rig.name)}\n` +
+        `🆔 <b>ID</b>       <code>${rig.id}</code>\n` +
+        `⚙️ <b>Algo</b>     <code>${escapeHtml(rig.algo || rig.type)}</code>\n` +
+        `📡 <b>Status</b>   <b>WARNING</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚠️ Connectivity issue detected.\n` +
+        `Please verify miner, pool, network and local machine status.`,
+
+      highWarningCount: (acct, count) =>
+        `🚨 <b>MULTI-RIG ALERT</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏢 <b>Account</b>   <code>${escapeHtml(acct)}</code>\n` +
+        `📊 <b>Affected</b>  <b>${count}</b> rigs\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚠️ Large number of rigs are reporting warnings.\n` +
+        `Immediate investigation recommended.`,
+
+      efficiency: (acct, r, info, efficiency, displayTarget) =>
+        `🟠 <b>ALERT < 50% efficiency for more than 15 minutes</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏢 <b>Account</b>   <code>${escapeHtml(acct)}</code>\n` +
+        `🖥 ${escapeHtml(r.name || r.id)}\n` +
+        `🆔<code>${r.id}</code>\n` +
+        `⚙️<code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🎯 <b>Target</b>\n` +
+        `<code>${displayTarget.toFixed(2)} ${info.hashrate.suffix}</code>\n\n` +
+        `📉 <b>Efficiency</b>\n` +
+        `<b>${efficiency.toFixed(1)}%</b>`,
+
+      zeroHashrate: (acct, r, info) =>
+        `🔴 <b>CRITICAL HASHRATE LOSS</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏢 <b>Account</b>   <code>${escapeHtml(acct)}</code>\n` +
+        `🖥 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
+        `🆔 <b>ID</b>        <code>${r.id}</code>\n` +
+        `⚙️ <b>Algo</b>      <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `💸 <b>Paid</b>\n` +
+        `<code>${info.price?.paid || '0.00'} ${info.price?.currency || 'BTC'}</code>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `❌ Zero accepted hashrate detected for over 5 minutes.\n` +
+        `Immediate action required.`,
+
+      startup: (acct, r, info, efficiency, displayTarget) =>
+        `🟠 <b>STARTUP PERFORMANCE ALERT</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏢 <b>Account</b>   <code>${escapeHtml(acct)}</code>\n` +
+        `🖥 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
+        `🆔 <b>ID</b>        <code>${r.id}</code>\n` +
+        `⚙️ <b>Algo</b>      <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🎯 <b>Target</b>\n` +
+        `<code>${displayTarget.toFixed(2)} ${info.hashrate.suffix}</code>\n\n` +
+        `📉 <b>Efficiency</b>\n` +
+        `<b>${efficiency.toFixed(1)}%</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚠️ Below 70% efficiency during first rental hour.`,
+
+      completion: (acct, r, info, efficiency, displayTarget) =>
+        `🟠 <b>FINAL HOUR ALERT</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏢 <b>Account</b>   <code>${escapeHtml(acct)}</code>\n` +
+        `🖥 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
+        `🆔 <b>ID</b>        <code>${r.id}</code>\n` +
+        `⚙️ <b>Algo</b>      <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🎯 <b>Target</b>\n` +
+        `<code>${displayTarget.toFixed(2)} ${info.hashrate.suffix}</code>\n\n` +
+        `📉 <b>Efficiency</b>\n` +
+        `<b>${efficiency.toFixed(1)}%</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚠️ Efficiency dropped below 70% during the final hour.`,
+
+      rentedNotice: (hbType, r, info, acct, roi, remStr) =>
+        `🟢 <b>${escapeHtml(hbType).toUpperCase()}</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🆔 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
+        `🏢 <b>Account</b>   <code>${escapeHtml(acct).toUpperCase()}</code>\n` +
+        `⚙️ <b>Algo</b>      <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚡ <b>Hashrate</b>\n` +
+        `ADV : <code>${info.niceAdvertisedHashrate}</code>\n` +
+        `AVG : <code>${info.niceAverageHashrate}</code>\n` +
+        `CUR : <code>${info.niceHashrate}</code>\n\n` +
+        `🎯 <b>Efficiency</b>\n` +
+        `<b>${info.percent}%</b>\n\n` +
+        `💰 <b>ROI</b>\n` +
+        `<b>${roi >= 0 ? '+' : ''}${roi}%</b>\n\n` +
+        `⏳ <b>Remaining</b>\n` +
+        `<code>${remStr}</code>\n\n` +
+        `💸 <b>Paid</b>\n` +
+        `<code>${info.price?.paid || '0.00'} ${info.price?.currency || 'BTC'}</code>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🔗 <a href="https://www.miningrigrentals.com/rentals/view/${r.id}">Open Rental</a>`,
+
+      finished: (fr, info) =>
+        `🏁 <b>RENTAL COMPLETED</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏢<code>${escapeHtml(fr.client)}</code>\n` +
+        `🖥 <b>Effect</b>${escapeHtml(fr.name || fr.id)}\n` +
+        `🆔<code>${fr.id}</code>\n` +
+        `⚙️<code>${escapeHtml(info?.algo || fr.algo || '')}</code>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `⚡ <b>Hashrate (avg / cur)</b>\n` +
+        `<code>${info?.niceAverageHashrate || 'N/A'} / ${info?.niceHashrate || 'N/A'}</code>\n` +
+        `\n` +
+        `🎯 <b>Efficiency</b>\n` +
+        `<b>${typeof info?.percent !== 'undefined' ? info.percent + '%' : 'N/A'}</b>\n` +
+        `\n` +
+        `💸 <b>Paid</b>\n` +
+        `<code>${info?.price?.paid || fr.price || '0.00'} ${info?.price?.currency || fr.currency || 'BTC'}</code>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `(Details may be partial if API did not return full rental info.)`,
+
+      systemStarted: (accts) =>
+        `🤖 <b>System Started</b>\n` +
+        `Time: ${new Date().toLocaleString()}\n` +
+        `Monitoring: ${accts || 'None'}\n` +
+        `Heartbeat Interval: 30m\n` +
+        `Service is now active.`,
+
+      heartbeatSummary: (barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime) =>
+        `📊 <b>[Heartbeat Summary]</b>\n` +
+        `<b>Time:</b> <code>${escapeHtml(monitorTime || 'N/A')}</code>\n` +
+        `━━━━━━━━━━━━━━\n` +
+        `<b>Total</b> <code>${String(totalAll).padStart(4)}</code> ` +
+        `(<b>Disabled</b> <code>${String(disabledAll).padStart(4)}</code>)\n` +
+        `<b>Online</b> <code>${String(onlineAll).padStart(4)}</code> ` +
+        `(<b>Offline</b> <code>${String(offlineAll).padStart(4)}</code>)\n` +
+        `♻️ <b>Rented</b> <code>${String(rentedAll).padStart(4)}</code>\n` +
+        `${barChart ? `${barChart}\n` : ''}` +
+        `━━━━━━━━━━━━━━\n` +
+        `<b>Active Rentals</b>\n` +
+        `${activeRentalLines.length > 0 ? activeRentalLines.join('\n\n━━━━━━━━━━━━━━\n') : '<i>No active rentals</i>'}\n` +
+        `<i>Update at ${monitorTime}</i>`,
+    },
+  };
   const { sendTelegram } = useTelegram(onCall, mrrClient);
   const [isMonitorDbOpen, setIsMonitorDbOpen] = useState(false);
   const [isTelegramOn, setIsTelegramOn] = useState(true);
   const [health, setHealth] = useState(null);
 
-  const previewTestMessage = `⚡️ <b>Test Connection</b>\nTime: ${new Date().toLocaleTimeString()}\nClient: ${mrrClient}`;
+  const previewTestMessage = `⚡️ Test Connection\nTime: ${new Date().toLocaleTimeString()}\nClient: ${mrrClient}`;
   const isConfigured = health?.configured !== false;
   const statusLabel = health?.configured === false ? 'Missing Telegram credentials' : (isTelegramOn ? 'Notifications enabled' : 'Notifications disabled');
 
@@ -187,13 +337,13 @@ export default function TelegramManager({ onCall, mrrClient }) {
       .then(res => {
         if (res && typeof res.enabled === 'boolean') setIsTelegramOn(res.enabled);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     onCall('/api/v2/notify/telegram/health', { method: 'GET', silent: true })
       .then(res => {
         setHealth(res);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [onCall]);
 
   const handleToggle = async () => {
@@ -239,36 +389,6 @@ export default function TelegramManager({ onCall, mrrClient }) {
           {isTelegramOn ? '🔔 ON' : '🔕 OFF'}
         </button>
       </div>
-
-      <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}>
-        <button
-          className="btn-pro secondary"
-          style={{ border: '1px solid #24A1DE', color: '#24A1DE' }}
-          onClick={() => onCall('/api/v2/mrr/monitor/run', { method: 'POST', query: { client: mrrClient }, showModal: false })}
-          title="Manually trigger heartbeat status for active rentals"
-        >
-          Force Heartbeat
-        </button>
-        <button
-          className="btn-pro secondary"
-          onClick={() => sendTelegram(previewTestMessage, { showModal: true })}
-          title="Send a test Telegram message"
-        >
-          Test Bot
-        </button>
-        <button
-          className="btn-pro secondary"
-          onClick={() => setIsMonitorDbOpen(true)}
-          title="Inspect tracked rentals and reset monitor state"
-        >
-          Monitor DB
-        </button>
-      </div>
-
-      <div style={{ borderRadius: '10px', padding: '12px', background: 'rgba(71, 85, 105, 0.16)', fontSize: '12px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}>
-        {previewTestMessage}
-      </div>
-
       <div style={{ display: 'grid', gap: '6px', fontSize: '12px', opacity: 0.8 }}>
         <div><b>Configured:</b> {health?.tokenPresent ? 'Bot token OK' : 'Missing token'} · {health?.chatIdPresent ? 'Chat ID OK' : 'Missing chat ID'}</div>
         <div>Notifications are sent for: <b>new rental</b>, <b>rental completion</b>, <b>low efficiency</b>, <b>zero hashrate</b>, and <b>end-of-rental</b> summaries.</div>

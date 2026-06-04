@@ -248,8 +248,13 @@ function getRentalAlgorithm(rental) {
   return rental?.rig?.type || rental?.algorithm || rental?.algorithm || rental?.normalized?.algorithm || 'N/A';
 }
 
+function getRentalCurrentHashrate(rental) {
+  return formatHashrateValue(rental?.hashrate?.current || rental?.hashrate) || rental?.normalized?.niceHashrate || '0 N/A';
+}
+
 function getRentalAdvertisedHashrate(rental) {
   return formatHashrateValue(rental?.hashrate?.advertised) || rental?.normalized?.niceHashrate || '0 N/A';
+  return formatHashrateValue(rental?.hashrate?.advertised) || rental?.normalized?.niceAdvertisedHashrate || '0 N/A';
 }
 
 function getRentalAverageHashrate(rental) {
@@ -432,6 +437,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             endTime: getRentalEndTime(rental),
             advertised: getRentalAdvertisedHashrate(rental), // For display
             average: getRentalAverageHashrate(rental),       // For display
+            advertised: getRentalAdvertisedHashrate(rental),
+            average: getRentalAverageHashrate(rental),
+            current: getRentalCurrentHashrate(rental),
             rawAds: getRawHashrate(rental.hashrate?.advertised || rental.advertised),
             rawAvg: getRawHashrate(rental.hashrate?.average || rental.average),
             pools: pools.map(p => ({
@@ -645,10 +653,13 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       // Find our specific active NiceHash order for this algorithm
                       const myNhOrder = nhOrders.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
                       const myNhOrderPrice = myNhOrder ? parseFloat(myNhOrder.price) : 0;
-                      
-                      const myOrderDiff = myNhOrderPrice > 0
-                        ? ((displayPrice - myNhOrderPrice) / myNhOrderPrice) * 100
+
+                      const myNhOrderAddFee = myNhOrder
+                        ? (Number.parseFloat(myNhOrder.add_fee) || (myNhOrderPrice * 1.04))
                         : 0;
+                      const myOrderDiff = myNhOrderAddFee > 0
+                        ? ((displayPrice - myNhOrderAddFee) / myNhOrderAddFee) * 100
+                        : null;
 
                       return (
                         <div key={rig.id} style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -697,10 +708,12 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                 <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>
                                   Avg Hashrate
+                                  Hashrate (Avg / Cur)
                                 </div>
                                 <div>
                                   {(() => {
                                     if (info?.isRental) return info.average || '0 N/A';
+                                    if (info?.isRental) return `${info.average || '0'} / ${info.current || '0'}`;
                                     const hr = rig.hashrate || rig.hash;
                                     if (!hr && hr !== 0) return '0 N/A';
                                     if (typeof hr === 'object') {

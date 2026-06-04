@@ -69,28 +69,63 @@ export async function initNonces() {
   });
 }
 
+function extractEpochMs(payload) {
+  const candidates = [
+    payload?.data,
+    payload?.data?.time,
+    payload?.data?.timestamp,
+    payload?.data?.server_time,
+    payload?.data?.serverTime,
+    payload?.time,
+    payload?.timestamp,
+    payload?.server_time,
+    payload?.serverTime,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null || candidate === '') continue;
+
+    if (typeof candidate === 'object') {
+      continue;
+    }
+
+    const parsed = Number(candidate);
+    if (!Number.isFinite(parsed) || parsed <= 0) continue;
+
+    // API values are usually Unix seconds; tolerate millisecond payloads too.
+    return parsed >= 1e12 ? BigInt(Math.trunc(parsed)) : BigInt(Math.trunc(parsed * 1000));
+  }
+
+  return null;
+}
+
 export async function syncMrrClock() {
   if (mrrClockSynced) return;
   if (mrrSyncPromise) return mrrSyncPromise;
-
-  console.log('[mrr:clock] Synchronizing with NiceHash server time...');
+  console.log('[mrr:clock] Synchronizing with MiningRigRentals server time...');
   mrrSyncPromise = (async () => {
     try {
-      const { client } = resolveNhClient('BT');
-      if (!client) return;
+      // Nonces must be close to MRR's server time. Syncing with NiceHash (which may drift) is risky.
+      const res = await request('https://www.miningrigrentals.com/api/v2/info/time', {
+        headers: { 'user-agent': 'Ben Tre Mining Tool/2.0' },
+      });
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw new Error(`HTTP ${res.statusCode}`);
+      }
 
-      const serverTimeMs = await client.getServerTime();
+      const body = await res.body.json();
+      const serverTimeMs = extractEpochMs(body) ?? BigInt(Date.now());
       const localTimeMs = Date.now();
-      mrrClockOffset = BigInt(serverTimeMs) - BigInt(localTimeMs);
+      mrrClockOffset = serverTimeMs - BigInt(localTimeMs);
       mrrClockSynced = true;
 
       if (Math.abs(Number(mrrClockOffset)) > 1000) {
-        console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (NH Server: ${serverTimeMs}, Local: ${localTimeMs})`);
+        console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (MRR Server: ${serverTimeMs}, Local: ${localTimeMs})`);
       } else {
-        console.info(`[mrr:clock] Synced with NiceHash. Offset: ${mrrClockOffset}ms.`);
+        console.info(`[mrr:clock] Synced with MRR. Offset: ${mrrClockOffset}ms.`);
       }
     } catch (err) {
-      console.warn(`[mrr:clock] Synchronization failed: ${err.message}. Using raw system clock.`);
+      console.warn(`[mrr:clock] MRR time sync failed: ${err.message}. Using local clock.`);
       mrrClockSynced = true;
     } finally {
       mrrSyncPromise = null;
@@ -111,11 +146,18 @@ export async function nextMrrNonce(clientName) {
   }
 
   const nowMs = BigInt(Date.now()) + mrrClockOffset;
-  let nonce;
-
-  // Use 19-digit high-precision nonces for all clients to ensure compatibility 
-  // with MRR's modern API requirements.
   const now19 = BigInt(nowMs) * 1000000n;
+
+  // Safety: If the last stored nonce is more than 1 day in the future relative 
+  // to our current synced time, reset it to allow recovering from clock jumps.
+  const oneDayInNonces = 86400000n * 1000000n;
+  if (lastNonce > (now19 + oneDayInNonces)) {
+    console.warn(`[mrr:${cleanName}] Database nonce (${lastNonce}) is too far in the future. Resetting to current synced time.`);
+    mrrLastNonceByClient.set(cleanName, now19);
+    return nextMrrNonce(cleanName);
+  }
+
+  let nonce;
   nonce = (now19 > lastNonce) ? now19 : (lastNonce + 1n);
 
   mrrLastNonceByClient.set(cleanName, nonce);
@@ -235,13 +277,15 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     }
 
     let authMessage = String(data?.data?.message || data?.message || '');
-    let isAuthFailureMessage = /signature|unauthorized|authenticated|invalid|missing api key/i.test(authMessage);
-    const shouldRetry = (!data.success && isAuthFailureMessage) || response.statusCode === 401;
+    let isAuthFailureMessage = /signature|unauthorized|authenticated|missing api key/i.test(authMessage);
+    const isBadNonce = /nonce/i.test(authMessage);
+    const shouldRetry = (!data.success && isAuthFailureMessage && !isBadNonce) || response.statusCode === 401;
 
-    if (shouldRetry) {
+    if (shouldRetry && !isBadNonce) {
       console.warn(`[mrr:${clientName}] HMAC failed (${authMessage || 'Unauthorized'}), retrying with Legacy SHA1 Concatenation...`);
       currentNonce = await nextMrrNonce(clientName);
-      const legacyStr = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}${clientConfig.apiSecret}`;
+      // Correct V1 Legacy concatenation: apiKey + nonce + apiSecret
+      const legacyStr = `${clientConfig.apiKey}${currentNonce}${clientConfig.apiSecret}`;
       const legacySig = createHash('sha1').update(legacyStr).digest('hex');
 
       const retryRes = await send(currentNonce, legacySig, {

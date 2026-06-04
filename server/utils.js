@@ -124,23 +124,26 @@ export function extractRentalInfo(rental) {
   const priceObj = rental.price || rental.rig?.price || {};
   const currency = priceObj.currency || rental.currency || rental.price_unit || 'BTC';
 
-  let hr = rental.hashrate;
-  if (!hr || (typeof hr === 'object' && !hr.hashrate && !hr.current && !hr.advertised && !hr.nice)) {
-    hr = rental.rig?.hashrate || rental.rig?.hash;
-  }
+  // Merge hashrate info from both top level and nested rig object to get the most detail
+  const rentalHr = rental.hashrate && typeof rental.hashrate === 'object' ? rental.hashrate : {};
+  const rigHashObj = rental.rig?.hashrate || rental.rig?.hash;
+  const rigHr = rigHashObj && typeof rigHashObj === 'object' ? rigHashObj : {};
+
+  // Rig hashrate contains the detailed time windows (last_5min, last_15min, etc)
+  const hr = { ...rigHr, ...rentalHr };
 
   let currentHash = 0;
   let advertisedHash = 0;
   let averageHash = 0;
-  let hashrateSuffix = '';
+  let hashrateSuffix = hr.suffix || '';
 
   if (hr && typeof hr === 'object') {
-    // Prioritize specific MRR time windows if standard 'current' is missing
+    // Prioritize last 15 minutes as the current hashrate per user request
     currentHash = parseFloat(
+      (hr.last_15min && typeof hr.last_15min === 'object' ? hr.last_15min.hash : hr.last_15min) ||
       hr.hashrate || 
       hr.current || 
       hr.hash || 
-      (hr.last_15min && typeof hr.last_15min === 'object' ? hr.last_15min.hash : hr.last_15min) || 
       0);
 
     if (hr.advertised && typeof hr.advertised === 'object') {
@@ -163,11 +166,11 @@ export function extractRentalInfo(rental) {
   }
 
   const niceAdvertisedHashrate = (hr && typeof hr === 'object' && hr.advertised?.nice) ||
-    (advertisedHash > 0 ? `${advertisedHash} ${hashrateSuffix}`.trim() : '0 N/A');
+    (advertisedHash > 0 ? `${advertisedHash.toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');
 
-  const niceHashrate = (hr && typeof hr === 'object' && hr.nice) ||
-    (hr && typeof hr === 'object' && hr.last_15min?.nice) ||
-    (currentHash > 0 ? `${currentHash} ${hashrateSuffix}`.trim() : '0 N/A');
+  const niceHashrate = (hr && typeof hr === 'object' && hr.last_15min?.nice) ||
+    (hr && typeof hr === 'object' && hr.nice) ||
+    (currentHash > 0 ? `${currentHash.toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');
 
   const niceAverageHashrate = (hr && typeof hr === 'object' && hr.average?.nice) ||
     (averageHash > 0 ? `${averageHash.toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');

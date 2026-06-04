@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import MrrRigs from './MrrRigs';
 import Modal from './Modal';
-import TelegramManager, { useTelegram, calculateRemainingTime } from './TelegramManager';
-import { toUtcTimestamp } from '../core/time';
+import TelegramManager, { useTelegram } from './TelegramManager';
+import { calculateRemainingTime, toUtcTimestamp } from '../core/time';
 
 /** Safely extracts an array from various MRR API response shapes */
 function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'items', 'data']) {

@@ -28,6 +28,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   const [inspectData, setInspectData] = useState(null)
   const [filePools, setFilePools] = useState([])
   const [verifyFromFile, setVerifyFromFile] = useState(false)
+  const [useBrowser, setUseBrowser] = useState(false)
+  const [showBrowser, setShowBrowser] = useState(false)
   const [lastRunSummary, setLastRunSummary] = useState(null)
 
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
@@ -302,7 +304,20 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     }
 
     try {
-      const result = await poolApi.verify(payload, nhClient, signal); // Pass nhClient
+      let result;
+      if (useBrowser) {
+        // Gọi endpoint Chromedriver mới
+        const res = await apiFetch(`/api/v2/pools/verify-browser?client=${nhClient}&headless=${!showBrowser}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal
+        });
+        result = { ok: res.ok, data: res.data, status: res.status };
+      } else {
+        // Sử dụng API truyền thống
+        result = await poolApi.verify(payload, nhClient, signal);
+      }
       return { ...result, poolDetails, requestBody: payload };
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -689,6 +704,20 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '32px' }}>
+                <input type="checkbox" id="useBrowserToggle" checked={useBrowser} onChange={(e) => setUseBrowser(e.target.checked)} />
+                <label htmlFor="useBrowserToggle" style={{ fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', color: '#60a5fa' }}>
+                  🚀 USE CHROMEDRIVER (ALL CLIENT MODE)
+                </label>
+              </div>
+              {useBrowser && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '24px', marginLeft: '20px' }}>
+                  <input type="checkbox" id="showBrowserToggle" checked={showBrowser} onChange={(e) => setShowBrowser(e.target.checked)} />
+                  <label htmlFor="showBrowserToggle" style={{ fontSize: '10px', cursor: 'pointer', opacity: 0.8 }}>
+                    Show Browser Window (Headed)
+                  </label>
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '32px' }}>
                 <input type="checkbox" id="mainVerifySourceToggle" checked={verifyFromFile} onChange={(e) => setVerifyFromFile(e.target.checked)} />
                 <label htmlFor="mainVerifySourceToggle" style={{ fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>

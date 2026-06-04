@@ -127,22 +127,21 @@ const TelegramTemplates = {
     `Immediate action required.`,
 
   startup: (acct, r, info, efficiency, displayTarget) =>
-    `🟠 <b>STARTUP PERFORMANCE ALERT</b>\n` +
+    `🟠 <b> 70% efficiency during first rental hour</b>\n` +
     `${divider}\n` +
-    `🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n` +
-    `🖥 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
-    `🆔 <b>ID</b>  <code>${r.id}</code>\n` +
-    `⚙️  <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+    `🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>` +
+    `🖥 ${escapeHtml(r.name || r.id)}\n` +
+    `🆔 <code>${r.id}</code>\n` +
+    `⚙️ <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
     `${divider}\n` +
-    `🎯 <b>Target</b>\n` +
+    `📉 <b>Efficiency</b>` +
+    `<b>${efficiency.toFixed(1)}%</b> | ` +
+    `🎯 <b>Target</b>` +
     `<code>${displayTarget.toFixed(2)} ${info.hashrate.suffix}</code>\n\n` +
-    `📉 <b>Efficiency</b>\n` +
-    `<b>${efficiency.toFixed(1)}%</b>\n` +
-    `${divider}\n` +
-    `⚠️ Below 70% efficiency during first rental hour.`,
+    `${divider}\n`,
 
   completionAlert: (acct, r, info, efficiency, displayTarget) =>
-    `🟠 <b>FINAL HOUR ALERT</b>\n` +
+    `🟠 <b>FINAL HOUR ALERT ⚠️ Efficiency dropped below 70% during the final hour</b>\n` +
     `${divider}\n` +
     `🏢 <b>Account</b> <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n` +
     `🖥 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
@@ -153,8 +152,7 @@ const TelegramTemplates = {
     `<code>${displayTarget.toFixed(2)} ${info.hashrate.suffix}</code>\n\n` +
     `📉 <b>Efficiency</b>\n` +
     `<b>${efficiency.toFixed(1)}%</b>\n` +
-    `${divider}\n` +
-    `⚠️ Efficiency dropped below 70% during the final hour.`,
+    `${divider}\n`,
 
   rentedNotice: (hbType, r, info, acct, roi, remStr) =>
     `🟢 <b>${escapeHtml(hbType).toUpperCase()}</b>\n` +

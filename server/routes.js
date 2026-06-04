@@ -1,5 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { Builder, By, until } from 'selenium-webdriver';
+import chrome from 'selenium-webdriver/chrome.js';
 import { asyncHandler, maskSensitive, extractAlgorithmItems, extractRentalInfo, extractRigInfo } from './utils.js';
 import { mrrApiCall, mrrRequest, fetchAggregatedRentals, mrrConfigs, defaultMrrClient } from './mrr.js';
 import { resolveNhClient, getNiceHashApp, nhConfigs, isAggregate, normalizeAlgoForNiceHash, mapNiceHashToMRR } from './nh.js';
@@ -287,6 +289,56 @@ export function registerRoutes(app) {
   app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.getPoolDetails(req.params.poolId))));
   app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.createPool(req.body))));
   app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.verifyPool(req.body))));
+
+  // Route verify bằng Chromedriver tự động load thông tin từ account
+  app.post('/api/v2/pools/verify-browser', asyncHandler(async (req, res) => {
+    const { stratumHost, stratumPort, username } = req.body;
+    const clientParam = String(req.query.client || 'BT').toUpperCase();
+    const isHeadless = req.query.headless === 'true';
+
+    const options = new chrome.Options();
+    if (isHeadless) {
+      options.addArguments('--headless=new');
+    }
+    options.addArguments('--window-size=1280,720');
+
+    let driver = await new Builder()
+      .forBrowser('chrome')
+      .setChromeOptions(options)
+      .build();
+
+    try {
+      // Sử dụng công cụ public của NiceHash để verify nhanh không cần login
+      await driver.get('https://www.nicehash.com/tools/pool-verification');
+      
+      const wait = 15000;
+      // Điền thông tin Host:Port
+      const hostInput = await driver.wait(until.elementLocated(By.css('input[placeholder*="stratum"]')), wait);
+      await hostInput.clear();
+      await hostInput.sendKeys(`${stratumHost}:${stratumPort}`);
+      
+      // Điền Username
+      const userInput = await driver.findElement(By.css('input[placeholder*="username"]'));
+      await userInput.clear();
+      await userInput.sendKeys(username);
+
+      // Click Verify
+      const verifyBtn = await driver.findElement(By.xpath("//button[contains(., 'Verify')]"));
+      await verifyBtn.click();
+
+      // Đợi kết quả hiển thị trên UI của trình duyệt
+      const resultSection = await driver.wait(until.elementLocated(By.className('verification-results')), 30000);
+      const resultText = await resultSection.getText();
+      
+      const isSuccess = resultText.toLowerCase().includes('success') || resultText.toLowerCase().includes('verified');
+      
+      res.json({ success: isSuccess, message: resultText, client: clientParam });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    } finally {
+      await driver.quit();
+    }
+  }));
 
   app.post('/api/v2/mrr/monitor/run', asyncHandler(async (req, res) => {
     const scope = String(req.query.client || req.body?.client || 'ALL').trim().toUpperCase();

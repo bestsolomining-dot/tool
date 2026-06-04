@@ -495,6 +495,7 @@ export function registerRoutes(app) {
           hashrate_unit: r.hashrate_unit || 'TH',
         },
         nicehashPrice: priceMap.get(a) || null,
+        nicehashPrice: null,
       };
     });
 

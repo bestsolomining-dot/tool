@@ -1,4 +1,3 @@
-import { request } from 'undici';
 import { db } from './db.js';
 import { mrrApiCall, mrrConfigs } from './mrr.js';
 import { resolveNhClient, getNiceHashApp, isAggregate } from './nh.js';
@@ -50,8 +49,9 @@ export async function setTelegramStatus(enabled) {
 const { 
   ALERT_COOLDOWN_MS, 
   WARNING_RIG_THRESHOLD, 
-  RENTED_HEARTBEAT_MS 
 } = TELEGRAM_CONFIG;
+
+const RENTED_HEARTBEAT_MS = 15 * 60 * 1000; // Force heartbeat summary to every 15 minutes
 
 // In‑memory state
 const lastAlertTimes = new Map();   // key → timestamp
@@ -118,19 +118,17 @@ export async function sendTelegramInternal(message) {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const res = await request(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
-        headersTimeout: 8000,
-        bodyTimeout: 8000,
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
       });
 
-      const data = await res.body.json();
-      if (res.statusCode >= 200 && res.statusCode < 300 && data?.ok) {
+      const data = await res.json();
+      if (res.ok && data?.ok) {
         return data;
       }
-      throw new Error(data?.description || `HTTP ${res.statusCode}`);
+      throw new Error(data?.description || `HTTP ${res.status}`);
     } catch (err) {
       lastError = err;
       if (attempt < maxAttempts) {
@@ -194,14 +192,15 @@ function dbAllAsync(sql, params = []) {
 export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL') {
   await maybeDelay('runRentalMonitor');
   const requestedScope = String(clientScope || 'ALL').trim().toUpperCase();
+  const scopeList = requestedScope.split(',').map(s => s.trim());
 
   const allConfiguredAccts = Object.keys(mrrConfigs).filter(
     k => mrrConfigs[k].apiKey && mrrConfigs[k].apiSecret
   );
 
-  const mrrAccts = (requestedScope === 'ALL' || requestedScope === 'VN' || isAggregate(requestedScope))
+  const mrrAccts = (scopeList.includes('ALL') || scopeList.includes('VN') || scopeList.some(s => isAggregate(s)))
     ? allConfiguredAccts
-    : allConfiguredAccts.filter(acct => acct === requestedScope);
+    : allConfiguredAccts.filter(acct => scopeList.includes(acct.toUpperCase()));
 
   const now = Date.now();
   const notifications = [];
@@ -231,6 +230,18 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   for (const acct of mrrAccts) {
     const harvestedRentalIds = new Set();
     const rigLookupByRentalId = new Map();
+
+    // Initialize metrics for this account to ensure it shows in summary even on failure
+    const metric = {
+      name: acct,
+      total: 0,
+      online: 0,
+      rented: 0,
+      offline: 0,
+      disabled: 0,
+      warning: 0,
+      error: false
+    };
 
     try {
       // 1) Fetch rig list
@@ -285,8 +296,9 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
           if (isRented) {
             rentedRigs.push(rig);
-            if (rentalId) harvestedRentalIds.add(rentalId);
-            if (rentalId) rigLookupByRentalId.set(rentalId, rig);
+            const detailKey = rentalId && rentalId !== '0' ? String(rentalId) : `rig-${rig.id}`;
+            harvestedRentalIds.add(detailKey);
+            rigLookupByRentalId.set(detailKey, rig);
           }
           if (isAvailable) availableCount++;
           if (isOffline) offlineCount++;
@@ -306,15 +318,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           }
         }
 
-        accountMetrics.push({
-          name: acct,
-          total: rigList.length,
-          online: onlineCount,
-          rented: rentedRigs.length,
-          offline: offlineCount,
-          disabled: disabledCount,
-          warning: warningCount
-        });
+        metric.total = rigList.length;
+        metric.online = onlineCount;
+        metric.rented = rentedRigs.length;
+        metric.offline = offlineCount;
+        metric.disabled = disabledCount;
+        metric.warning = warningCount;
 
         totalAll += rigList.length;
         availableAll += availableCount;
@@ -328,6 +337,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       } else if (rigsRes.data) {
         const errMsg = rigsRes.data.data?.message || rigsRes.data.message || rigsRes.data.error || 'Unknown';
         console.warn(`[${new Date().toLocaleTimeString()}] Account ${acct} rig list failed: ${errMsg}`);
+        metric.error = true;
       }
 
       // 2) Fetch bought + sold rentals
@@ -485,12 +495,13 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         }
 
         // Build line for summary heartbeat
-        const isFinished_s = remainingMs <= 0 || (endT > 0 && now >= endT);
+        const hasEndTime = endT > 0;
+        const isFinished_s = hasEndTime && now >= endT;
         const remD_s = Math.floor(remainingMs / 86400000);
         const remH_s = Math.floor((remainingMs % 86400000) / 3600000);
         const remM_s = Math.floor((remainingMs % 3600000) / 60000);
 
-        const remStr_s = isFinished_s ? 'Finished' : (remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`);
+        const remStr_s = isFinished_s ? 'Finished' : (hasEndTime ? (remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`) : 'Active');
         const perfEmoji = efficiency >= 90 ? '🟢' : (efficiency >= 70 ? '🟡' : '🔴');
         const divider = '━━━━━━━━━━━━━━━━━━━';
         // Only include active rentals in the summary list to reduce clutter
@@ -543,17 +554,20 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           try {
             await sendTelegramInternal(msg);
             await dbRunAsync(`UPDATE rentals SET last_notified = ? WHERE id = ?`, [now, String(r.id)]);
-            notifications.push({ id: r.id, status: 'Sent', telegram: 'ok' });
+            notifications.push({ id: r.id, client: acct, status: 'Sent', telegram: 'ok' });
           } catch (tgErr) {
-            notifications.push({ id: r.id, status: 'Failed', error: tgErr.message });
+            notifications.push({ id: r.id, client: acct, status: 'Failed', error: tgErr.message });
           }
         } else {
-          notifications.push({ id: r.id, status: 'Skipped', reason: 'Already notified' });
+          notifications.push({ id: r.id, client: acct, status: 'Skipped', reason: 'Already notified' });
         }
       }
     } catch (err) {
       console.error(`[${new Date().toLocaleTimeString()}] [monitor:error] Client ${acct}: ${err.message}`);
+      metric.error = true;
     }
+
+    accountMetrics.push(metric);
   }
 
   // ------------------------------------------------------------------
@@ -581,7 +595,13 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
       const info = extractRentalInfo(enriched);
       const finishMsg = TelegramTemplates.finished(enriched, info);
-      await sendTelegramInternal(finishMsg).catch(e => console.warn(`[${new Date().toLocaleTimeString()}] [monitor] Finish notice failed: ${e.message}`));
+      try {
+        await sendTelegramInternal(finishMsg);
+        notifications.push({ id: fr.id, client: fr.client, status: 'Sent', type: 'Finished', telegram: 'ok' });
+      } catch (e) {
+        console.warn(`[${new Date().toLocaleTimeString()}] [monitor] Finish notice failed for ${fr.id}: ${e.message}`);
+        notifications.push({ id: fr.id, client: fr.client, status: 'Failed', type: 'Finished', error: e.message });
+      }
       await dbRunAsync(`DELETE FROM rentals WHERE id = ?`, [fr.id]);
     }
   }
@@ -596,7 +616,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       const ratio = totalAll > 0 ? am.total / totalAll : 0;
       const filled = Math.max(1, Math.round(ratio * maxBarLen));
       const bar = '█'.repeat(filled);
-      return `<code>${am.name.padEnd(4)}${bar.padEnd(maxBarLen + 2)}${am.total}</code>`;
+      const statusNote = am.error ? ' [ERROR]' : am.total;
+      return `<code>${am.name.padEnd(4)}${bar.padEnd(maxBarLen + 1)}${statusNote}</code>`;
     }).join('\n');
 
     const finishTime = new Date().toLocaleTimeString();

@@ -25,6 +25,9 @@ export class NiceHashClient {
   async getServerTime() {
     await this._delayFirstTime('getServerTime');
     const response = await fetch(`${this.baseUrl}/api/v2/time`);
+    if (!response.ok) {
+      throw new Error(`NiceHash Time Sync failed: ${response.status}`);
+    }
     const data = await response.json();
     return data.serverTime;
   }
@@ -69,30 +72,32 @@ export class NiceHashClient {
 
   async call({ method, path, query = {}, body = null }) {
     await this._delayFirstTime(path);
+    
+    // Ensure path and query string are separated (in case query was included in the path string)
+    const [cleanPath, pathQueryString] = path.split('?');
+
     const serverTime = await this.getServerTime();
     const time = serverTime.toString();
     const nonce = randomUUID();
     const requestId = randomUUID();
 
-    const queryParams = new URLSearchParams(
-      typeof query === 'string'
-        ? Object.fromEntries(new URLSearchParams(query).entries())
-        : query,
-    );
+    const queryParams = new URLSearchParams(pathQueryString || '');
+    const additionalParams = new URLSearchParams(query || {});
+    additionalParams.forEach((value, key) => queryParams.set(key, value));
     
     // Remove 'client' from query before sending to NiceHash upstream, 
     // as it is only intended for our backend's internal routing.
     queryParams.delete('client');
 
     // For Hashpower Private API, ts and nonce MUST be in the query string
-    if (path.includes('/hashpower/')) {
+    if (cleanPath.includes('/hashpower/')) {
       queryParams.set('ts', time);
       queryParams.set('nonce', nonce);
     }
 
     const queryString = queryParams.toString();
 
-    const signature = this.computeSignature(method, path, queryString, body, time, nonce);
+    const signature = this.computeSignature(method, cleanPath, queryString, body, time, nonce);
 
     const headers = {
       'X-Time': time,
@@ -103,14 +108,14 @@ export class NiceHashClient {
       'Content-Type': 'application/json'
     };
 
-    const url = `${this.baseUrl}${path}${queryString ? '?' + queryString : ''}`;
+    const url = `${this.baseUrl}${cleanPath}${queryString ? '?' + queryString : ''}`;
     const response = await fetch(url, {
       method: method.toUpperCase(),
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (response.statusCode >= 400) {
+    if (!response.ok) {
       const errorText = await response.text();
       let errorMessage = errorText;
       try {
@@ -119,7 +124,7 @@ export class NiceHashClient {
       } catch (e) { /* use raw text */ }
 
       const error = new Error(errorMessage);
-      error.statusCode = response.statusCode;
+      error.statusCode = response.status;
       error.headers = response.headers;
       throw error;
     }

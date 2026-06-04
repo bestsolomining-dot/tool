@@ -1,5 +1,4 @@
 import { createHash, createHmac } from 'crypto';
-import { request } from 'undici';
 import { db } from './db.js';
 import { normalizeCredential, sanitizeMrrEndpoint } from './utils.js';
 import { isAggregate, resolveNhClient, getNiceHashApp } from './nh.js';
@@ -107,14 +106,14 @@ export async function syncMrrClock() {
   mrrSyncPromise = (async () => {
     try {
       // Nonces must be close to MRR's server time. Syncing with NiceHash (which may drift) is risky.
-      const res = await request('https://www.miningrigrentals.com/api/v2/info/time', {
+      const res = await fetch('https://www.miningrigrentals.com/api/v2/info/time', {
         headers: { 'user-agent': 'Ben Tre Mining Tool/2.0' },
       });
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw new Error(`HTTP ${res.statusCode}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
       }
 
-      const body = await res.body.json();
+      const body = await res.json();
       const serverTimeMs = extractEpochMs(body) ?? BigInt(Date.now());
       const localTimeMs = Date.now();
       mrrClockOffset = serverTimeMs - BigInt(localTimeMs);
@@ -253,7 +252,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
       }
     }
 
-    const send = async (nStr, sig, authHeaders = {}) => request(baseUrl.toString(), {
+    const send = async (nStr, sig, authHeaders = {}) => fetch(baseUrl.toString(), {
       method: requestMethod,
       headers: {
         'user-agent': 'Ben Tre Mining Tool/2.0',
@@ -275,7 +274,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
       'x-api-sign': signatureV2,
     });
 
-    let text = await response.body.text();
+    let text = await response.text();
     let data;
     try {
       data = text ? JSON.parse(text) : { success: false, message: 'Empty response' };
@@ -286,7 +285,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     let authMessage = String(data?.data?.message || data?.message || '');
     let isAuthFailureMessage = /signature|unauthorized|authenticated|missing api key/i.test(authMessage);
     const isBadNonce = /nonce/i.test(authMessage);
-    const shouldRetry = (!data.success && isAuthFailureMessage && !isBadNonce) || response.statusCode === 401;
+    const shouldRetry = (!data.success && isAuthFailureMessage && !isBadNonce) || response.status === 401;
 
     if (shouldRetry && !isBadNonce) {
       console.warn(`[mrr:${clientName}] HMAC failed (${authMessage || 'Unauthorized'}), retrying with Legacy SHA1 Concatenation...`);
@@ -300,7 +299,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
         'X-Api-Nonce': currentNonce,
         'X-Api-Sign': legacySig,
       });
-      const retryText = await retryRes.body.text();
+      const retryText = await retryRes.text();
       try {
         data = JSON.parse(retryText);
         response = retryRes;
@@ -311,7 +310,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
       }
     }
 
-    let finalStatus = response.statusCode;
+    let finalStatus = response.status;
     if ((data?.success === false || isAuthFailureMessage) && finalStatus < 400) {
       finalStatus = 401;
     }

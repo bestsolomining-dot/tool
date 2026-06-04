@@ -53,3 +53,8 @@ mrr_monitor.db-wal
 orders.csv
 package-lock.json
 mrr_monitor.db-wal
+chromedriver.exe
+mrr_monitor.db
+mrr_monitor.db-shm
+mrr_monitor.db-wal
+orders.csv

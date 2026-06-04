@@ -243,6 +243,14 @@ export default function App() {
         </section>
         <main className="dashboard">
           <section className="quick-actions">
+            <article className="panel">
+              <MiningRigSection
+                onCall={handleMiningCall}
+                mrrClient={mrrClient}
+                setMrrClient={setMrrClient}
+                onOpenMrrPools={handleOpenMrrPools}
+              />
+            </article>
             <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <article className="panel">
                 <NiceHash
@@ -264,16 +272,7 @@ export default function App() {
                   Open Calculator
                 </button>
               </div>
-              
             </div>
-            <article className="panel">
-              <MiningRigSection
-                onCall={handleMiningCall}
-                mrrClient={mrrClient}
-                setMrrClient={setMrrClient}
-                onOpenMrrPools={handleOpenMrrPools}
-              />
-            </article>
             <article className="panel">
               <MrrPoolsManager
                 onCall={handleMiningCall}
@@ -282,7 +281,6 @@ export default function App() {
                 externalRigId={mrrPoolRigId}
                 externalRentalId={mrrPoolRentalId}
               />
-              
             </article>
           </section>
         </main>

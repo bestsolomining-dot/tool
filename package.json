@@ -10,9 +10,12 @@
 		"electron:build": "npm run build:exe",
 		"all": "concurrently \"npm run backend\" \"npm run dev\"",
 		"build": "vite build",
+		"generate-wrangler": "node script/generate-wrangler.js",
+		"build:wrangler": "npm run generate-wrangler",
+		"build:cloudflare": "npm run build && npm run generate-wrangler",
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
-		"deploy": "npm run build && wrangler deploy",
+		"deploy": "npm run build && npm run generate-wrangler && wrangler deploy --config wrangler.generated.toml",
 		"test:notify": "node test-notifier.js"
 	},
 	"main": "index.js",

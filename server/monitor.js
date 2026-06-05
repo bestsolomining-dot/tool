@@ -9,6 +9,15 @@ import { TELEGRAM_CONFIG, TelegramTemplates } from '../src/shared/telegram.js';
 //  Global State (Persisted in DB)
 // ==========================
 
+const monitorInitTracker = new Set();
+async function maybeDelay(key) {
+  if (!monitorInitTracker.has(key)) {
+    console.log(`[Monitor] First-time load delay (2s) for: ${key}`);
+    await new Promise(r => setTimeout(r, 2000));
+    monitorInitTracker.add(key);
+  }
+}
+
 /** Retrieves the global telegram notification status from the DB */
 export async function getTelegramStatus() {
   try {
@@ -87,6 +96,7 @@ function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'ite
 //  Telegram sender (with retries)
 // ==========================
 export async function sendTelegramInternal(message) {
+  await maybeDelay('sendTelegram');
   const status = await getTelegramStatus();
   if (!status.enabled) {
     console.log('[telegram] Notifications are globally disabled, skipping message.');
@@ -182,6 +192,7 @@ function dbAllAsync(sql, params = []) {
 //  Main monitoring function
 // ==========================
 export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL') {
+  await maybeDelay('runRentalMonitor');
   const requestedScope = String(clientScope || 'ALL').trim().toUpperCase();
 
   const allConfiguredAccts = Object.keys(mrrConfigs).filter(

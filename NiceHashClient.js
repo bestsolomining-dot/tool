@@ -8,12 +8,22 @@ export class NiceHashClient {
     this.baseUrl = environment === 'production' 
       ? 'https://api2.nicehash.com' 
       : 'https://api-test.nicehash.com';
+    this.initializedPaths = new Set();
+  }
+
+  async _delayFirstTime(key) {
+    if (!this.initializedPaths.has(key)) {
+      console.log(`[NiceHash] First-time function delay (2s): ${key}`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      this.initializedPaths.add(key);
+    }
   }
 
   /**
    * Fetches server time to ensure synchronization.
    */
   async getServerTime() {
+    await this._delayFirstTime('getServerTime');
     const response = await fetch(`${this.baseUrl}/api/v2/time`);
     const data = await response.json();
     return data.serverTime;
@@ -58,6 +68,7 @@ export class NiceHashClient {
   }
 
   async call({ method, path, query = {}, body = null }) {
+    await this._delayFirstTime(path);
     const serverTime = await this.getServerTime();
     const time = serverTime.toString();
     const nonce = randomUUID();

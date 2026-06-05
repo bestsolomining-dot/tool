@@ -5,6 +5,7 @@ import { normalizeCredential, sanitizeMrrEndpoint } from './utils.js';
 import { isAggregate, resolveNhClient, getNiceHashApp } from './nh.js';
 
 const mrrLastNonceByClient = new Map();
+const mrrInitTracker = new Set();
 let mrrClockOffset = 0n;
 let mrrClockSynced = false;
 let mrrSyncPromise = null;
@@ -226,6 +227,12 @@ export async function runMrrCallInOrder(clientName, task) {
 }
 
 export async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw }) {
+  if (!mrrInitTracker.has(endpoint)) {
+    console.log(`[MRR] First-time endpoint delay (2s): ${endpoint}`);
+    await new Promise(r => setTimeout(r, 2000));
+    mrrInitTracker.add(endpoint);
+  }
+
   if (!mrrClockSynced) {
     await syncMrrClock();
   }

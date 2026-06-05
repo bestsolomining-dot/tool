@@ -13,8 +13,8 @@ export class NiceHashClient {
 
   async _delayFirstTime(key) {
     if (!this.initializedPaths.has(key)) {
-      console.log(`[NiceHash] First-time function delay (2s): ${key}`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log(`[NiceHash] First-time function delay (1s): ${key}`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
       this.initializedPaths.add(key);
     }
   }

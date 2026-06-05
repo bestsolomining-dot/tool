@@ -11,8 +11,8 @@ import { TELEGRAM_CONFIG, TelegramTemplates } from '../src/shared/telegram.js';
 const monitorInitTracker = new Set();
 async function maybeDelay(key) {
   if (!monitorInitTracker.has(key)) {
-    console.log(`[Monitor] First-time load delay (2s) for: ${key}`);
-    await new Promise(r => setTimeout(r, 2000));
+    console.log(`[Monitor] First-time load delay (1s) for: ${key}`);
+    await new Promise(r => setTimeout(r, 1000));
     monitorInitTracker.add(key);
   }
 }

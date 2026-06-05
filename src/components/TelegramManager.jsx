@@ -157,9 +157,9 @@ const TelegramTemplates = {
   rentedNotice: (hbType, r, info, acct, roi, remStr) =>
     `🟢 <b>${escapeHtml(hbType).toUpperCase()}</b>\n` +
     `${divider}\n` +
-    `🆔 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
-    `🏢 <b>Account</b> <b><u>[<code>${escapeHtml(acct).toUpperCase()}</code>]</u></b>\n` +
-    `⚙️  <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+    `🆔 ${escapeHtml(r.name || r.id)}\n` +
+    `🏢 <b><u>[<code>${escapeHtml(acct).toUpperCase()}</code>]</u></b>\n` +
+    `⚙️ <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
     `${divider}\n` +
     `⚡ <b>Hashrate</b>\n` +
     `ADV : <code>${info.niceAdvertisedHashrate}</code>\n` +
@@ -167,8 +167,8 @@ const TelegramTemplates = {
     `CUR : <code>${info.niceHashrate}</code>\n\n` +
     `🎯 <b>Efficiency</b>\n` +
     `<b>${info.percent}%</b>\n\n` +
-    `${roi >= 0 ? '🟢' : '🔴'} <b>ROI</b>\n` +
-    `<b>${roi >= 0 ? '+' : ''}${roi}%</b>\n\n` +
+    // `${roi >= 0 ? '🟢' : '🔴'} <b>ROI</b>\n` +
+    // `<b>${roi >= 0 ? '+' : ''}${roi}%</b>\n\n` +
     `⏳ <b>Remaining</b>\n` +
     `<code>${remStr}</code>\n\n` +
     `💸 <b>Paid</b>\n` +
@@ -197,20 +197,19 @@ const TelegramTemplates = {
 
   heartbeatSummary: (barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime) =>
     `📊 <b>[Summary]</b>\n` +
-    `<b>Time:</b> <code>${escapeHtml(monitorTime || 'N/A')}</code>\n` +
-    `${divider}\n` +
-    `<b>Total</b> <code>${String(totalAll).padStart(4)}</code> ` +
-    `(<b>Disabled</b> <code>${String(disabledAll).padStart(4)}</code>)\n` +
     `<b>Online</b> <code>${String(onlineAll).padStart(4)}</code> ` +
     `(<b>Offline</b> <code>${String(offlineAll).padStart(4)}</code>)\n` +
+    `<b>Total</b> <code>${String(totalAll).padStart(4)}</code> ` +
+    `(<b>Disabled</b> <code>${String(disabledAll).padStart(4)}</code>)\n` +
     `♻️ <b>Rented</b> <code>${String(rentedAll).padStart(4)}</code>\n` +
     `${barChart ? `${barChart}\n` : ''}` +
     `${divider}\n` +
-    `<b>Active Rentals</b>\n` +
+    `<b>Active Rentals:</b>\n` +
+    `${divider}\n` +
     `${activeRentalLines.length > 0 ? activeRentalLines.join('\n') : '<i>No active rentals</i>'}\n` +
     `<i>Update at ${monitorTime}</i>`,
 
-  manualNotice: (r, account, avg, suffix, roi, remStr, progress, paid) => `💎 <b>[RENTED] #${r.id}</b>\n` +
+  manualNotice: (r, account, avg, suffix, roi, remStr, progress, paid) => `✅ <b>[NEW RENTAL] ✅ #${r.id}</b>\n` +
     `${divider}\n` +
     `<b>Algo:</b> <code>${escapeHtml(r.rig?.type || r.algo || 'N/A').toUpperCase()}</code>\n` +
     `<b>Acct:</b> <code>${escapeHtml(account).toUpperCase()}</code>\n` +

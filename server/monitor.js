@@ -508,12 +508,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         if (!isFinished_s) {
           activeRentalLines.push(
             `${perfEmoji} [<b><u>${escapeHtml(acct)}</u></b>] 🧬 <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
-            `<b>${escapeHtml(r.name || r.id)}</b>\n\n` +
-            `🎯<b>Effect: ${info.percent}%</b>\n` +
-            `📊<b>Avg: ${info.niceAverageHashrate}H | Ads: ${info.niceAdvertisedHashrate}H</b>\n` +
-            `🛜<b>15M: ${info.niceHashrate}H</b> 🧲 <b>Target: ${displayTarget.toFixed(2)} ${info.hashrate.suffix.toUpperCase()}</b>\n` +
-            `⏰<b>${remStr_s} to end </b>\n` +
-            `${divider}\n`
+            `<b>${escapeHtml(r.name || r.id)}</b>\n` +
+            `🎯Effect: <b>${info.percent}%</b>\n` +
+            `📊Avg: <b>${info.niceAverageHashrate}H | Ads: ${info.niceAdvertisedHashrate}H</b>\n` +
+            `🛜15M: <b>${info.niceHashrate}H</b> 🧲 <b>Target: ${displayTarget.toFixed(2)} ${info.hashrate.suffix.toUpperCase()}</b>\n` +
+            `⏳<b>${remStr_s}</b> to end \n`
           );
         }
 
@@ -539,7 +538,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const shouldNotify = forceNotify || (isNewToMonitor && withinReasonableStart);
 
         if (shouldNotify) {
-          const hbType = forceNotify ? 'MONITOR' : 'RENTED';
+          const hbType = forceNotify ? 'MONITOR' : 'RENTING';
           const roi = (efficiency - 100).toFixed(1);
           const timeProgress = totalDurationMs > 0 ? Math.floor((elapsedMs / totalDurationMs) * 100) : 0;
 

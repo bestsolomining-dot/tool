@@ -168,9 +168,14 @@ export function extractRentalInfo(rental) {
   const niceAdvertisedHashrate = (hr && typeof hr === 'object' && hr.advertised?.nice) ||
     (advertisedHash > 0 ? `${advertisedHash.toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');
 
+  const nice5mHashrate = (hr && typeof hr === 'object' && hr.last_5min?.nice) ||
+    (hr && typeof hr === 'object' && hr.last_5min ? `${parseFloat(hr.last_5min.hash || hr.last_5min || 0).toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');
+
   const niceHashrate = (hr && typeof hr === 'object' && hr.last_15min?.nice) ||
     (hr && typeof hr === 'object' && hr.nice) ||
     (currentHash > 0 ? `${currentHash.toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');
+
+  const nice15mHashrate = niceHashrate;
 
   const niceAverageHashrate = (hr && typeof hr === 'object' && hr.average?.nice) ||
     (averageHash > 0 ? `${averageHash.toFixed(2)} ${hashrateSuffix}`.trim() : '0 N/A');
@@ -197,6 +202,8 @@ export function extractRentalInfo(rental) {
       currency
     },
     niceHashrate,
+    nice5mHashrate,
+    nice15mHashrate,
     niceAverageHashrate,
     niceAdvertisedHashrate,
   };

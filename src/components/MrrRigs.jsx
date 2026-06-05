@@ -248,17 +248,29 @@ function getRentalAlgorithm(rental) {
   return rental?.rig?.type || rental?.algorithm || rental?.algorithm || rental?.normalized?.algorithm || 'N/A';
 }
 
+function getRental5mHashrate(rental) {
+  const rate = rental?.hashrate?.last_5min || rental?.rig?.hashrate?.last_5min;
+  return formatHashrateValue(rate) || rental?.normalized?.nice5mHashrate || '0 N/A';
+}
+
+function getRental15mHashrate(rental) {
+  const rate = rental?.hashrate?.last_15min || rental?.rig?.hashrate?.last_15min;
+  return formatHashrateValue(rate) || rental?.normalized?.nice15mHashrate || '0 N/A';
+}
+
 function getRentalCurrentHashrate(rental) {
-  return formatHashrateValue(rental?.hashrate?.current || rental?.hashrate) || rental?.normalized?.niceHashrate || '0 N/A';
+  const rate = rental?.hashrate?.current || rental?.rig?.hashrate?.last_15min || rental?.hashrate?.last_15min || rental?.rig?.hashrate?.current;
+  return formatHashrateValue(rate) || rental?.normalized?.niceHashrate || '0 N/A';
 }
 
 function getRentalAdvertisedHashrate(rental) {
-  return formatHashrateValue(rental?.hashrate?.advertised) || rental?.normalized?.niceHashrate || '0 N/A';
-  return formatHashrateValue(rental?.hashrate?.advertised) || rental?.normalized?.niceAdvertisedHashrate || '0 N/A';
+  const rate = rental?.hashrate?.advertised || rental?.rig?.hashrate?.advertised;
+  return formatHashrateValue(rate) || rental?.normalized?.niceAdvertisedHashrate || '0 N/A';
 }
 
 function getRentalAverageHashrate(rental) {
-  return formatHashrateValue(rental?.hashrate?.average) || rental?.normalized?.niceAverageHashrate || '0 N/A';
+  const rate = rental?.hashrate?.average || rental?.rig?.hashrate?.average;
+  return formatHashrateValue(rate) || rental?.normalized?.niceAverageHashrate || '0 N/A';
 }
 
 function getRentalEfficiency(rental) {
@@ -437,9 +449,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             endTime: getRentalEndTime(rental),
             advertised: getRentalAdvertisedHashrate(rental), // For display
             average: getRentalAverageHashrate(rental),       // For display
-            advertised: getRentalAdvertisedHashrate(rental),
-            average: getRentalAverageHashrate(rental),
             current: getRentalCurrentHashrate(rental),
+            last5m: getRental5mHashrate(rental),
+            last15m: getRental15mHashrate(rental),
             rawAds: getRawHashrate(rental.hashrate?.advertised || rental.advertised),
             rawAvg: getRawHashrate(rental.hashrate?.average || rental.average),
             pools: pools.map(p => ({
@@ -725,13 +737,27 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                 <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>
-                                  Avg Hashrate
-                                  Hashrate (Avg / Cur)
+                                  Hashrate (Avg / 5m / 15m)
                                 </div>
                                 <div>
                                   {(() => {
-                                    if (info?.isRental) return info.average || '0 N/A';
-                                    if (info?.isRental) return `${info.average || '0'} / ${info.current || '0'}`;
+                                    if (info?.isRental) {
+                                      return (
+                                        <div style={{ 
+                                          display: 'flex', 
+                                          flexDirection: 'column',
+                                          background: 'rgba(255,255,255,0.05)',
+                                          padding: '5px 8px',
+                                          borderRadius: '4px',
+                                          marginTop: '4px'
+                                        }}>
+                                          <div style={{ fontWeight: 'bold' }}>{info.average || '0 N/A'}</div>
+                                          <div style={{ fontSize: '9px', opacity: 0.8, marginTop: '1px' }}>
+                                            <span style={{ color: '#60a5fa' }}>5m:</span> {info.last5m || '0 N/A'} | <span style={{ color: '#a78bfa' }}>15m:</span> {info.last15m || '0 N/A'}
+                                          </div>
+                                        </div>
+                                      );
+                                    }
                                     const hr = rig.hashrate || rig.hash;
                                     if (!hr && hr !== 0) return '0 N/A';
                                     if (typeof hr === 'object') {
@@ -792,7 +818,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                             </div>
 
                             {(info || rig.host) && (
-                              <div className="rig-pool-summary" style={{ background: 'rgba(0,0,0,0.25)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.02)', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.2)' }}>
+                              <div className="rig-pool-summary" style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
                                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.host || info?.stratumHost}><span style={{ opacity: 0.7 }}>Host:</span> {rig.host || info?.stratumHost || 'N/A'}</div>
                                   <div><span style={{ opacity: 0.7 }}>Port:</span> {rig.port || info?.stratumPort || 'N/A'}</div>
@@ -843,7 +869,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                               <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
                                               <div style={{ marginTop: '2px', opacity: 0.9 }}>
                                                 {rentalPriceDiff !== null && rentalMyOrderDiff !== null && <span style={{ margin: '0 4px', opacity: 0.3 }}></span>}
-
                                               </div>
                                             </div>
                                             <div style={{ fontSize: '9px', textAlign: 'right' }}>

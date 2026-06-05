@@ -48,3 +48,7 @@ mrr_monitor.db-wal
 mrr_monitor.db-shm
 mrr_monitor.db
 orders.csv
+mrr_monitor.db-shm
+mrr_monitor.db-wal
+orders.csv
+package-lock.json

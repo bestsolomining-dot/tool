@@ -487,9 +487,9 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           activeRentalLines.push(
             `${perfEmoji} [<b><u>${escapeHtml(acct)}</u></b>] 🧬 <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
             `<b>${escapeHtml(r.name || r.id)}</b>\n\n` +
-            `<b><b>🎯Effect ${info.percent}%</b>\n` +
-            `📊Avg ${info.niceAverageHashrate}H | Ads ${info.niceAdvertisedHashrate}H</b>\n` +
-            `🛜<b>15M ${info.niceHashrate}H</b> 🧲 <b>Target ${displayTarget.toFixed(2)} ${info.hashrate.suffix.toUpperCase()}</b>\n` +
+            `🎯<b>Effect: ${info.percent}%</b>\n` +
+            `📊<b>Avg: ${info.niceAverageHashrate}H | Ads: ${info.niceAdvertisedHashrate}H</b>\n` +
+            `🛜<b>15M: ${info.niceHashrate}H</b> 🧲 <b>Target: ${displayTarget.toFixed(2)} ${info.hashrate.suffix.toUpperCase()}</b>\n` +
             `⏰<b>${remStr_s} to end </b>\n` +
             `${divider}\n`
           );

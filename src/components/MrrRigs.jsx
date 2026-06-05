@@ -237,7 +237,7 @@ function formatRentalStartTime(startTime) {
   if (h > 0 || d > 0) elapsed += `${h}h `;
   elapsed += `${m}m`;
 
-  return `Started ${elapsed} ago`;
+  return `${elapsed}`;
 }
 
 function getRentalEndTime(rental) {
@@ -694,14 +694,14 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       return (
                         <div key={rig.id} style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           <div style={{ padding: '0 2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ background: isMine ? '#5c005f' : 'rgba(255,255,255,0.05)', color: 'white', fontSize: '8px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                              {idLabel}: #{displayId}
-                            </span>
-                            {(mrrClient === 'VN' || rig.mrrClient) && (
-                              <span style={{ ...getClientBadgeStyle(rig.mrrClient || mrrClient), fontSize: '8px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                            <span style={{ background: isMine ? '#5c005f' : 'rgba(255,255,255,0.05)', color: 'white', fontSize: '10px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                              {idLabel}: #{displayId} 
+                              {(mrrClient === 'VN' || rig.mrrClient) && (
+                              <span style={{ ...getClientBadgeStyle(rig.mrrClient || mrrClient), fontSize: '10px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
                                 {String(rig.mrrClient || mrrClient).toUpperCase()}
                               </span>
                             )}
+                            </span>
                           </div>
                           <div className="rig-card" style={{
                             background: isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)',
@@ -732,8 +732,36 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '10px', marginBottom: '8px' }}>
                               <div>
-                                <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Algo</div>
-                                <div style={{ color: '#60a5fa' }}>{info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</div>
+                                <div style={{ opacity: 1, fontSize: '10px', color: '#4466ff', textTransform: 'uppercase' }}>Algo: {info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</div>
+                                
+                                <div>
+                                <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price</div>
+                                <div style={{ color: '#fbbf24' }}>
+                                  {(displayPrice).toFixed(8)}
+                                  <small style={{ opacity: 0.5, marginLeft: '2px' }}>{displayPriceCurrency}</small>
+                                  {isRented && paidLabel && (
+                                    <div style={{ fontSize: '9px', color: '#10b981', marginTop: '1px' }}>
+                                      Paid: <strong>{paidLabel}</strong>
+                                    </div>
+                                  )}
+                                </div>
+                                {hasNhPrice && (
+                                  <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
+                                    {/* Comparison against your specific active order */}
+                                    {myNhOrderPrice > 0 && (
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
+                                        <span>
+                                          ROI: <span style={{ fontWeight: 'bold' }}>
+                                            <span style={{ color: getRoiColor(myOrderDiff) }}>
+                                              {myOrderDiff > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%
+                                            </span>
+                                          </span>
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                 <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>
@@ -778,39 +806,11 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                       Advertised: <span style={{ color: '#34d399' }}>{info.advertised}</span>
                                     </div>
                                   )}
-
                                 </div>
                               </div>
+                              
                               <div>
-                                <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price</div>
-                                <div style={{ color: '#fbbf24' }}>
-                                  {(displayPrice).toFixed(8)}
-                                  <small style={{ opacity: 0.5, marginLeft: '2px' }}>{displayPriceCurrency}</small>
-                                  {isRented && paidLabel && (
-                                    <div style={{ fontSize: '9px', color: '#10b981', marginTop: '1px' }}>
-                                      Paid: <strong>{paidLabel}</strong>
-                                    </div>
-                                  )}
-                                </div>
-                                {hasNhPrice && (
-                                  <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
-                                    {/* Comparison against your specific active order */}
-                                    {myNhOrderPrice > 0 && (
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
-                                        <span>
-                                          ROI: <span style={{ fontWeight: 'bold' }}>
-                                            <span style={{ color: getRoiColor(myOrderDiff) }}>
-                                              {myOrderDiff > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%
-                                            </span>
-                                          </span>
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                              <div>
-                                <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>Start Time</div>
+                                <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>Started: </div>
                                 <div style={{ fontSize: (info?.startTime || rig.start) ? '10px' : '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.startTime || rig.start || ''}>
                                   {formatRentalStartTime(info?.startTime || rig.start)}
                                 </div>
@@ -872,7 +872,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                               </div>
                                             </div>
                                             <div style={{ fontSize: '9px', textAlign: 'right' }}>
-                                              <div><span style={{ opacity: 0.8 }}>End in:</span> <CountdownTimer endTime={rentalEndTime} /></div>
+                                              <div><span style={{ opacity: 0.8 }}>Remaining:</span> <CountdownTimer endTime={rentalEndTime} /></div>
                                             </div>
                                           </div>
                                           <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>

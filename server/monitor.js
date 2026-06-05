@@ -504,15 +504,18 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const remStr_s = isFinished_s ? 'Finished' : (hasEndTime ? (remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`) : 'Active');
         const perfEmoji = efficiency >= 90 ? '🟢' : (efficiency >= 70 ? '🟡' : '🔴');
         const divider = '━━━━━━━━━━━━━━━━━━━';
-        // Only include active rentals in the summary list to reduce clutter
-        if (!isFinished_s) {
+
+        // Filter for active rentals with Algorithm Speed > 0
+        const currentSpeedVal = parseFloat(info.hashrate.current || 0);
+        if (!isFinished_s && currentSpeedVal > 0) {
           activeRentalLines.push(
-            `${perfEmoji} [<b><u>${escapeHtml(acct)}</u></b>] 🧬 <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+            `${perfEmoji} 🧬 <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
             `<b>${escapeHtml(r.name || r.id)}</b>\n` +
             `🎯Effect: <b>${info.percent}%</b>\n` +
             `📊Avg: <b>${info.niceAverageHashrate}H | Ads: ${info.niceAdvertisedHashrate}H</b>\n` +
-            `🛜15M: <b>${info.niceHashrate}H</b> 🧲 <b>Target: ${displayTarget.toFixed(2)} ${info.hashrate.suffix.toUpperCase()}</b>\n` +
-            `⏳<b>${remStr_s}</b> to end \n`
+            `🛜Speed: <b>${info.niceHashrate}H</b>\n` +
+            `🧲Target: <b>${displayTarget.toFixed(2)} ${info.hashrate.suffix.toUpperCase()}</b>\n` +
+            `⏳<b>${remStr_s}</b> to end | 📡 Pool: <code>${escapeHtml(r.host || 'N/A')}:${r.port || ''}</code>\n`
           );
         }
 

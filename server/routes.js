@@ -166,37 +166,8 @@ export function registerRoutes(app) {
       data = await req.nhApp.hashpower.getMyOrders(query);
     }
 
-    const list = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
-    if (list && list.length > 0) {
-      try {
-        const flattenedData = list.map(o => ({
-          id: o.id || '',
-          account: o.nhClient || clientParam,
-          algorithm: typeof o.algorithm === 'object' ? o.algorithm.algorithm : o.algorithm,
-          market: typeof o.market === 'object' ? o.market.id : o.market,
-          price: o.price,
-          limit: o.limit,
-          speed: o.acceptedCurrentSpeed || 0,
-          poolHost: o.pool?.stratumHostname || '',
-          poolUser: o.pool?.username || '',
-          poolPass: o.pool?.password || '',
-          status: typeof o.status === 'object' ? o.status.code : o.status,
-          ts: new Date().toISOString(),
-        }));
+    const rawList = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
 
-        const headers = Object.keys(flattenedData[0]).join(',');
-        const rows = flattenedData.map(row =>
-          Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
-        ).join('\n');
-
-        const csvContent = `${headers}\n${rows}`;
-        const filePath = path.join(process.cwd(), 'orders.csv');
-        await fs.writeFile(filePath, csvContent, 'utf-8');
-        console.log(`[export] Overwritten orders list to: ${filePath}`);
-      } catch (csvErr) {
-        console.error('[excel] Failed to save orders:', csvErr.message);
-      }
-    }
     res.json(data);
   }));
 

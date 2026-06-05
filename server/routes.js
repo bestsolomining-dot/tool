@@ -426,12 +426,11 @@ export function registerRoutes(app) {
     if (isAggregate(clientParam)) {
       const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret && !isAggregate(c));
       const allRigs = [];
-      const errors = [];
 
-      for (const clientName of allClientNames) {
+      const results = await Promise.all(allClientNames.map(async (clientName) => {
         try {
           const { data, statusCode } = await mrrApiCall({ endpoint: targetEndpoint, clientNameRaw: clientName });
-          let rigs = Array.isArray(data?.data) ? data.data : (Array.isArray(data?.data?.rigs) ? data.data.rigs : []);
+          const rigs = Array.isArray(data?.data) ? data.data : (Array.isArray(data?.data?.rigs) ? data.data.rigs : []);
 
           if (targetEndpoint === '/rig/mine' && statusCode === 200 && data.success && rigs.length > 0) {
             const rigIds = rigs.map(r => r.id).join(';');
@@ -456,14 +455,20 @@ export function registerRoutes(app) {
           }
 
           if (statusCode === 200 && data?.success && rigs.length > 0) {
-            allRigs.push(...rigs.map(rig => ({ ...rig, mrrClient: clientName })));
-          } else {
-            errors.push({ client: clientName, message: data?.message || `Failed to fetch rigs (status: ${statusCode})` });
+            return { rigs: rigs.map(rig => ({ ...rig, mrrClient: clientName })) };
           }
+          return { error: { client: clientName, message: data?.message || `Failed to fetch rigs (status: ${statusCode})` } };
         } catch (err) {
-          errors.push({ client: clientName, message: err.message });
+          return { error: { client: clientName, message: err.message } };
         }
-      }
+      }));
+
+      const errors = [];
+      results.forEach(res => {
+        if (res.rigs) allRigs.push(...res.rigs);
+        if (res.error) errors.push(res.error);
+      });
+
       res.json({ success: true, rigs: allRigs, errors: errors.length > 0 ? errors : undefined });
     } else {
       if (targetEndpoint === '/rig/mine') {

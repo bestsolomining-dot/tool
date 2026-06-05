@@ -441,11 +441,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           lowHashStart = 0;
         }
 
-        // Zero hashrate for 5 minutes
+        // Zero hashrate for 10 minutes
         if (currentHash === 0) {
           if (zeroHashStart === 0) zeroHashStart = now;
-          if (now - zeroHashStart >= 300000) {
-            const alertKey = `${r.id}_zero_5m`;
+          if (now - zeroHashStart >= 600000) {
+            const alertKey = `${r.id}_zero_10m`;
             const lastAlert = lastAlertTimes.get(alertKey) || 0;
             if (now - lastAlert > ALERT_COOLDOWN_MS) {
               const msg = TelegramTemplates.zeroHashrate(acct, r, info);
@@ -479,6 +479,29 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           }
         }
 
+        // High efficiency completion (last 10 min, efficiency >95%)
+        if (remainingMs > 0 && remainingMs < 600000 && efficiency >= 95) {
+          const successKey = `${r.id}_success_95`;
+          const lastAlert = lastAlertTimes.get(successKey) || 0;
+          if (now - lastAlert > ALERT_COOLDOWN_MS) {
+            // Use a local string template for the server monitor
+            const msg = `🎉 <b>[Success] High Efficiency Completion</b>\n🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n🖥 ${escapeHtml(r.name || r.id)}\n🆔 <code>${r.id}</code>\n📉 Efficiency: <b>${efficiency.toFixed(1)}%</b>`;
+            await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Success alert failed: ${e.message}`));
+            lastAlertTimes.set(successKey, now);
+          }
+        }
+
+        // Perfect Efficiency rule: Notice every 1 minute if 100%
+        if (efficiency >= 100) {
+          const perfectKey = `perfect_100_${r.id}`;
+          const lastPerfect = lastAlertTimes.get(perfectKey) || 0;
+          if (now - lastPerfect >= 9000000) {
+            const msg = `💎 <b>[Perfect Performance] 100%</b>\n🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n🖥 ${escapeHtml(r.name || r.id)}\n🆔 <code>${r.id}</code>\n📈 Efficiency: <b>${efficiency.toFixed(1)}%</b>\n🚀 Efficiency is optimal!`;
+            await sendTelegramInternal(msg).catch(() => { });
+            lastAlertTimes.set(perfectKey, now);  
+          }
+        }
+
         // Build line for summary heartbeat
         const hasEndTime = endT > 0;
         const isFinished_s = hasEndTime && now >= endT;
@@ -487,8 +510,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const remM_s = Math.floor((remainingMs % 3600000) / 60000);
 
         const remStr_s = isFinished_s ? 'Finished' : (hasEndTime ? (remD_s > 0 ? `${remD_s}d ${remH_s}h` : `${remH_s}h ${remM_s}m`) : 'Active');
-        const perfEmoji = efficiency >= 90 ? '🟢' : (efficiency >= 70 ? '🟡' : '🔴');
-        const divider = '━━━━━━━━━━━━━━━━━━━';
+        const perfEmoji = efficiency >= 100 ? '💯' : (efficiency >= 90 ? '🟢' : (efficiency >= 70 ? '🔵' : (efficiency >= 50 ? '🟡' : '🔴')));
+        const divider = '━━━━━━━━━━━━━━━━━';  
 
         // Filter for active rentals with Algorithm Speed > 0
         const currentSpeedVal = parseFloat(info.hashrate.current || 0);
@@ -500,7 +523,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             `📊Avg: <b>${info.niceAverageHashrate}H | Ads: ${info.niceAdvertisedHashrate}H</b>\n` +
             `🛜Speed: <b>${info.niceHashrate}H</b>\n` +
             `🧲Target: <b>${displayTarget.toFixed(2)} ${info.hashrate.suffix.toUpperCase()}</b>\n` +
-            `⏳<b>${remStr_s}</b> to end | 📡 Pool: <code>${escapeHtml(r.host || 'N/A')}:${r.port || ''}</code>\n`
+            `⏳Remaining: <b>${remStr_s}</b> \n`
           );
         }
 

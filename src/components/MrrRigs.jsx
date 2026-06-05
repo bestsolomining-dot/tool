@@ -746,6 +746,10 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                           effectBg = `linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, ${effectBg} 100%)`;
                           effectBorder = '1px solid rgba(245, 158, 11, 0.4)';
                           effectTextColor = '#f59e0b';
+                        } else if (effNum >= 100) {
+                          effectBg = `linear-gradient(135deg, rgba(255, 22, 255, 0.39) 0%, ${effectBg} 100%)`;
+                          effectBorder = '1px solid rgba(36, 208, 251, 0.4)';
+                          effectTextColor = '#00eeff';
                         } else if (effNum > 90) {
                           effectBg = `linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, ${effectBg} 100%)`;
                           effectBorder = '1px solid rgba(16, 185, 129, 0.4)';

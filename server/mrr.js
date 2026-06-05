@@ -226,10 +226,17 @@ export async function runMrrCallInOrder(clientName, task) {
 }
 
 export async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw }) {
-  if (!mrrInitTracker.has(endpoint)) {
-    console.log(`[MRR] First-time endpoint delay (2s): ${endpoint}`);
+  // Normalize endpoint for tracking to prevent repeated delays on dynamic IDs (e.g. /rig/ID1;ID2/pool)
+  const trackingBase = endpoint.split('\n')[0].trim(); // In case endpoint has extra whitespace or newlines
+  const trackingEndpoint = trackingBase
+    .replace(/\/(rig|rental)\/[^/]+\/pool/, '/$1/:id/pool')
+    .replace(/\/(rig|rental)\/[0-9;]+$/, '/$1/:id')
+    .replace(/\/(rig|rental)\/[0-9;]+\/info$/, '/$1/:id/info');
+
+  if (!mrrInitTracker.has(trackingEndpoint)) {
+    console.log(`[MRR] First-time endpoint delay (2s): ${trackingEndpoint}`);
     await new Promise(r => setTimeout(r, 2000));
-    mrrInitTracker.add(endpoint);
+    mrrInitTracker.add(trackingEndpoint);
   }
 
   if (!mrrClockSynced) {
@@ -347,56 +354,60 @@ export async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
 
   const { ts: _t, client: _c, ...mrrQuery } = query || {};
 
-  for (const clientName of allClientNames) {
-    try {
-      const results = [];
-      
-      // If a specific type is requested, use it; otherwise fetch both bought and sold
-      const typesToFetch = mrrQuery.type ? [mrrQuery.type] : ['bought', 'sold'];
-      
-      for (const type of typesToFetch) {
-        const { data, statusCode } = await mrrApiCall({ 
-          endpoint: '/rental', 
-          method: 'GET', 
-          clientNameRaw: clientName, 
-          query: { ...mrrQuery, type } 
-        });
-
-        if (statusCode === 200 && data.success) {
-          const list = Array.isArray(data.data) ? data.data : (data.data?.rentals || []);
-          results.push(...list);
-        } else if (!isAll && typesToFetch.length === 1) {
-          return { statusCode, data, clientName };
-        }
+  const fetchSingleAccount = async (clientName) => {
+    const localRentals = [];
+    const typesToFetch = mrrQuery.type ? [mrrQuery.type] : ['bought', 'sold'];
+    
+    for (const type of typesToFetch) {
+      const { data, statusCode } = await mrrApiCall({ 
+        endpoint: '/rental', 
+        method: 'GET', 
+        clientNameRaw: clientName, 
+        query: { ...mrrQuery, type } 
+      });
+      if (statusCode === 200 && data.success) {
+        const list = Array.isArray(data.data) ? data.data : (data.data?.rentals || []);
+        localRentals.push(...list);
       }
-
-      if (results.length > 0) {
-        // De-duplicate if fetching multiple types
-        const uniqueList = Array.from(new Map(results.map(r => [String(r.id), r])).values());
-        uniqueList.forEach(r => r.mrrClient = clientName);
-        
-        const rentalIds = uniqueList.map(r => r.id).join(';');
-          const { data: poolsData } = await mrrApiCall({ endpoint: `/rental/${rentalIds}/pool`, clientNameRaw: clientName });
-          if (poolsData && poolsData.success) {
-            const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (Array.isArray(poolsData.data?.result) ? poolsData.data.result : []);
-            const poolMap = new Map(poolItems.map(item => [String(item.rigid || item.id || item.rentalid || item.rental_id), item.pools]));
-            uniqueList.forEach(r => {
-              const pools = poolMap.get(String(r.id));
-              if (pools && pools.length > 0) {
-                const p0 = pools.find(p => p.priority === 0 || p.priority === '0') || pools[0];
-                r.host = p0.host || p0.stratumHost;
-                r.port = p0.port || p0.stratumPort;
-                r.user = p0.user || p0.username;
-              }
-            });
-          }
-        allRentals.push(...uniqueList);
-      }
-    } catch (err) {
-      if (!isAll) throw err;
-      errors.push({ client: clientName, message: err.message });
     }
-  }
+
+    if (localRentals.length > 0) {
+      const uniqueList = Array.from(new Map(localRentals.map(r => [String(r.id), r])).values());
+      uniqueList.forEach(r => r.mrrClient = clientName);
+      
+      const rentalIds = uniqueList.map(r => r.id).join(';');
+      const { data: poolsData } = await mrrApiCall({ endpoint: `/rental/${rentalIds}/pool`, clientNameRaw: clientName });
+      if (poolsData?.success) {
+        const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (Array.isArray(poolsData.data?.result) ? poolsData.data.result : []);
+        const poolMap = new Map(poolItems.map(item => [String(item.rigid || item.id || item.rentalid || item.rental_id), item.pools]));
+        uniqueList.forEach(r => {
+          const pools = poolMap.get(String(r.id));
+          if (pools && pools.length > 0) {
+            const p0 = pools.find(p => p.priority === 0 || p.priority === '0') || pools[0];
+            r.host = p0.host || p0.stratumHost;
+            r.port = p0.port || p0.stratumPort;
+            r.user = p0.user || p0.username;
+          }
+        });
+      }
+      return uniqueList;
+    }
+    return [];
+  };
+
+  const results = await Promise.all(allClientNames.map(async (clientName) => {
+    try {
+      const rentals = await fetchSingleAccount(clientName);
+      return { rentals };
+    } catch (err) {
+      return { error: { client: clientName, message: err.message } };
+    }
+  }));
+
+  results.forEach(res => {
+    if (res.rentals) allRentals.push(...res.rentals);
+    if (res.error) errors.push(res.error);
+  });
 
   return {
     statusCode: 200,

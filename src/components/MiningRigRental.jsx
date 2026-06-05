@@ -376,6 +376,18 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
             notifiedAlerts.current.delete(completionKey);
           }
 
+          // RULE: Notice if ending soon (< 10m remaining) and efficiency > 95%
+          const successKey = `${rentalId}_success_95`;
+          if (remainingMs > 0 && remainingMs < 600000 && efficiency >= 95) {
+            if (!notifiedAlerts.current.has(successKey)) {
+              tg.notifyCompletionSuccess(r, efficiency).then(() => {
+                notifiedAlerts.current.add(successKey);
+              }).catch(() => { });
+            }
+          } else if (remainingMs >= 600000 || remainingMs <= 0 || efficiency < 95) {
+            notifiedAlerts.current.delete(successKey);
+          }
+
           conditionTimers.current.set(rentalId, timers);
         });
 

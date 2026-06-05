@@ -55,6 +55,16 @@ const TelegramTemplates = {
     `${divider}\n` +
     `<b>Paid:</b> ${paid}`,
 
+  perfectEfficiency: (account, r, efficiency, paid) => `💎 <b>[Perfect Performance] 100%</b>\n` +
+    `<b>Efficiency:</b> <b>${efficiency.toFixed(1)}%</b>\n` +
+    `<b>Left:</b> ${Math.round(remainingMs / 60000)}m\n` +
+    `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
+    `${divider}\n` +
+    `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+    `${divider}\n` +
+    `<b>Paid:</b> ${paid}\n` +
+    `<i>Running at full capacity!</i>`,
+
   startup: (account, r, avg, suffix, efficiency, paid) => `🚀 <b>[Startup Alert]</b>\n` +
     `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
     `${divider}\n` +
@@ -123,7 +133,7 @@ const TelegramTemplates = {
     `💸 <b>Paid</b>\n` +
     `<code>${info.price?.paid || '0.00'} ${info.price?.currency || 'BTC'}</code>\n` +
     `${divider}\n` +
-    `❌ Zero accepted hashrate detected for over 5 minutes.\n` +
+    `❌ Zero accepted hashrate detected for over 10 minutes.\n` +
     `Immediate action required.`,
 
   startup: (acct, r, info, efficiency, displayTarget) =>
@@ -198,7 +208,7 @@ const TelegramTemplates = {
     `📊 <b>[Summary]</b>\n` +
     `<b>Online</b> <code>${String(onlineAll).padStart(4)}</code> ` +
     `(<b>Offline</b> <code>${String(offlineAll).padStart(4)}</code>)\n` +
-    `<b>Total</b> <code>${String(totalAll).padStart(4)}</code> ` +
+    `<b>Total</b>   <code>${String(totalAll).padStart(4)}</code> ` +
     `(<b>Disabled</b> <code>${String(disabledAll).padStart(4)}</code>)\n` +
     `♻️ <b>Rented</b> <code>${String(rentedAll).padStart(4)}</code>\n` +
     `${barChart ? `${barChart}\n` : ''}` +
@@ -255,6 +265,14 @@ export function useTelegram(onCall, mrrClient) {
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
+  const notifyPerfectEfficiency = useCallback((r, efficiency) => {
+    const account = getTelegramAccount(r, mrrClient);
+    const efficiencyVal = parseFloat(efficiency || 0);
+    const paid = getPaidAmount(r);
+    const msg = TelegramTemplates.perfectEfficiency(account, r, efficiencyVal, paid);
+    return sendTelegram(msg, { silent: true });
+  }, [sendTelegram, mrrClient]);
+
   const notifyStartupEfficiencyAlert = useCallback((r, efficiency) => {
     const account = getTelegramAccount(r, mrrClient);
     const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0).toFixed(2);
@@ -270,6 +288,15 @@ export function useTelegram(onCall, mrrClient) {
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
     const paid = getPaidAmount(r);
     const msg = TelegramTemplates.completion(account, r, avg, suffix, efficiency, paid);
+    return sendTelegram(msg, { silent: true });
+  }, [sendTelegram, mrrClient]);
+
+  const notifyCompletionSuccess = useCallback((r, efficiency) => {
+    const account = getTelegramAccount(r, mrrClient);
+    const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0).toFixed(2);
+    const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
+    const paid = getPaidAmount(r);
+    const msg = TelegramTemplates.completionSuccess(account, r, avg, suffix, efficiency, paid);
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
@@ -305,8 +332,10 @@ export function useTelegram(onCall, mrrClient) {
     notifyLowEfficiency,
     notifyStartupEfficiencyAlert,
     notifyCompletionEfficiencyAlert,
+    notifyCompletionSuccess,
+    notifyPerfectEfficiency,
     sendManualNotice
-  }), [sendTelegram, notifyNewRental, notifyZeroHashrate, notifyLowEfficiency, notifyStartupEfficiencyAlert, notifyCompletionEfficiencyAlert, sendManualNotice]);
+  }), [sendTelegram, notifyNewRental, notifyZeroHashrate, notifyLowEfficiency, notifyStartupEfficiencyAlert, notifyCompletionEfficiencyAlert, notifyCompletionSuccess, notifyPerfectEfficiency, sendManualNotice]);
 }
 
 export default function TelegramManager({ onCall, mrrClient }) {

@@ -167,8 +167,42 @@ export function registerRoutes(app) {
     }
 
     const rawList = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
+    
+    // Process list: filter for speed > 0, hide Account, and split Pool details
+    const processedList = rawList
+      .filter(o => parseFloat(o.acceptedCurrentSpeed || 0) > 0)
+      .map(o => ({
+        id: o.id || '',
+        algorithmSpeed: o.acceptedCurrentSpeed || 0,
+        niceAdvertisedHashrate: o.limit || 0,        // Field requested for hashrate tracking
+        poolHost: o.pool?.stratumHostname || '',     // Split Pool Host
+        poolPort: o.pool?.port || '',                // Split Pool Port
+        algorithm: typeof o.algorithm === 'object' ? o.algorithm.algorithm : o.algorithm,
+        market: typeof o.market === 'object' ? o.market.id : o.market,
+        price: o.price,
+        limit: o.limit,
+        poolUser: o.pool?.username || '',
+        poolPass: o.pool?.password || '',
+        status: typeof o.status === 'object' ? o.status.code : o.status,
+        ts: new Date().toISOString(),
+      }));
 
-    res.json(data);
+    if (processedList.length > 0) {
+      try {
+        const headers = Object.keys(processedList[0]).join(',');
+        const rows = processedList.map(row =>
+          Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+        ).join('\n');
+
+        const csvContent = `${headers}\n${rows}`;
+        const filePath = path.join(process.cwd(), 'orders.csv');
+        await fs.writeFile(filePath, csvContent, 'utf-8');
+      } catch (csvErr) {
+        console.error('[export] Failed to save orders:', csvErr.message);
+      }
+    }
+
+    res.json(typeof data === 'object' && !Array.isArray(data) ? { ...data, list: processedList } : processedList);
   }));
 
   app.get('/api/v2/hashpower/rented-summary', asyncHandler(async (req, res) => {
@@ -229,8 +263,20 @@ export function registerRoutes(app) {
 
   app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.createOrder(req.body))));
   app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderBook(req.query))));
-  app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderPrice(req.query))));
-  app.get('/api/v2/hashpower/business/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getBusinessOrder(req.query))));
+  
+  // Sanitize query to remove tool-specific params (client, ts) before sending to NiceHash
+  app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
+    const { algorithm, market } = req.query;
+    res.json(await req.nhApp.hashpower.getOrderPrice({ algorithm, market }));
+  }));
+
+  // FIX: Resolved 405 error. Using getOrderPrice for both standard and business 
+  // as they share the /order/calculate GET endpoint for price data.
+  app.get('/api/v2/hashpower/business/order', asyncHandler(async (req, res) => {
+    const { algorithm, market } = req.query;
+    res.json(await req.nhApp.hashpower.getOrderPrice({ algorithm, market }));
+  }));
+
   app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.cancelOrder(req.params.orderId))));
   app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.refillOrder(req.params.orderId, req.body))));
   app.post('/api/v2/hashpower/order/:orderId/update', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.updatePriceLimit(req.params.orderId, req.body))));

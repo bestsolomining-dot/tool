@@ -287,6 +287,16 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   const [loadingInfoIds, setLoadingInfoIds] = useState(new Set());
   const [algoMarketPrices, setAlgoMarketPrices] = useState({}); // algoName -> priceData
 
+  const [expandedPools, setExpandedPools] = useState(new Set());
+  const togglePoolInfo = (rigId) => {
+    setExpandedPools(prev => {
+      const next = new Set(prev);
+      if (next.has(rigId)) next.delete(rigId);
+      else next.add(rigId);
+      return next;
+    });
+  };
+
   const [expandedAlgos, setExpandedAlgos] = useState({}); // algoKey -> boolean
   // More granular status filtering: 'available', 'rented', or 'all'
   const [statusFilter, setStatusFilter] = useState(endpoint === '/rig' ? initialStatus : 'rented');
@@ -558,14 +568,21 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           <div style={{ fontSize: '10px', color: '#a78bfa', textTransform: 'uppercase' }}>Rented</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#a78bfa' }}>{stats.rented}</div>
         </div>
-        <div className="stat-card-mini" style={{ background: 'rgba(251, 191, 36, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(251, 191, 36, 0.2)' }}>
-          <div style={{ fontSize: '10px', color: '#fbbf24', textTransform: 'uppercase' }}>Global Avg Eff</div>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#fbbf24' }}>
-            {(() => {
-              const effs = rigs.map(r => parseFloat(r.percent || r.hashrate?.average?.percent || 0)).filter(e => e > 0);
-              return effs.length ? (effs.reduce((a, b) => a + b, 0) / effs.length).toFixed(1) : '0.0';
-            })()}%
-          </div>
+        <div className="stat-card-mini" style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+          {(() => {
+            const effs = rigs.map(r => parseFloat(r.percent || r.hashrate?.average?.percent || 0)).filter(e => e > 0);
+            const avg = effs.length ? (effs.reduce((a, b) => a + b, 0) / effs.length) : 100;
+            const roi = avg - 100;
+            const roiColor = getRoiColor(roi);
+            return (
+              <>
+                <div style={{ fontSize: '10px', color: roiColor, textTransform: 'uppercase' }}>Global Avg ROI</div>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: roiColor }}>
+                  {roi > 0 ? '+' : ''}{roi.toFixed(1)}%
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
 
@@ -635,8 +652,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       const displayPrice1000 = displayPriceData.value;
                       const BASE_UNIT_FACTOR = 1000; // API returns price per 1000 hashes for most algos
                       const isEquihash = algoName.toLowerCase() === 'equihash';
-                      const displayPrice = isEquihash 
-                        ? displayPrice1000 
+                      const displayPrice = isEquihash
+                        ? displayPrice1000
                         : displayPrice1000 * BASE_UNIT_FACTOR;//
                       const displayPriceCurrency = displayPriceData.currency || 'BTC';
                       const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid);
@@ -691,21 +708,66 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                         ? ((displayPrice - myNhOrderAddFee) / myNhOrderAddFee) * 100
                         : null;
 
+                      // Metrics for compact display
+                      const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
+                      const eff = parseFloat(effValue).toFixed(2);
+                      const rentalStartTime = info?.startTime || rig.start;
+                      const rentalEndTime = info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null);
+                      const startT = new Date(rentalStartTime + (String(rentalStartTime).endsWith('UTC') ? '' : ' UTC')).getTime();
+                      const endT = new Date(rentalEndTime + (String(rentalEndTime).endsWith('UTC') ? '' : ' UTC')).getTime();
+                      const avgVal = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash);
+                      const hSuffix = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || '';
+                      const totalMs = endT - startT;
+                      const now = Date.now();
+                      const elapsedMs = Math.max(0, Math.min(now - startT, totalMs));
+                      const remainingMs = Math.max(0, endT - now);
+                      const timeProgress = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
+                      const totalExpectedHashes = adsVal * (totalMs / 1000);
+                      const actualHashesDone = avgVal * (elapsedMs / 1000);
+                      const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
+                      const targetHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
+                      const isBehind = targetHashrate > adsVal;
+                      const displayTarget = targetHashrate < 0 ? 0 : targetHashrate;
+                      const rentalPriceDiff = diffPercent !== null ? Number.parseFloat(diffPercent) : null;
+                      const rentalMyOrderDiff = myOrderDiff !== null ? Number.parseFloat(myOrderDiff) : null;
+
+                      // Logic for Effect-based colors: red < 50%, orange < 70, green > 90%
+                      const effNum = parseFloat(effValue);
+                      let effectBg = isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)';
+                      let effectBorder = isMine ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)';
+                      let effectTextColor = '#fbbf24'; // Default amber/yellow for 70-90% range
+
+                      if (effNum > 0) {
+                        if (effNum < 50) {
+                          effectBg = `linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, ${effectBg} 100%)`;
+                          effectBorder = '1px solid rgba(239, 68, 68, 0.4)';
+                          effectTextColor = '#ef4444';
+                        } else if (effNum < 70) {
+                          effectBg = `linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, ${effectBg} 100%)`;
+                          effectBorder = '1px solid rgba(245, 158, 11, 0.4)';
+                          effectTextColor = '#f59e0b';
+                        } else if (effNum > 90) {
+                          effectBg = `linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, ${effectBg} 100%)`;
+                          effectBorder = '1px solid rgba(16, 185, 129, 0.4)';
+                          effectTextColor = '#10b981';
+                        }
+                      }
+
                       return (
                         <div key={rig.id} style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           <div style={{ padding: '0 2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ background: isMine ? '#5c005f' : 'rgba(255,255,255,0.05)', color: 'white', fontSize: '10px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                              {idLabel}: #{displayId} 
+                              {idLabel}: #{displayId}
                               {(mrrClient === 'VN' || rig.mrrClient) && (
-                              <span style={{ ...getClientBadgeStyle(rig.mrrClient || mrrClient), fontSize: '10px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                {String(rig.mrrClient || mrrClient).toUpperCase()}
-                              </span>
-                            )}
+                                <span style={{ ...getClientBadgeStyle(rig.mrrClient || mrrClient), fontSize: '10px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                  {String(rig.mrrClient || mrrClient).toUpperCase()}
+                                </span>
+                              )}
                             </span>
                           </div>
                           <div className="rig-card" style={{
-                            background: isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)',
-                            border: isMine ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)',
+                            background: effectBg,
+                            border: effectBorder,
                             borderRadius: '8px',
                             padding: '10px',
                             position: 'relative'
@@ -731,158 +793,128 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '10px', marginBottom: '8px' }}>
-                              <div>
-                                <div style={{ opacity: 1, fontSize: '10px', color: '#4466ff', textTransform: 'uppercase' }}>Algo: {info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</div>
-                                
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ opacity: 1, fontSize: '10px', color: '#ffffff', textTransform: 'uppercase' }}>Algo: <span style={{ color: '#fc7324' }}>{info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</span></div>
                                 <div>
-                                <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price</div>
-                                <div style={{ color: '#fbbf24' }}>
-                                  {(displayPrice).toFixed(8)}
-                                  <small style={{ opacity: 0.5, marginLeft: '2px' }}>{displayPriceCurrency}</small>
-                                  {isRented && paidLabel && (
-                                    <div style={{ fontSize: '9px', color: '#10b981', marginTop: '1px' }}>
-                                      Paid: <strong>{paidLabel}</strong>
-                                    </div>
-                                  )}
-                                </div>
-                                {hasNhPrice && (
-                                  <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
-                                    {/* Comparison against your specific active order */}
-                                    {myNhOrderPrice > 0 && (
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
-                                        <span>
-                                          ROI: <span style={{ fontWeight: 'bold' }}>
-                                            <span style={{ color: getRoiColor(myOrderDiff) }}>
-                                              {myOrderDiff > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%
-                                            </span>
-                                          </span>
-                                        </span>
+                                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price</div>
+                                  <div style={{ color: '#fbbf24' }}>
+                                    {(displayPrice).toFixed(8)}
+                                    <small style={{ opacity: 0.5, marginLeft: '2px' }}>{displayPriceCurrency}</small>
+                                    {isRented && paidLabel && (
+                                      <div style={{ fontSize: '10px', color: '#10b981', marginTop: '1px' }}>
+                                        Paid: <strong>{paidLabel}</strong>
                                       </div>
                                     )}
                                   </div>
-                                )}
-                              </div>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>
-                                  Hashrate (Avg / 5m / 15m)
-                                </div>
-                                <div>
-                                  {(() => {
-                                    if (info?.isRental) {
-                                      return (
-                                        <div style={{ 
-                                          display: 'flex', 
-                                          flexDirection: 'column',
-                                          background: 'rgba(255,255,255,0.05)',
-                                          padding: '5px 8px',
-                                          borderRadius: '4px',
-                                          marginTop: '4px'
-                                        }}>
-                                          <div style={{ fontWeight: 'bold' }}>{info.average || '0 N/A'}</div>
-                                          <div style={{ fontSize: '9px', opacity: 0.8, marginTop: '1px' }}>
-                                            <span style={{ color: '#60a5fa' }}>5m:</span> {info.last5m || '0 N/A'} | <span style={{ color: '#a78bfa' }}>15m:</span> {info.last15m || '0 N/A'}
-                                          </div>
+                                  {hasNhPrice && ( /* This block was already present, but the user's snippet starts here. */
+                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
+                                      {/* Comparison against your specific active order */}
+                                      {myNhOrderPrice > 0 && ( /* This is the start of the user's provided snippet. */
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#60a5fa' }}>
+                                          <span>
+                                            <span style={{ fontWeight: 'bold' }}>
+                                              Order Price: {myNhOrderAddFee.toFixed(8)} {displayPriceCurrency}
+                                            </span>
+                                          </span>
+                                          <span>
+                                            ROI: <span style={{ fontWeight: 'bold' }}>
+                                              <span style={{ color: getRoiColor(myOrderDiff) }}>
+                                                {myOrderDiff > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%
+                                              </span>
+                                            </span>
+                                          </span>
                                         </div>
-                                      );
-                                    }
-                                    const hr = rig.hashrate || rig.hash;
-                                    if (!hr && hr !== 0) return '0 N/A';
-                                    if (typeof hr === 'object') {
-                                      // Use Average for rented rigs if available in the payload
-                                      if (isRented && hr.average) {
-                                        if (typeof hr.average === 'object') {
-                                          return hr.average.nice || `${parseFloat(hr.average.hash || 0).toFixed(2)} ${hr.average.type || ''}`.trim();
-                                        }
-                                        return hr.average;
-                                      }
-                                      // Fallback to "nice" formatted strings or advertised rate
-                                      return hr.advertised?.nice || hr.nice || hr.advertised?.hash || hr.advertised || '0';
-                                    }
-                                    return hr;
-                                  })()}
-                                  {info?.isRental && (
-                                    <div style={{ fontSize: '11px', opacity: 0.7 }}>
-                                      Advertised: <span style={{ color: '#34d399' }}>{info.advertised}</span>
+                                      )}
                                     </div>
                                   )}
                                 </div>
                               </div>
-                              
-                              <div>
-                                <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>Started: </div>
-                                <div style={{ fontSize: (info?.startTime || rig.start) ? '10px' : '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={info?.startTime || rig.start || ''}>
-                                  {formatRentalStartTime(info?.startTime || rig.start)}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                  <div>
+                                    <div><span style={{ opacity: 0.8 }}>Effect:</span>
+                                      <span style={{ color: effectTextColor, marginLeft: '4px' }}>{eff}%</span></div>
+                                    <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
+                                    <div style={{ marginTop: '2px', opacity: 0.9 }}>
+                                      {rentalPriceDiff !== null && rentalMyOrderDiff !== null && <span style={{ margin: '0 4px', opacity: 0.3 }}></span>}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <div style={{ opacity: 0.7, fontSize: '8px', textTransform: 'uppercase' }}>
+                                    Hashrate (Avg / 5m / 15m)
+                                  </div>
+                                  <div>
+                                    {(() => {
+                                      if (info?.isRental) {
+                                        return (
+                                          <div style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            background: 'rgba(255,255,255,0.05)',
+                                            padding: '5px 8px',
+                                            borderRadius: '4px',
+                                            marginTop: '4px'
+                                          }}>
+                                            <div style={{ fontWeight: 'bold' }}>{info.average || '0 N/A'}</div>
+                                            <div style={{ fontSize: '10px', opacity: 0.8, marginTop: '1px' }}>
+                                              <span style={{ color: '#60a5fa' }}>5m:</span> {info.last5m || '0 N/A'} | <span style={{ color: '#a78bfa' }}>15m:</span> {info.last15m || '0 N/A'}
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                      const hr = rig.hashrate || rig.hash;
+                                      if (!hr && hr !== 0) return '0 N/A';
+                                      if (typeof hr === 'object') {
+                                        // Use Average for rented rigs if available in the payload
+                                        if (isRented && hr.average) {
+                                          if (typeof hr.average === 'object') {
+                                            return hr.average.nice || `${parseFloat(hr.average.hash || 0).toFixed(2)} ${hr.average.type || ''}`.trim();
+                                          }
+                                          return hr.average;
+                                        }
+                                        // Fallback to "nice" formatted strings or advertised rate
+                                        return hr.advertised?.nice || hr.nice || hr.advertised?.hash || hr.advertised || '0';
+                                      }
+                                      return hr;
+                                    })()}
+                                    {info?.isRental && (
+                                      <div style={{ fontSize: '11px', opacity: 0.7 }}>
+                                        Adv: <span style={{ color: '#34d399' }}>{info.advertised}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <div style={{ fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }} title={info?.startTime || rig.start || ''}>
+                                    <span><span style={{ opacity: 0.5, textTransform: 'uppercase' }}>Started: </span>{formatRentalStartTime(info?.startTime || rig.start)}</span>
+                                    {/* <span style={{ fontSize: '1px', opacity: 0.8 }}>
+                                      Remain: <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /> */}
+                                    <span style={{ fontSize: '10px', opacity: 0.8 }}>
+                                      Remain: <CountdownTimer endTime={rentalEndTime} />
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
 
-                            {(info || rig.host) && (
+                            </div>
+                            {isRented && (
+                              <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+                                  <div style={{ width: `${timeProgress}%`, height: '100%', background: timeProgress > 90 ? '#f87171' : 'linear-gradient(90deg, #60a5fa, #a78bfa)', transition: 'width 0.5s ease' }} />
+                                </div>
+                              </div>
+                            )}
+
+                            {expandedPools.has(rig.id) && (info || rig.host) && (
                               <div className="rig-pool-summary" style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
                                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.host || info?.stratumHost}><span style={{ opacity: 0.7 }}>Host:</span> {rig.host || info?.stratumHost || 'N/A'}</div>
                                   <div><span style={{ opacity: 0.7 }}>Port:</span> {rig.port || info?.stratumPort || 'N/A'}</div>
                                   <div style={{ gridColumn: 'span 2', overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.user || info?.username}><span style={{ opacity: 0.7 }}>User:</span> {rig.user || info?.username || 'N/A'}</div>
                                 </div>
-                                {isRented && (
-                                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {(() => {
-                                      const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
-                                      const eff = parseFloat(effValue).toFixed(2);
 
-                                      // Calculate Target Hashrate to reach 100% completion
-                                      const rentalStartTime = info?.startTime || rig.start;
-                                      const rentalEndTime = info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null);
-                                      const startT = new Date(rentalStartTime + (String(rentalStartTime).endsWith('UTC') ? '' : ' UTC')).getTime();
-                                      const endT = new Date(rentalEndTime + (String(rentalEndTime).endsWith('UTC') ? '' : ' UTC')).getTime();
-
-                                      // Fix: Always use raw numbers for math to prevent unit mismatch errors
-                                      const avgVal = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash);
-
-                                      const hSuffix = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || '';
-
-                                      const totalMs = endT - startT;
-                                      const now = Date.now();
-                                      const elapsedMs = Math.max(0, Math.min(now - startT, totalMs));
-                                      const remainingMs = Math.max(0, endT - now);
-                                      const timeProgress = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
-
-                                      const totalExpectedHashes = adsVal * (totalMs / 1000);
-                                      const actualHashesDone = avgVal * (elapsedMs / 1000);
-                                      // Removing the Math.max(0, ...) clamp to allow showing surplus
-                                      const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
-                                      const targetHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
-                                      const targetDiff = adsVal > 0 ? ((targetHashrate - adsVal) / adsVal * 100).toFixed(1) : null;
-                                      const rentalPriceDiff = diffPercent !== null ? Number.parseFloat(diffPercent) : null;
-                                      const rentalMyOrderDiff = myOrderDiff !== null ? Number.parseFloat(myOrderDiff) : null;
-                                      const isBehind = targetHashrate > adsVal;
-                                      // A truly negative target means you've already delivered 100% of the work for the WHOLE rental
-                                      const displayTarget = targetHashrate < 0 ? 0 : targetHashrate;
-
-                                      return (
-                                        <>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <div>
-                                              <div><span style={{ opacity: 0.8 }}>Effect:</span>
-                                                <span style={{ color: parseFloat(eff) < 100 ? '#31ff42' : '#d33434', marginLeft: '4px' }}>{eff}%</span></div>
-
-                                              <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
-                                              <div style={{ marginTop: '2px', opacity: 0.9 }}>
-                                                {rentalPriceDiff !== null && rentalMyOrderDiff !== null && <span style={{ margin: '0 4px', opacity: 0.3 }}></span>}
-                                              </div>
-                                            </div>
-                                            <div style={{ fontSize: '9px', textAlign: 'right' }}>
-                                              <div><span style={{ opacity: 0.8 }}>Remaining:</span> <CountdownTimer endTime={rentalEndTime} /></div>
-                                            </div>
-                                          </div>
-                                          <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
-                                            <div style={{ width: `${timeProgress}%`, height: '100%', background: timeProgress > 90 ? '#f87171' : 'linear-gradient(90deg, #60a5fa, #a78bfa)', transition: 'width 0.5s ease' }} />
-                                          </div>
-                                        </>
-                                      );
-                                    })()}
-                                  </div>
-                                )}
                               </div>
                             )}
 
@@ -899,9 +931,12 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                     color: isRented ? '#a78bfa' : undefined,
                                     fontWeight: isRented ? 'bold' : 'normal'
                                   }}
-                                  onClick={() => onOpenPool?.(rig, info)}
+                                  onClick={() => {
+                                    togglePoolInfo(rig.id);
+                                    onOpenPool?.(rig, info);
+                                  }}
                                 >
-                                  {isRented ? 'Pools' : 'Pools'}
+                                  {expandedPools.has(rig.id) ? 'Hide Pools' : 'Pools'}
                                 </button>
                               )}
 

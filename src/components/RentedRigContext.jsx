@@ -27,7 +27,8 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
         const tempProcessed = activeOrders.map(o => {
           const rawAlgo = typeof o.algorithm === 'object' ? o.algorithm.algorithm || o.algorithm.displayName : o.algorithm;
           const algoCode = (rawAlgo || '').toUpperCase();
-          const marketCode = (typeof o.market === 'object' ? o.market.id : o.market) || 'USA';
+          const rawMarket = String(typeof o.market === 'object' ? o.market.id : o.market || '').toUpperCase();
+          const marketCode = ['USA', 'EU'].includes(rawMarket) ? rawMarket : 'USA';
           return {
             id: String(o.id || o.orderId || ''),
             paid: o.payedAmount || "0.00000000", // NiceHash API uses 'payedAmount'

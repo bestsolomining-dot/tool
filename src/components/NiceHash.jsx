@@ -120,8 +120,9 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     // We check if we are currently mounted and have a client before fetching
     if (nhClient && typeof onCall === 'function') {
       fetchOrders();
+      refreshSummary(); // Ensure the active orders summary is also fetched
     }
-  }, [nhClient, fetchOrders, onCall]);
+  }, [nhClient, fetchOrders, onCall, refreshSummary]);
 
   // Find market comparison data for the currently selected order
   const matchingOrderInfo = useMemo(() =>

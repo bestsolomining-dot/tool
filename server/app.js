@@ -6,7 +6,7 @@ import { initNhConfigs, nhConfigs, getNiceHashApp, resolveNhClient } from './nh.
 import { initMrrConfigs, mrrConfigs, initNonces, syncMrrClock, mrrApiCall } from './mrr.js';
 import { registerRoutes } from './routes.js';
 import { corsMiddleware, logRequestMiddleware } from './utils.js';
-import { runRentalMonitor, initTelegramNotifications } from './monitor.js';
+import { runRentalMonitor } from './monitor.js';
 
 export function createApp({ distPath }) {
   const app = express();
@@ -46,12 +46,11 @@ export async function initializeApp(env) {
   const syncManager = new SyncManager({ db, nhConfigs, mrrConfigs, mrrApiCall, resolveNhClient, getNiceHashApp });
   syncManager.run();
 
-  // Initialize Telegram notifications
-  initTelegramNotifications();
-
   // Start the monitor
   setInterval(() => runRentalMonitor(), 60000);
-  runRentalMonitor();
+
+  // Delay first heartbeat until sync/app load is complete (15s)
+  setTimeout(() => runRentalMonitor(true), 15000);
 
   try {
     const { client } = resolveNhClient('BT');

@@ -54,7 +54,7 @@ const {
 const RENTED_HEARTBEAT_MS = 15 * 60 * 1000; // Force heartbeat summary to every 15 minutes
 
 // In‑memory state
-const lastAlertTimes = new Map();   // key → timestamp
+const lastAlertTimes = new Map([['global_summary', Date.now()]]);   // key → timestamp
 const lastRigStates = new Map();    // rigId → status string
 
 // ==========================
@@ -139,21 +139,6 @@ export async function sendTelegramInternal(message) {
 
   console.error(`[telegram] Failed after ${maxAttempts} attempts: ${lastError.message}`);
   throw lastError;
-}
-
-/** Sends the initial startup message to Telegram */
-export async function initTelegramNotifications() {
-  const status = await getTelegramStatus();
-  if (!status.enabled) return;
-
-  const accts = Object.keys(mrrConfigs).filter(k => mrrConfigs[k].apiKey).join(', ');
-  const message = TelegramTemplates.systemStarted(accts);
-
-  try {
-    await sendTelegramInternal(message);
-  } catch (err) {
-    console.warn('[telegram:init] Startup notice failed (check credentials):', err.message);
-  }
 }
 
 // ==========================

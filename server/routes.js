@@ -168,12 +168,13 @@ export function registerRoutes(app) {
 
     const rawList = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
     
-    // Process list: filter for speed > 0, hide Account, and split Pool details
+    // Process list: hide Account and split Pool details. 
+    // Note: removed speed filter to ensure ACTIVE orders with 0 current speed are included.
     const processedList = rawList
-      .filter(o => parseFloat(o.acceptedCurrentSpeed || 0) > 0)
       .map(o => ({
         id: o.id || '',
-        algorithmSpeed: o.acceptedCurrentSpeed || 0,
+        acceptedCurrentSpeed: o.acceptedCurrentSpeed || 0, // Used by frontend list
+        algorithmSpeed: o.acceptedCurrentSpeed || 0,       // Kept for backward compatibility/CSV
         niceAdvertisedHashrate: o.limit || 0,        // Field requested for hashrate tracking
         poolHost: o.pool?.stratumHostname || '',     // Split Pool Host
         poolPort: o.pool?.port || '',                // Split Pool Port
@@ -181,9 +182,14 @@ export function registerRoutes(app) {
         market: typeof o.market === 'object' ? o.market.id : o.market,
         price: o.price,
         limit: o.limit,
+        payedAmount: o.payedAmount || 0,             // Required for RentedRigContext summary
+        availableAmount: o.availableAmount || 0,     // Required for order details
+        rigsCount: o.rigsCount || 0,
         poolUser: o.pool?.username || '',
         poolPass: o.pool?.password || '',
         status: typeof o.status === 'object' ? o.status.code : o.status,
+        pool: o.pool,                                // Preserved for UI components (NiceHash.jsx)
+        nhClient: o.nhClient,                        // Preserved for aggregation tracking
         ts: new Date().toISOString(),
       }));
 
@@ -266,14 +272,16 @@ export function registerRoutes(app) {
   
   // Sanitize query to remove tool-specific params (client, ts) before sending to NiceHash
   app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
-    const { algorithm, market } = req.query;
+    const { algorithm } = req.query;
+    const market = ['USA', 'EU'].includes(String(req.query.market).toUpperCase()) ? req.query.market.toUpperCase() : 'USA';
     res.json(await req.nhApp.hashpower.getOrderPrice({ algorithm, market }));
   }));
 
   // FIX: Resolved 405 error. Using getOrderPrice for both standard and business 
   // as they share the /order/calculate GET endpoint for price data.
   app.get('/api/v2/hashpower/business/order', asyncHandler(async (req, res) => {
-    const { algorithm, market } = req.query;
+    const { algorithm } = req.query;
+    const market = ['USA', 'EU'].includes(String(req.query.market).toUpperCase()) ? req.query.market.toUpperCase() : 'USA';
     res.json(await req.nhApp.hashpower.getOrderPrice({ algorithm, market }));
   }));
 
@@ -563,8 +571,7 @@ export function registerRoutes(app) {
           currency: r.price_unit || 'BTC',
           hashrate_unit: r.hashrate_unit || 'TH',
         },
-        nicehashPrice: priceMap.get(a) || null,
-        nicehashPrice: null,
+        nicehashPrice: priceMap.get(a) || null
       };
     });
 

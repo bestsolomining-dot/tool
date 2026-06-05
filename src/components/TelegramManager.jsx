@@ -198,7 +198,7 @@ const TelegramTemplates = {
     `📊 <b>[Summary]</b>\n` +
     `<b>Online</b> <code>${String(onlineAll).padStart(4)}</code> ` +
     `(<b>Offline</b> <code>${String(offlineAll).padStart(4)}</code>)\n` +
-    `<b>Total</b>   <code>${String(totalAll).padStart(4)}</code> ` +
+    `<b>Total</b> <code>${String(totalAll).padStart(4)}</code> ` +
     `(<b>Disabled</b> <code>${String(disabledAll).padStart(4)}</code>)\n` +
     `♻️ <b>Rented</b> <code>${String(rentedAll).padStart(4)}</code>\n` +
     `${barChart ? `${barChart}\n` : ''}` +

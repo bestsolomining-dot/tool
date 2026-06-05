@@ -813,7 +813,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#60a5fa' }}>
                                           <span>
                                             <span style={{ fontWeight: 'bold' }}>
-                                              Order Price: {myNhOrderAddFee.toFixed(8)} {displayPriceCurrency}
+                                              Order Price: <div style={{ color: '#fbbf24' }}>
+                                                {myNhOrderAddFee.toFixed(8)} {displayPriceCurrency}
+                                                </div>
                                             </span>
                                           </span>
                                           <span>
@@ -828,12 +830,22 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                     </div>
                                   )}
                                 </div>
+                                <div>
+                                  <div style={{ fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }} title={info?.startTime || rig.start || ''}>
+                                    <span><span style={{ opacity: 0.5, textTransform: 'uppercase' }}>Started: </span>{formatRentalStartTime(info?.startTime || rig.start)}</span>
+                                    {/* <span style={{ fontSize: '1px', opacity: 0.8 }}>
+                                      Remain: <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /> */}
+                                    <span style={{ fontSize: '10px', opacity: 0.8 }}>
+                                      Remain: <CountdownTimer endTime={rentalEndTime} />
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                   <div>
                                     <div><span style={{ opacity: 0.8 }}>Effect:</span>
-                                      <span style={{ color: effectTextColor, marginLeft: '4px' }}>{eff}%</span></div>
+                                      <span style={{ fontSize: '12px', color: effectTextColor, marginLeft: '4px' }}>{eff}%</span></div>
                                     <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
                                     <div style={{ marginTop: '2px', opacity: 0.9 }}>
                                       {rentalPriceDiff !== null && rentalMyOrderDiff !== null && <span style={{ margin: '0 4px', opacity: 0.3 }}></span>}
@@ -857,7 +869,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                             marginTop: '4px'
                                           }}>
                                             <div style={{ fontWeight: 'bold' }}>{info.average || '0 N/A'}</div>
-                                            <div style={{ fontSize: '10px', opacity: 0.8, marginTop: '1px' }}>
+                                            <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '1px' }}>
                                               <span style={{ color: '#60a5fa' }}>5m:</span> {info.last5m || '0 N/A'} | <span style={{ color: '#a78bfa' }}>15m:</span> {info.last15m || '0 N/A'}
                                             </div>
                                           </div>
@@ -879,23 +891,12 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                       return hr;
                                     })()}
                                     {info?.isRental && (
-                                      <div style={{ fontSize: '11px', opacity: 0.7 }}>
+                                      <div style={{ paddingRight: 'auto', fontSize: '11px', opacity: 0.7 }}>
                                         Adv: <span style={{ color: '#34d399' }}>{info.advertised}</span>
                                       </div>
                                     )}
                                   </div>
-                                </div>
-
-                                <div>
-                                  <div style={{ fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }} title={info?.startTime || rig.start || ''}>
-                                    <span><span style={{ opacity: 0.5, textTransform: 'uppercase' }}>Started: </span>{formatRentalStartTime(info?.startTime || rig.start)}</span>
-                                    {/* <span style={{ fontSize: '1px', opacity: 0.8 }}>
-                                      Remain: <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /> */}
-                                    <span style={{ fontSize: '10px', opacity: 0.8 }}>
-                                      Remain: <CountdownTimer endTime={rentalEndTime} />
-                                    </span>
-                                  </div>
-                                </div>
+                                </div>                                
                               </div>
 
                             </div>

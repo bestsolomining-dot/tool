@@ -62,3 +62,7 @@ mrr_monitor.db
 mrr_monitor.db-shm
 mrr_monitor.db-wal
 orders.csv
+mrr_monitor.db
+mrr_monitor.db-shm
+mrr_monitor.db-wal
+orders.csv

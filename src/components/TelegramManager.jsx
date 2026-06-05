@@ -64,7 +64,7 @@ const TelegramTemplates = {
     `<b>Paid:</b> ${paid}`,
 
   completion: (account, r, avg, suffix, efficiency, paid) => `🏁 <b>[Completion Alert]</b>\n` +
-    `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
+    `<b>Account:</b><code>${escapeHtml(account)}</code>\n` +
     `${divider}\n` +
     `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
     `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
@@ -75,7 +75,7 @@ const TelegramTemplates = {
     `🤖 <b>System Started</b>\n` +
     `Time: ${new Date().toLocaleString()}\n` +
     `Monitoring: ${accts || 'None'}\n` +
-    `Heartbeat Interval: 30m\n` +
+    `Heartbeat Interval: 15m\n` +
     `Service is now active.`,
 
   rigStatusWarning: (acct, rig) =>
@@ -127,7 +127,7 @@ const TelegramTemplates = {
     `Immediate action required.`,
 
   startup: (acct, r, info, efficiency, displayTarget) =>
-    `🟠 <b> 70% efficiency during first rental hour</b>\n` +
+    `🟠 <b> low efficiency first rental hour</b>\n` +
     `${divider}\n` +
     `🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>` +
     `🖥 ${escapeHtml(r.name || r.id)}\n` +
@@ -141,7 +141,7 @@ const TelegramTemplates = {
     `${divider}\n`,
 
   completionAlert: (acct, r, info, efficiency, displayTarget) =>
-    `🟠 <b>FINAL HOUR ALERT ⚠️ Efficiency dropped below 70% during the final hour</b>\n` +
+    `🟠 <b>FINAL HOUR ALERT</b>\n` +
     `${divider}\n` +
     `🏢 <b>Account</b> <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n` +
     `🖥 <b>Rig</b>       ${escapeHtml(r.name || r.id)}\n` +
@@ -180,8 +180,8 @@ const TelegramTemplates = {
     `🏁 <b>RENTAL COMPLETED</b>\n` +
     `${divider}\n` +
     `🏢<code>${escapeHtml(fr.client)}</code>\n` +
-    `🖥 <b>Effect</b>${escapeHtml(fr.name || fr.id)}\n` +
-    `🆔<code>${fr.id}</code>\n` +
+    `🖥 ${escapeHtml(fr.name || fr.id)}\n` +
+    // `🆔<code>${fr.id}</code>\n` +
     `⚙️<code>${escapeHtml(info?.algo || fr.algo || '')}</code>\n` +
     `${divider}\n` +
     `⚡ <b>Hashrate (avg / cur)</b>\n` +
@@ -192,9 +192,8 @@ const TelegramTemplates = {
     `\n` +
     `💸 <b>Paid</b>\n` +
     `<code>${info?.price?.paid || fr.price || '0.00'} ${info?.price?.currency || fr.currency || 'BTC'}</code>\n` +
-    `${divider}\n` +
-    `(Details may be partial if API did not return full rental info.)`,
-
+    `${divider}\n`,
+  
   heartbeatSummary: (barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime) =>
     `📊 <b>[Summary]</b>\n` +
     `<b>Online</b> <code>${String(onlineAll).padStart(4)}</code> ` +

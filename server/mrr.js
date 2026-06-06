@@ -12,7 +12,7 @@ let mrrSyncPromise = null;
 export let mrrConfigs = {}; // Declare as mutable
 export let defaultMrrClient = 'BT'; // Declare as mutable
 
-const mrrGlobalQueue = Promise.resolve(); // Hàng đợi duy nhất cho toàn bộ hệ thống MRR
+const mrrQueueByClient = new Map(); // Serialized queue storage to prevent parallel nonce usage
 let mrrGlobalCounter = 0; // Biến đếm phụ để chống trùng lặp tuyệt đối
 
 // --- Cache and In-flight request tracking to reduce API hammering ---
@@ -285,7 +285,6 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedEndpoint}`);
     const sigEndpoint = normalizedEndpoint;
-    const { client: _c, ts: _t, endpoint: _e, ...cleanQuery } = query || {};
 
     if (Object.keys(cleanQuery).length > 0) {
       for (const [key, value] of Object.entries(cleanQuery)) {

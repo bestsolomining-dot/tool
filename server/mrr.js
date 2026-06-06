@@ -13,6 +13,12 @@ export let mrrConfigs = {}; // Declare as mutable
 export let defaultMrrClient = 'BT'; // Declare as mutable
 
 const mrrQueueByClient = new Map();
+
+// --- Cache and In-flight request tracking to reduce API hammering ---
+const mrrRequestCache = new Map();
+const mrrInflight = new Map();
+const MRR_CACHE_TTL = 8000; // 8 seconds cache for repetitive GET requests
+
 const mrrInstances = new Map(); // This map will store resolved client configs
 
 export function initMrrConfigs(env) {
@@ -59,8 +65,9 @@ export async function initNonces() {
       if (!err && rows) {
         rows.forEach(row => {
           try {
+            // Nonce state MUST be tracked by API Key to ensure monotonicity across all requests
             mrrLastNonceByClient.set(row.client, BigInt(row.last_nonce));
-            console.log(`[mrr:init] Loaded last nonce baseline for ${row.client}: ${row.last_nonce}`);
+            console.log(`[mrr:init] Loaded nonce baseline for Key ${row.client.slice(0, 8)}...: ${row.last_nonce}`);
           } catch (e) { }
         });
       }
@@ -135,37 +142,33 @@ export async function syncMrrClock() {
   return mrrSyncPromise;
 }
 
-export async function nextMrrNonce(clientName) {
-  const cleanName = String(clientName || '').trim().toUpperCase();
-  const lastNonce = BigInt(mrrLastNonceByClient.get(cleanName) || 0n);
+/**
+ * Generates a strictly increasing nonce for a specific API Key.
+ * Keying by API Key prevents collisions if multiple client names share the same credentials.
+ */
+export async function nextMrrNonce(apiKey, clientLabel) {
+  if (!apiKey) return (BigInt(Date.now()) * 1000000n).toString();
+  
+  const lastNonce = BigInt(mrrLastNonceByClient.get(apiKey) || 0n);
 
   if (lastNonce > 99999999999999999999n) {
-    console.warn(`[mrr:${cleanName}] Resetting nonsensical high-watermark nonce (${lastNonce}) to 0.`);
-    mrrLastNonceByClient.set(cleanName, 0n);
-    return nextMrrNonce(cleanName);
+    console.warn(`[mrr:${clientLabel}] Resetting nonsensical high-watermark nonce (${lastNonce}) to 0.`);
+    mrrLastNonceByClient.set(apiKey, 0n);
+    return nextMrrNonce(apiKey, clientLabel);
   }
 
   const nowMs = BigInt(Date.now()) + mrrClockOffset;
   const now19 = BigInt(nowMs) * 1000000n;
 
-  // Safety: If the last stored nonce is more than 1 day in the future relative 
-  // to our current synced time, reset it to allow recovering from clock jumps.
-  const oneDayInNonces = 86400000n * 1000000n;
-  if (lastNonce > (now19 + oneDayInNonces)) {
-    console.warn(`[mrr:${cleanName}] Database nonce (${lastNonce}) is too far in the future. Resetting to current synced time.`);
-    mrrLastNonceByClient.set(cleanName, now19);
-    return nextMrrNonce(cleanName);
-  }
-
   let nonce;
   nonce = (now19 > lastNonce) ? now19 : (lastNonce + 1n);
 
-  mrrLastNonceByClient.set(cleanName, nonce);
+  mrrLastNonceByClient.set(apiKey, nonce);
   await new Promise((resolve) => {
     db.run(
-      `INSERT INTO mrr_nonces (client, last_nonce) VALUES (?, ?) 
+      `INSERT INTO mrr_nonces (client, last_nonce) VALUES (?, ?)
        ON CONFLICT(client) DO UPDATE SET last_nonce=excluded.last_nonce`,
-      [cleanName, nonce.toString()],
+      [apiKey, nonce.toString()], // Use apiKey as the unique ID for DB storage
       () => resolve(),
     );
   });
@@ -173,23 +176,22 @@ export async function nextMrrNonce(clientName) {
   return nonce.toString();
 }
 
+function getFallbackRealAccount() {
+  return Object.keys(mrrConfigs).find(k => !isAggregate(k) && mrrConfigs[k].apiKey && mrrConfigs[k].apiSecret) || 'BT';
+}
+
 export function resolveMrrClient(clientNameRaw) {
-  const clientName = isAggregate(clientNameRaw) ? 'VN' : String(clientNameRaw || defaultMrrClient).trim().toUpperCase();
-  const lookupSuffix = clientName;
+  let clientName = String(clientNameRaw || defaultMrrClient).trim().toUpperCase();
+
+  // Single-client operations cannot use aggregate handles; resolve to a real account
+  if (isAggregate(clientName)) {
+    clientName = isAggregate(defaultMrrClient) ? getFallbackRealAccount() : defaultMrrClient;
+  }
 
   if (!mrrInstances.has(clientName)) {
     let config = mrrConfigs[clientName];
-    const envKey = process.env[`MRR_KEY_RIG_${lookupSuffix}`] || process.env[`MRR_API_KEY_${lookupSuffix}`];
-    const envSecret = process.env[`MRR_SECRET_RIG_${lookupSuffix}`] || process.env[`MRR_API_SECRET_${lookupSuffix}`];
-
-    const envNonce = normalizeCredential(
-      process.env[`RIG_NOUNCE_${lookupSuffix}`] ||
-      process.env[`RIG_NONCE_${lookupSuffix}`] ||
-      process.env[`RIG_${lookupSuffix}_NOUNCE`] ||
-      process.env[`RIG_${lookupSuffix}_NONCE`] ||
-      process.env[`MRR_NOUNCE_${lookupSuffix}`] ||
-      process.env[`MRR_NONCE_${lookupSuffix}`]
-    );
+    const envKey = process.env[`MRR_KEY_RIG_${clientName}`] || process.env[`MRR_API_KEY_${clientName}`];
+    const envSecret = process.env[`MRR_SECRET_RIG_${clientName}`] || process.env[`MRR_API_SECRET_${clientName}`];
 
     if (envKey && envSecret) {
       config = { apiKey: normalizeCredential(envKey), apiSecret: normalizeCredential(envSecret) };
@@ -202,8 +204,7 @@ export function resolveMrrClient(clientNameRaw) {
 
   const clientConfig = mrrInstances.get(clientName);
   if (!clientConfig) {
-    if (isAggregate(clientName)) return { clientName, clientConfig: null };
-    const err = new Error(`MRR credentials missing for client "${clientName}". Ensure MRR_KEY_RIG_${lookupSuffix} is set.`);
+    const err = new Error(`MRR credentials missing for client "${clientName}".`);
     err.statusCode = 400;
     throw err;
   }
@@ -226,6 +227,25 @@ export async function runMrrCallInOrder(clientName, task) {
 }
 
 export async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw }) {
+  const requestMethod = String(method || 'GET').toUpperCase();
+  const isCacheable = requestMethod === 'GET';
+  const { client: _c, ts: _t, endpoint: _e, ...cleanQuery } = query || {};
+
+  const { clientName, clientConfig } = resolveMrrClient(clientNameRaw);
+  const apiKey = clientConfig?.apiKey;
+
+  // Use API Key in cache key so multiple labels sharing a key share the same cache
+  const cacheKey = `${apiKey || clientName}:${requestMethod}:${endpoint}:${JSON.stringify(cleanQuery)}:${JSON.stringify(body || {})}`;
+
+  if (isCacheable) {
+    const cached = mrrRequestCache.get(cacheKey);
+    if (cached && Date.now() < cached.expires) return cached.data;
+
+    const inflight = mrrInflight.get(cacheKey);
+    if (inflight) return inflight;
+  }
+
+  const task = (async () => {
   // Normalize endpoint for tracking to prevent repeated delays on dynamic IDs (e.g. /rig/ID1;ID2/pool)
   const trackingBase = endpoint.split('\n')[0].trim(); // In case endpoint has extra whitespace or newlines
   const trackingEndpoint = trackingBase
@@ -244,9 +264,12 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
   }
 
   const { clientName, clientConfig } = resolveMrrClient(clientNameRaw);
-  return runMrrCallInOrder(clientName, async () => {
+
+  // Lock by API Key if possible to prevent parallel nonce usage for the same account
+  const lockKey = clientConfig?.apiKey || clientName;
+
+  return runMrrCallInOrder(lockKey, async () => {
     const normalizedEndpoint = sanitizeMrrEndpoint(endpoint);
-    const requestMethod = String(method || 'GET').toUpperCase();
     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedEndpoint}`);
     const sigEndpoint = normalizedEndpoint;
@@ -271,7 +294,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
       ...(hasBody ? { body: JSON.stringify(body) } : {}),
     });
 
-    let currentNonce = await nextMrrNonce(clientName);
+    let currentNonce = await nextMrrNonce(clientConfig.apiKey, clientName);
     let signString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
     const signatureV2 = createHmac('sha1', clientConfig.apiSecret).update(signString).digest('hex');
 
@@ -296,7 +319,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
 
     if (shouldRetry && !isBadNonce) {
       console.warn(`[mrr:${clientName}] HMAC failed (${authMessage || 'Unauthorized'}), retrying with Legacy SHA1 Concatenation...`);
-      currentNonce = await nextMrrNonce(clientName);
+      currentNonce = await nextMrrNonce(clientConfig.apiKey, clientName);
       // Correct V1 Legacy concatenation: apiKey + nonce + apiSecret
       const legacyStr = `${clientConfig.apiKey}${currentNonce}${clientConfig.apiSecret}`;
       const legacySig = createHash('sha1').update(legacyStr).digest('hex');
@@ -327,6 +350,23 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
 
     return { statusCode: finalStatus, data, clientName };
   });
+  })();
+
+  if (isCacheable) {
+    mrrInflight.set(cacheKey, task);
+  }
+
+  try {
+    const result = await task;
+    if (isCacheable && result.statusCode === 200 && result.data?.success) {
+      mrrRequestCache.set(cacheKey, { data: result, expires: Date.now() + MRR_CACHE_TTL });
+    }
+    return result;
+  } finally {
+    if (isCacheable) {
+      mrrInflight.delete(cacheKey);
+    }
+  }
 }
 
 export async function mrrRequest(endpoint, req, res, method = 'GET', body = undefined) {

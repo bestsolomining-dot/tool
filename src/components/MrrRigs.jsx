@@ -155,7 +155,7 @@ function getPriceDataLocal(source) {
       const normalized = obj[key];
       if (normalized === undefined) return undefined;
       if (typeof normalized === 'object') {
-        const nested = normalized.price ?? normalized.amount ?? normalized.total ?? normalized.value ?? normalized;
+        const nested = normalized.paid ?? normalized.price ?? normalized.amount ?? normalized.total ?? normalized.value ?? normalized;
         return parsePriceValueLocal(nested);
       }
       return parsePriceValueLocal(normalized);
@@ -169,7 +169,7 @@ function getPriceDataLocal(source) {
       if (value !== undefined) return { value, currency: key.toUpperCase() };
     }
 
-    const directValue = obj.price ?? obj.advertised ?? obj.amount ?? obj.total;
+    const directValue = obj.paid ?? obj.price ?? obj.advertised ?? obj.amount ?? obj.total;
     if (directValue !== undefined) return { value: parsePriceValueLocal(directValue), currency };
 
     // fallback to first numeric child field, but ignore paid-only values
@@ -711,12 +711,15 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       const myNhOrder = nhOrders.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
                       const myNhOrderPrice = myNhOrder ? parseFloat(myNhOrder.price) : 0;
 
-                      const myNhOrderAddFee = myNhOrder
-                        ? (Number.parseFloat(myNhOrder.add_fee) || (myNhOrderPrice * 1.04))
+                      const nhPriceWithFee = myNhOrderPrice > 0 
+                        ? (parseFloat(myNhOrder.add_fee) || (myNhOrderPrice * 1.04)) 
                         : 0;
-                      const myOrderDiff = myNhOrderAddFee > 0
-                        ? ((displayPrice - myNhOrderAddFee) / myNhOrderAddFee) * 100
-                        : null;
+                      const myOrderDiff = myNhOrderPrice > 0 && mrrPriceNum > 0 ? calculatePriceComparison(
+                        mrrPriceNum,
+                        rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || '',
+                        nhPriceWithFee,
+                        myNhOrder.marketUnit || 'TH'
+                      ) : null;
 
                       // Metrics for compact display
                       const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
@@ -738,8 +741,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       const targetHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
                       const isBehind = targetHashrate > adsVal;
                       const displayTarget = targetHashrate < 0 ? 0 : targetHashrate;
-                      const rentalPriceDiff = diffPercent !== null ? Number.parseFloat(diffPercent) : null;
-                      const rentalMyOrderDiff = myOrderDiff !== null ? Number.parseFloat(myOrderDiff) : null;
+                      const rentalPriceDiff = diffPercent !== null ? parseFloat(diffPercent) : null;
+                      const rentalMyOrderDiff = myOrderDiff !== null ? parseFloat(myOrderDiff) : null;
 
                       // Logic for Effect-based colors: red < 50%, orange < 70, green > 90%
                       const effNum = parseFloat(effValue);
@@ -829,21 +832,22 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                     <small style={{ opacity: 0.5, marginLeft: '2px' }}>{displayPriceCurrency}</small>
                                   </div>
                                   {isRented && paidLabel && (
-                                    <div style={{ fontSize: '12px', color: '#10b981', marginTop: '5px', marginBottom: '5px', background: 'rgba(16, 185, 129, 0.1)', padding: '1px 4px', borderRadius: '3px', display: 'inline-block' }}>
+                                    <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', marginBottom: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '1px 4px', borderRadius: '3px', display: 'inline-block' }}>
                                       Paid: <strong>{paidLabel}</strong>
                                     </div>
                                   )}
 
-                                  {hasNhPrice && myNhOrderPrice > 0 && (
+                                  {myNhOrder && myNhOrderPrice > 0 && (
                                     <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
                                       <div style={{ color: '#60a5fa', marginBottom: '2px' }}>
                                         <span style={{ opacity: 0.7, fontSize: '8px', textTransform: 'uppercase' }}>Order Price: </span>
-                                        <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhOrderAddFee.toFixed(8)}</span>
+                                        <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhOrderPrice.toFixed(8)}</span>
+                                        <small style={{ opacity: 0.5, marginLeft: '4px' }}>BTC/{myNhOrder.marketUnit || 'TH'}</small>
                                       </div>
                                       <div>
                                         <span style={{ opacity: 0.7, fontSize: '9px', textTransform: 'uppercase' }}>ROI: </span>
                                         <span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>
-                                          {myOrderDiff > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%
+                                          {parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%
                                         </span>
                                       </div>
                                     </div>

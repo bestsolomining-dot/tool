@@ -512,14 +512,15 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   // Auto-run Verify All logic if requested via URL parameter after 5s
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('start') === 'true' && !didAutoStartRef.current && pools.length > 0 && !loading && !playing) {
+    if (params.get('start') === 'true' && !didAutoStartRef.current && pools.length > 0 && !loading && !playing && !running) {
       didAutoStartRef.current = true;
+      console.log('[Pools] Auto-start detected in URL. Starting automation in 5s...');
       const timer = setTimeout(() => {
-        verifyAllOnce();
+        startRun();
       }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [pools, loading, playing]);
+  }, [pools, loading, playing, running]);
 
   function stopAutomation() {
     stopRef.current = true

@@ -699,7 +699,12 @@ export function registerRoutes(app) {
       return res.json(result);
     }
 
-    const results = await Promise.all(ids.map(fetchSingleInfo));
+    const results = [];
+    for (const id of ids) {
+      results.push(await fetchSingleInfo(id));
+      // Ensure microsecond nonce uniqueness
+      await new Promise(r => setTimeout(r, 200));
+    }
     res.set('X-MRR-Client', String(req.query.client || defaultMrrClient).toUpperCase());
     res.json({ success: true, data: results });
   }));

@@ -6,11 +6,11 @@ export default function NiceHashOrderCard({ order }) {
       background: 'rgba(92, 71, 4, 0.18)',
       border: '1px solid rgba(219, 131, 16, 0.26)',
       borderRadius: '12px',
-      padding: '13px',
+      padding: '10px',
       display: 'flex',
       flexDirection: 'column',
-      gap: '8px',
-      minWidth: '200px',
+      gap: '6px',
+      minWidth: '170px',
       maxHeight: '200px'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -18,11 +18,11 @@ export default function NiceHashOrderCard({ order }) {
         <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{order.account}</span>
       </div>
       <div style={{ marginTop: '-4px' }}>
-        <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>Pool</div>
+        {/* <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>Pool</div> */}
         <div style={{ fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{order.poolName}</div>
       </div>
       
-      <div style={{ margin: '4px 0' }}>
+      <div style={{ margin: '2px 0' }}>
         <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Paid</div>
         <div style={{ fontSize: '0.6rem', fontWeight: '600', color: '#f3ba2f' }}>{order.paid} <small>BTC</small></div>
       </div>

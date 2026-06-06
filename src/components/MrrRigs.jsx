@@ -499,14 +499,24 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   // Auto-fetch details for rented rigs so "Started X ago" and "Eff" show up automatically
   useEffect(() => {
     if (loading || typeof onCall !== 'function') return;
-    const rentedWithoutInfo = filteredRigs.filter(r => {
-      const s = String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase();
-      return (s.includes('rented') || s.includes('active')) && !enrichedInfo[r.id] && !loadingInfoIds.has(r.id);
-    });
 
-    if (rentedWithoutInfo.length > 0) {
-      rentedWithoutInfo.forEach(r => fetchRigDetailInfo(r));
-    }
+    const syncRentedDetails = async () => {
+      const rentedWithoutInfo = filteredRigs.filter(r => {
+        const s = String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase();
+        return (s.includes('rented') || s.includes('active')) && !enrichedInfo[r.id] && !loadingInfoIds.has(r.id);
+      });
+
+      if (rentedWithoutInfo.length > 0) {
+        for (const rig of rentedWithoutInfo) {
+          // Sequential await prevents nonce overlap for the same account
+          await fetchRigDetailInfo(rig);
+          // Add a small safety gap
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
+    };
+
+    syncRentedDetails();
   }, [filteredRigs, enrichedInfo, loading, loadingInfoIds, onCall]);
 
   const getStatusClass = (status) => {
@@ -805,21 +815,21 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                             </div>
 
                             {/* Main Metrics Grid */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '10px', fontSize: '10px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '8px', fontSize: '10px' }}>
                               {/* Left Column: Algorithm & Price */}
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderRight: '1px solid rgba(255,255,255,0.05)', paddingRight: '4px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', borderRight: '1px solid rgba(255,255,255,0.05)', paddingRight: '4px' }}>
                                 <div>
                                   <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase', marginBottom: '2px' }}>Algorithm</div>
                                   <div style={{ color: '#fc7324', fontWeight: 'bold' }}>{info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</div>
                                 </div>
                                 <div>
-                                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase', marginBottom: '2px' }}>Pricing</div>
+                                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase', marginBottom: '2px' }}>Market Price:</div>
                                   <div style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold' }}>
                                     {displayPrice.toFixed(8)}
                                     <small style={{ opacity: 0.5, marginLeft: '2px' }}>{displayPriceCurrency}</small>
                                   </div>
                                   {isRented && paidLabel && (
-                                    <div style={{ fontSize: '9px', color: '#10b981', marginTop: '5px', marginBottom: '5px', background: 'rgba(16, 185, 129, 0.1)', padding: '1px 4px', borderRadius: '3px', display: 'inline-block' }}>
+                                    <div style={{ fontSize: '12px', color: '#10b981', marginTop: '5px', marginBottom: '5px', background: 'rgba(16, 185, 129, 0.1)', padding: '1px 4px', borderRadius: '3px', display: 'inline-block' }}>
                                       Paid: <strong>{paidLabel}</strong>
                                     </div>
                                   )}
@@ -827,11 +837,11 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                   {hasNhPrice && myNhOrderPrice > 0 && (
                                     <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
                                       <div style={{ color: '#60a5fa', marginBottom: '2px' }}>
-                                        <span style={{ opacity: 0.7, fontSize: '8px', textTransform: 'uppercase' }}>NH Order: </span>
+                                        <span style={{ opacity: 0.7, fontSize: '8px', textTransform: 'uppercase' }}>Order Price: </span>
                                         <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhOrderAddFee.toFixed(8)}</span>
                                       </div>
                                       <div>
-                                        <span style={{ opacity: 0.7, fontSize: '8px', textTransform: 'uppercase' }}>Current ROI: </span>
+                                        <span style={{ opacity: 0.7, fontSize: '9px', textTransform: 'uppercase' }}>ROI: </span>
                                         <span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>
                                           {myOrderDiff > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%
                                         </span>

@@ -332,12 +332,12 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
       {localOrders.length > 0 && !orderDetail && (
         <div className="local-orders-list" style={{ marginTop: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <h4 style={{ margin: 0, fontSize: '13px', opacity: 0.8 }}>My Orders List</h4>
+            <h4 style={{ margin: '1px', fontSize: '13px', opacity: 0.8 }}>My Orders List</h4>
             <button className="text-button" style={{ fontSize: '10px' }} onClick={() => setLocalOrders([])}>Clear List</button>
           </div>
           <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px' }}>
             <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0 }}>
+              <thead style={{ padding: '8px', background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0 }}>
                 <tr style={{ cursor: 'pointer', userSelect: 'none' }}>
                   <th style={{ padding: '8px' }} onClick={() => requestSort('pool')}>POOL NAME {sortConfig.key === 'pool' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
                   <th style={{ padding: '8px' }} onClick={() => requestSort('algo')}>Algo {sortConfig.key === 'algo' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>

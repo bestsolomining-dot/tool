@@ -12,13 +12,14 @@ let mrrSyncPromise = null;
 export let mrrConfigs = {}; // Declare as mutable
 export let defaultMrrClient = 'BT'; // Declare as mutable
 
-const mrrQueueByClient = new Map();
+const mrrQueueByClient = new Map(); // Serialized queue storage to prevent parallel nonce usage
+let mrrGlobalCounter = 0; // Biến đếm phụ để chống trùng lặp tuyệt đối
 
 // --- Cache and In-flight request tracking to reduce API hammering ---
 const mrrRequestCache = new Map();
 const mrrInflight = new Map();
-const MRR_CACHE_TTL = 8000; // 8 seconds cache for repetitive GET requests
-const MRR_NONCE_RECOVERY_JUMP = 2000000n; // Headroom jump to recover from server-side high-water mark issues
+const MRR_CACHE_TTL = 10000; // 10 seconds cache
+const MRR_NONCE_RECOVERY_JUMP = 600000000000n; // 10 PHÚT - Nhảy vọt cực mạnh để phá băng Bad Nonce
 
 const mrrInstances = new Map(); // This map will store resolved client configs
 
@@ -156,16 +157,21 @@ export function nextMrrNonce(apiKey, clientLabel) {
   
   const lastNonce = BigInt(mrrLastNonceByClient.get(apiKey) || 0n);
 
-  // Safety: If lastNonce is nonsensical (e.g. > 19 digits), reset to now.
-  if (lastNonce > 99999999999999999999n) {
-    console.warn(`[mrr:${clientLabel}] Resetting outlier high-watermark nonce (${lastNonce}).`);
-    mrrLastNonceByClient.set(apiKey, BigInt(Date.now()) * 1000000n);
+  // Safety: Nếu nonce trong DB/Map quá lớn (> 19 chữ số) hoặc quá xa tương lai (> 24h), reset về hiện tại.
+  const oneDayNano = 24n * 60n * 60n * 1000n * 1000000n;
+  const nowNano = (BigInt(Date.now()) + mrrClockOffset) * 1000000n;
+  if (lastNonce > 9999999999999999999n || lastNonce > (nowNano + oneDayNano)) {
+    console.warn(`[mrr:${clientLabel}] Resetting outlier/future high-watermark nonce (${lastNonce}) to current time.`);
+    mrrLastNonceByClient.set(apiKey, nowNano);
   }
 
   const nowMs = BigInt(Date.now()) + mrrClockOffset;
   const now19 = BigInt(nowMs) * 1000000n;
 
-  const nonce = (now19 > lastNonce) ? now19 : (lastNonce + 1n);
+  // Đảm bảo nonce luôn tăng và cộng thêm biến đếm toàn cục để tránh va chạm mili giây
+  mrrGlobalCounter = (mrrGlobalCounter + 1) % 1000;
+  const baseNonce = (now19 > lastNonce) ? now19 : (lastNonce + 1000n);
+  const nonce = baseNonce + BigInt(mrrGlobalCounter);
 
   mrrLastNonceByClient.set(apiKey, nonce); // Update synchronously to block concurrent reads
   
@@ -235,15 +241,16 @@ export async function runMrrCallInOrder(clientName, task) {
 export async function mrrApiCall({ endpoint, method = 'GET', query, body, clientNameRaw }) {
   const requestMethod = String(method || 'GET').toUpperCase();
   const isCacheable = requestMethod === 'GET';
-  const { client: _c, ts: _t, endpoint: _e, ...cleanQuery } = query || {};
 
   const { clientName, clientConfig } = resolveMrrClient(clientNameRaw);
   const apiKey = clientConfig?.apiKey;
 
-  // Use API Key in cache key so multiple labels sharing a key share the same cache
+  // 1. Loại bỏ các tham số nhiễu (ts, client) để tạo Cache Key ổn định
+  const { client: _c, ts: _t, endpoint: _e, ...cleanQuery } = query || {};
   const cacheKey = `${apiKey || clientName}:${requestMethod}:${endpoint}:${JSON.stringify(cleanQuery)}:${JSON.stringify(body || {})}`;
 
-  if (isCacheable) {
+  // 2. CATCH LOADING: Nếu đang có request tương tự, đợi nó thay vì bắn request mới
+  if (isCacheable && !endpoint.includes('/rental/')) { // Đừng cache chi tiết rental quá lâu
     const cached = mrrRequestCache.get(cacheKey);
     if (cached && Date.now() < cached.expires) return cached.data;
 
@@ -252,7 +259,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
   }
 
   const task = (async () => {
-  // Normalize endpoint for tracking to prevent repeated delays on dynamic IDs (e.g. /rig/ID1;ID2/pool)
+    // Throttle: Chỉ delay 1s cho lần đầu tiên gọi endpoint cụ thể
   const trackingBase = endpoint.split('\n')[0].trim(); // In case endpoint has extra whitespace or newlines
   const trackingEndpoint = trackingBase
     .replace(/\/(rig|rental)\/[^/]+\/pool/, '/$1/:id/pool')
@@ -269,17 +276,15 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     await syncMrrClock();
   }
 
-  const { clientName, clientConfig } = resolveMrrClient(clientNameRaw);
-
-  // Lock by API Key if possible to prevent parallel nonce usage for the same account
-  const lockKey = clientConfig?.apiKey || clientName;
+  // 3. GLOBAL SERIALIZATION: Ép mọi request MRR phải chạy nối đuôi nhau
+  // Điều này loại bỏ hoàn toàn khả năng 2 request bắn cùng 1 lúc gây Bad Nonce
+  const lockKey = "GLOBAL_MRR_LOCK"; 
 
   return runMrrCallInOrder(lockKey, async () => {
     const normalizedEndpoint = sanitizeMrrEndpoint(endpoint);
     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedEndpoint}`);
     const sigEndpoint = normalizedEndpoint;
-    const { client: _c, ts: _t, endpoint: _e, ...cleanQuery } = query || {};
 
     if (Object.keys(cleanQuery).length > 0) {
       for (const [key, value] of Object.entries(cleanQuery)) {
@@ -322,16 +327,21 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     let isAuthFailureMessage = /signature|unauthorized|authenticated|missing api key/i.test(authMessage);
     const isBadNonce = /nonce/i.test(authMessage);
 
-    // Optimizer: If "Bad Nonce" is received, force clock re-sync, reset local baseline and retry once.
+    // Optimizer: If "Bad Nonce" is received, force clock re-sync and retry ONCE.
     if (isBadNonce || (response.status === 401 && /nonce/i.test(text))) {
-      console.warn(`[mrr:${clientName}] Bad Nonce error (401). Jumping baseline and re-syncing clock for key ${clientConfig.apiKey.slice(0, 6)}...`);
-
       // Force immediate clock re-sync
       await syncMrrClock(true);
-
-      // Brute-force recovery: Jump the internal high-water mark past the failure point
+      
+      const nowNano = (BigInt(Date.now()) + mrrClockOffset + 1000n) * 1000000n;
       const failedNonce = BigInt(currentNonce);
-      mrrLastNonceByClient.set(clientConfig.apiKey, failedNonce + MRR_NONCE_RECOVERY_JUMP);
+      
+      // Lấy giá trị lớn nhất giữa (nonce vừa xịt, thời điểm hiện tại) rồi cộng thêm 10 phút
+      const baseForJump = failedNonce > nowNano ? failedNonce : nowNano;
+      const newJumpedNonce = baseForJump + MRR_NONCE_RECOVERY_JUMP;
+
+      console.warn(`[mrr:${clientName}] ☢️ NUCLEAR JUMP: Baseline reset to ${newJumpedNonce} (+10m) for key ${clientConfig.apiKey.slice(0, 6)}...`);
+      mrrLastNonceByClient.set(clientConfig.apiKey, newJumpedNonce);
+      db.run('INSERT OR REPLACE INTO mrr_nonces (client, last_nonce) VALUES (?, ?)', [clientConfig.apiKey, newJumpedNonce.toString()]);
 
       currentNonce = nextMrrNonce(clientConfig.apiKey, clientName);
       signString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
@@ -346,10 +356,19 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
       const retryText = await retryRes.text();
       try {
         data = JSON.parse(retryText);
-        response = retryRes;
-        authMessage = String(data?.data?.message || data?.message || '');
-        isAuthFailureMessage = /signature|unauthorized|authenticated/i.test(authMessage);
-      } catch (e) { }
+        if (data.success) {
+          return { statusCode: 200, data, clientName };
+        }
+        
+        // If it still fails after a jump and clock sync, it's NOT a nonce error.
+        const secondMsg = String(data?.data?.message || data?.message || '');
+        if (retryRes.status === 401) {
+          console.error(`[mrr:${clientName}] Permanent Auth failure for key ${clientConfig.apiKey.slice(0, 6)}... - Check if API Key/Secret are valid.`);
+          return { statusCode: 401, data: { ...data, message: "Invalid Credentials (checked via Nonce Reset)" }, clientName };
+        }
+      } catch (e) { 
+        return { statusCode: retryRes.status, data: { success: false, message: "Recovery failed" }, clientName };
+      }
     }
 
     const shouldRetry = (!data.success && isAuthFailureMessage && !isBadNonce) || response.status === 401;

@@ -18,6 +18,7 @@ const mrrQueueByClient = new Map();
 const mrrRequestCache = new Map();
 const mrrInflight = new Map();
 const MRR_CACHE_TTL = 8000; // 8 seconds cache for repetitive GET requests
+const MRR_NONCE_RECOVERY_JUMP = 2000000n; // Headroom jump to recover from server-side high-water mark issues
 
 const mrrInstances = new Map(); // This map will store resolved client configs
 
@@ -65,9 +66,12 @@ export async function initNonces() {
       if (!err && rows) {
         rows.forEach(row => {
           try {
-            // Nonce state MUST be tracked by API Key to ensure monotonicity across all requests
-            mrrLastNonceByClient.set(row.client, BigInt(row.last_nonce));
-            console.log(`[mrr:init] Loaded nonce baseline for Key ${row.client.slice(0, 8)}...: ${row.last_nonce}`);
+            // Nonce state is tracked by API Key. If the row key looks like a label (e.g., 'BT'),
+            // it's likely from an older version of the tool and should be ignored to prevent conflicts.
+            if (row.client.length > 10) {
+              mrrLastNonceByClient.set(row.client, BigInt(row.last_nonce));
+              console.log(`[mrr:init] Loaded nonce baseline for Key ${row.client.slice(0, 8)}...: ${row.last_nonce}`);
+            }
           } catch (e) { }
         });
       }
@@ -106,8 +110,9 @@ function extractEpochMs(payload) {
   return null;
 }
 
-export async function syncMrrClock() {
-  if (mrrClockSynced) return;
+/** Synchronizes local clock with MRR server time. */
+export async function syncMrrClock(force = false) {
+  if (mrrClockSynced && !force) return;
   if (mrrSyncPromise) return mrrSyncPromise;
   console.log('[mrr:clock] Synchronizing with MiningRigRentals server time...');
   mrrSyncPromise = (async () => {
@@ -146,25 +151,26 @@ export async function syncMrrClock() {
  * Generates a strictly increasing nonce for a specific API Key.
  * Keying by API Key prevents collisions if multiple client names share the same credentials.
  */
-export async function nextMrrNonce(apiKey, clientLabel) {
+export function nextMrrNonce(apiKey, clientLabel) {
   if (!apiKey) return (BigInt(Date.now()) * 1000000n).toString();
   
   const lastNonce = BigInt(mrrLastNonceByClient.get(apiKey) || 0n);
 
+  // Safety: If lastNonce is nonsensical (e.g. > 19 digits), reset to now.
   if (lastNonce > 99999999999999999999n) {
-    console.warn(`[mrr:${clientLabel}] Resetting nonsensical high-watermark nonce (${lastNonce}) to 0.`);
-    mrrLastNonceByClient.set(apiKey, 0n);
-    return nextMrrNonce(apiKey, clientLabel);
+    console.warn(`[mrr:${clientLabel}] Resetting outlier high-watermark nonce (${lastNonce}).`);
+    mrrLastNonceByClient.set(apiKey, BigInt(Date.now()) * 1000000n);
   }
 
   const nowMs = BigInt(Date.now()) + mrrClockOffset;
   const now19 = BigInt(nowMs) * 1000000n;
 
-  let nonce;
-  nonce = (now19 > lastNonce) ? now19 : (lastNonce + 1n);
+  const nonce = (now19 > lastNonce) ? now19 : (lastNonce + 1n);
 
-  mrrLastNonceByClient.set(apiKey, nonce);
-  await new Promise((resolve) => {
+  mrrLastNonceByClient.set(apiKey, nonce); // Update synchronously to block concurrent reads
+  
+  // Async DB update - don't block the API thread
+  new Promise((resolve) => {
     db.run(
       `INSERT INTO mrr_nonces (client, last_nonce) VALUES (?, ?)
        ON CONFLICT(client) DO UPDATE SET last_nonce=excluded.last_nonce`,
@@ -294,7 +300,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
       ...(hasBody ? { body: JSON.stringify(body) } : {}),
     });
 
-    let currentNonce = await nextMrrNonce(clientConfig.apiKey, clientName);
+    let currentNonce = nextMrrNonce(clientConfig.apiKey, clientName);
     let signString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
     const signatureV2 = createHmac('sha1', clientConfig.apiSecret).update(signString).digest('hex');
 
@@ -315,11 +321,42 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     let authMessage = String(data?.data?.message || data?.message || '');
     let isAuthFailureMessage = /signature|unauthorized|authenticated|missing api key/i.test(authMessage);
     const isBadNonce = /nonce/i.test(authMessage);
+
+    // Optimizer: If "Bad Nonce" is received, force clock re-sync, reset local baseline and retry once.
+    if (isBadNonce || (response.status === 401 && /nonce/i.test(text))) {
+      console.warn(`[mrr:${clientName}] Bad Nonce error (401). Jumping baseline and re-syncing clock for key ${clientConfig.apiKey.slice(0, 6)}...`);
+
+      // Force immediate clock re-sync
+      await syncMrrClock(true);
+
+      // Brute-force recovery: Jump the internal high-water mark past the failure point
+      const failedNonce = BigInt(currentNonce);
+      mrrLastNonceByClient.set(clientConfig.apiKey, failedNonce + MRR_NONCE_RECOVERY_JUMP);
+
+      currentNonce = nextMrrNonce(clientConfig.apiKey, clientName);
+      signString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
+      const retrySig = createHmac('sha1', clientConfig.apiSecret).update(signString).digest('hex');
+
+      const retryRes = await send(currentNonce, retrySig, {
+        'x-api-key': clientConfig.apiKey,
+        'x-api-nonce': currentNonce,
+        'x-api-sign': retrySig,
+      });
+
+      const retryText = await retryRes.text();
+      try {
+        data = JSON.parse(retryText);
+        response = retryRes;
+        authMessage = String(data?.data?.message || data?.message || '');
+        isAuthFailureMessage = /signature|unauthorized|authenticated/i.test(authMessage);
+      } catch (e) { }
+    }
+
     const shouldRetry = (!data.success && isAuthFailureMessage && !isBadNonce) || response.status === 401;
 
     if (shouldRetry && !isBadNonce) {
       console.warn(`[mrr:${clientName}] HMAC failed (${authMessage || 'Unauthorized'}), retrying with Legacy SHA1 Concatenation...`);
-      currentNonce = await nextMrrNonce(clientConfig.apiKey, clientName);
+      currentNonce = nextMrrNonce(clientConfig.apiKey, clientName);
       // Correct V1 Legacy concatenation: apiKey + nonce + apiSecret
       const legacyStr = `${clientConfig.apiKey}${currentNonce}${clientConfig.apiSecret}`;
       const legacySig = createHash('sha1').update(legacyStr).digest('hex');

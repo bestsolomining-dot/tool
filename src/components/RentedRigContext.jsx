@@ -65,16 +65,18 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
             }
           const rawPrice = priceData?.price || priceData;
           const priceValue = parseFloat(rawPrice?.fixedPrice || rawPrice?.standardPrice?.fast || rawPrice?.standardPrice || rawPrice?.price || 0);
-          const priceUnit = rawPrice?.speedUnit || rawPrice?.unit || 'TH';
+          const priceUnit = rawPrice?.speedUnit || rawPrice?.unit || (algoName.toUpperCase().includes('SHA256') ? 'EH' : 'TH');
           marketPrices[key] = { value: priceValue, unit: priceUnit };
         } catch (e) { marketPrices[key] = { value: 0, unit: 'TH' }; }
         }));
 
         const processed = tempProcessed.map(p => {
-        const mktData = marketPrices[`${p.algo}:${p.market}`] || { value: 0, unit: 'TH' };
+        const isSha256 = p.algo.includes('SHA256');
+        const mktData = marketPrices[`${p.algo}:${p.market}`] || { value: 0, unit: isSha256 ? 'EH' : 'TH' };
         const mkt = mktData.value;
-          const cur = parseFloat(p.price);
-        const diff = mkt > 0 ? calculatePriceComparison(cur, 'TH', mkt, mktData.unit) : null;
+        const cur = parseFloat(p.price);
+        // For NH buying, swap arguments so "Savings" is positive: (Market - MyPrice) / Market
+        const diff = mkt > 0 ? calculatePriceComparison(mkt, mktData.unit, cur, mktData.unit) : null;
         return { ...p, marketPrice: mkt, marketUnit: mktData.unit, priceDiff: diff };
         }).sort((a, b) => parseFloat(b.speed || 0) - parseFloat(a.speed || 0));
 

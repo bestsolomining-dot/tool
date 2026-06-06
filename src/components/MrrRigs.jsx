@@ -18,7 +18,12 @@ const MRR_BASE_POWER = UNIT_TO_POWER[MRR_BASE_UNIT];
 
 /** Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH') */
 const clean = (u) => {
-  const m = String(u || '').toUpperCase().trim().match(/(EH|PH|TH|GH|MH|KH|H|E|P|T|G|M|K)/);
+  const str = String(u || '').toUpperCase().trim();
+  // Special case: ignore algorithm names that contain unit letters
+  if (str.includes('SHA256')) return 'PH'; 
+  if (str.includes('SCRYPT')) return 'MH';
+
+  const m = str.match(/(EH|PH|TH|GH|MH|KH|EHS|PHS|THS|GHS|MHS|E|P|T|G|M|K|H)/);
   if (!m) return 'TH';
   let unit = m[0];
   const singleMap = { 'E': 'EH', 'P': 'PH', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH', 'EHS': 'EH', 'PHS': 'PH', 'THS': 'TH', 'GHS': 'GH', 'MHS': 'MH' };
@@ -71,8 +76,8 @@ export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
   const mrrPriceNum = Number.parseFloat(mrrPrice || 0);
 
   if (nhPriceNum <= 0 || mrrPriceNum <= 0) return null;
-  const mrrUnitClean = clean(mrrUnit) || 'TH';
-  const nhUnitClean = clean(nhUnit) || 'TH';
+  const mrrUnitClean = clean(mrrUnit);
+  const nhUnitClean = clean(nhUnit);
 
   // Get power factors (10^n), defaulting to TeraHash (-6 relative to EH)
   const mrrP = UNIT_TO_POWER[mrrUnitClean] ?? -6;
@@ -82,7 +87,8 @@ export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
   const mrrPriceNorm = mrrPriceNum / Math.pow(10, mrrP);
   const nhPriceNorm = nhPriceNum / Math.pow(10, nhP);
 
-  return ((mrrPriceNorm - nhPriceNorm) / nhPriceNorm * 100).toFixed(1);
+  // Seller ROI = (Your Price - Market Benchmark) / Your Price
+  return ((mrrPriceNorm - nhPriceNorm) / mrrPriceNorm * 100).toFixed(1);
 }
 
 /** Deeply searches for a rig array in the MRR response */
@@ -678,7 +684,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                         ? { value: parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid), currency: String(info?.price?.currency || rig.price?.currency || info?.price?.price_unit || rig.price?.price_unit || 'BTC').toUpperCase() }
                         : displayPriceData;
 
-                      const btcPriceData = getBtcPriceDataUtils(effectivePriceSource);
+                      const btcPriceData = (effectiveCostData.currency === 'BTC') ? effectiveCostData : getBtcPriceDataUtils(effectivePriceSource);
+                      const isMrrBtc = btcPriceData.currency === 'BTC' && btcPriceData.value > 0;
                       const mrrComparePriceValue = btcPriceData.value;
 
                       const nhPriceValue = getNiceHashPriceValue(rawNhData);
@@ -700,9 +707,10 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                         return Number.isFinite(val) ? val : 0;
                       })();
 
+                      const mrrUnit = clean(info?.advertised || rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH');
                       const diffPercent = calculatePriceComparison(
                         mrrPriceNum,
-                        rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || '',
+                        mrrUnit,
                         nhPriceValue,
                         nhData?.speedUnit || nhData?.unit || ''
                       );
@@ -714,11 +722,13 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       const nhPriceWithFee = myNhOrderPrice > 0 
                         ? (parseFloat(myNhOrder.add_fee) || (myNhOrderPrice * 1.04)) 
                         : 0;
-                      const myOrderDiff = myNhOrderPrice > 0 && mrrPriceNum > 0 ? calculatePriceComparison(
+                      const isSha256 = algoName.toUpperCase().includes('SHA256');
+                      const myNhUnit = myNhOrder?.marketUnit || (isSha256 ? 'EH' : 'TH');
+                      const myOrderDiff = (myNhOrderPrice > 0 && mrrPriceNum > 0 && isMrrBtc) ? calculatePriceComparison(
                         mrrPriceNum,
-                        rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || '',
+                        (isSha256 && mrrUnit === 'TH') ? 'PH' : mrrUnit, // Fallback SHA256 to PH if TH is detected
                         nhPriceWithFee,
-                        myNhOrder.marketUnit || 'TH'
+                        myNhUnit
                       ) : null;
 
                       // Metrics for compact display
@@ -837,12 +847,11 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                     </div>
                                   )}
 
-                                  {myNhOrder && myNhOrderPrice > 0 && (
+                                  {myNhOrder && myNhOrderPrice > 0 && myOrderDiff !== null && (
                                     <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
                                       <div style={{ color: '#60a5fa', marginBottom: '2px' }}>
                                         <span style={{ opacity: 0.7, fontSize: '8px', textTransform: 'uppercase' }}>Order Price: </span>
                                         <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhOrderPrice.toFixed(8)}</span>
-                                        <small style={{ opacity: 0.5, marginLeft: '4px' }}>BTC/{myNhOrder.marketUnit || 'TH'}</small>
                                       </div>
                                       <div>
                                         <span style={{ opacity: 0.7, fontSize: '9px', textTransform: 'uppercase' }}>ROI: </span>

@@ -33,7 +33,7 @@ export default function NiceHashOrderCard({ order }) {
           <span style={{ fontWeight: 'bold' }}>{parseFloat(order.price).toFixed(8)}</span>
           {order.priceDiff && (
             <span style={{ 
-              color: parseFloat(order.priceDiff) <= 0 ? '#10b981' : '#f87171',
+              color: parseFloat(order.priceDiff) >= 0 ? '#10b981' : '#f87171',
               fontSize: '0.7rem'
             }}>
               ({parseFloat(order.priceDiff) > 0 ? '+' : ''}{order.priceDiff}%)

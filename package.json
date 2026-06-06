@@ -9,6 +9,7 @@
 		"build:exe": "npm run build && npx pkg . --output release/nh-tool.exe",
 		"electron:build": "npm run build:exe",
 		"all": "concurrently \"npm run backend\" \"npm run dev\"",
+		"all:start": "concurrently \"npm run backend\" \"vite --open /?start=true\"",
 		"build": "vite build",
 		"generate-wrangler": "node script/generate-wrangler.js",
 		"build:wrangler": "npm run generate-wrangler",

@@ -758,123 +758,135 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                       }
 
                       return (
-                        <div key={rig.id} style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <div style={{ padding: '0 2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ background: isMine ? '#5c005f' : 'rgba(255,255,255,0.05)', color: 'white', fontSize: '10px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                              {idLabel}: #{displayId}
-                              {(mrrClient === 'VN' || rig.mrrClient) && (
-                                <span style={{ ...getClientBadgeStyle(rig.mrrClient || mrrClient), fontSize: '10px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                  {String(rig.mrrClient || mrrClient).toUpperCase()}
-                                </span>
-                              )}
-                            </span>
-                          </div>
+                        <div key={rig.id} style={{ padding: '0' }}>
                           <div className="rig-card" style={{
                             background: effectBg,
                             border: effectBorder,
-                            borderRadius: '8px',
+                            borderRadius: '12px',
                             padding: '10px',
-                            position: 'relative'
+                            position: 'relative',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '10px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                            transition: 'transform 0.15s ease'
                           }}>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', gap: '8px' }}>
-                              <strong style={{ fontSize: '12px', lineHeight: '1.2', flex: 1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{rig.name}</strong>
-                              <span
-                                style={{
-                                  fontSize: '9px',
-                                  fontWeight: 'bold',
-                                  padding: '2px 6px',
-                                  borderRadius: '4px',
-                                  letterSpacing: '0.5px',
-                                  whiteSpace: 'nowrap',
-                                  ...getStatusClass(rig.status)
-                                }}>
-                                {(() => {
-                                  const s = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toUpperCase();
-                                  return s.includes('AVAILABLE') ? 'AVAILABLE' : s.includes('RENTED') ? 'RENTED' : s;
-                                })()}
-                              </span>
+                            {/* Header Section */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ background: isMine ? '#5c005f' : 'rgba(255,255,255,0.1)', color: 'white', fontSize: '9px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                  {idLabel}: #{displayId}
+                                  {(mrrClient === 'VN' || rig.mrrClient) && (
+                                    <span style={{ ...getClientBadgeStyle(rig.mrrClient || mrrClient), fontSize: '9px', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', marginLeft: '4px' }}>
+                                      {String(rig.mrrClient || mrrClient).toUpperCase()}
+                                    </span>
+                                  )}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: '9px',
+                                    fontWeight: 'bold',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    letterSpacing: '0.5px',
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.1)',
+                                    ...getStatusClass(rig.status)
+                                  }}>
+                                  {(() => {
+                                    const s = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toUpperCase();
+                                    return s.includes('AVAILABLE') ? 'AVAILABLE' : s.includes('RENTED') ? 'RENTED' : s;
+                                  })()}
+                                </span>
+                              </div>
+                              <strong style={{ fontSize: '13px', lineHeight: '1.3', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: '#f8fafc' }}>
+                                {rig.name}
+                              </strong>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '10px', marginBottom: '8px' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <div style={{ opacity: 1, fontSize: '10px', color: '#ffffff', textTransform: 'uppercase' }}>Algo: <span style={{ color: '#fc7324' }}>{info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</span></div>
+                            {/* Main Metrics Grid */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '10px', fontSize: '10px' }}>
+                              {/* Left Column: Algorithm & Price */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderRight: '1px solid rgba(255,255,255,0.05)', paddingRight: '4px' }}>
                                 <div>
-                                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price</div>
-                                  <div style={{ color: '#fbbf24' }}>
-                                    {(displayPrice).toFixed(8)}
+                                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase', marginBottom: '2px' }}>Algorithm</div>
+                                  <div style={{ color: '#fc7324', fontWeight: 'bold' }}>{info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</div>
+                                </div>
+                                <div>
+                                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase', marginBottom: '2px' }}>Pricing</div>
+                                  <div style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold' }}>
+                                    {displayPrice.toFixed(8)}
                                     <small style={{ opacity: 0.5, marginLeft: '2px' }}>{displayPriceCurrency}</small>
-                                    {isRented && paidLabel && (
-                                      <div style={{ fontSize: '10px', color: '#10b981', marginTop: '1px' }}>
-                                        Paid: <strong>{paidLabel}</strong>
-                                      </div>
-                                    )}
                                   </div>
-                                  {hasNhPrice && ( /* This block was already present, but the user's snippet starts here. */
-                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
-                                      {/* Comparison against your specific active order */}
-                                      {myNhOrderPrice > 0 && ( /* This is the start of the user's provided snippet. */
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#60a5fa' }}>
-                                          <span>
-                                            <span style={{ fontWeight: 'bold' }}>
-                                              Order Price: <div style={{ color: '#fbbf24' }}>
-                                                {myNhOrderAddFee.toFixed(8)} {displayPriceCurrency}
-                                                </div>
-                                            </span>
-                                          </span>
-                                          <span>
-                                            ROI: <span style={{ fontWeight: 'bold' }}>
-                                              <span style={{ color: getRoiColor(myOrderDiff) }}>
-                                                {myOrderDiff > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%
-                                              </span>
-                                            </span>
-                                          </span>
-                                        </div>
-                                      )}
+                                  {isRented && paidLabel && (
+                                    <div style={{ fontSize: '9px', color: '#10b981', marginTop: '5px', marginBottom: '5px', background: 'rgba(16, 185, 129, 0.1)', padding: '1px 4px', borderRadius: '3px', display: 'inline-block' }}>
+                                      Paid: <strong>{paidLabel}</strong>
+                                    </div>
+                                  )}
+
+                                  {hasNhPrice && myNhOrderPrice > 0 && (
+                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                      <div style={{ color: '#60a5fa', marginBottom: '2px' }}>
+                                        <span style={{ opacity: 0.7, fontSize: '8px', textTransform: 'uppercase' }}>NH Order: </span>
+                                        <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhOrderAddFee.toFixed(8)}</span>
+                                      </div>
+                                      <div>
+                                        <span style={{ opacity: 0.7, fontSize: '8px', textTransform: 'uppercase' }}>Current ROI: </span>
+                                        <span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>
+                                          {myOrderDiff > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%
+                                        </span>
+                                      </div>
                                     </div>
                                   )}
                                 </div>
-                                <div>
-                                  <div style={{ fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }} title={info?.startTime || rig.start || ''}>
-                                    <span><span style={{ opacity: 0.5, textTransform: 'uppercase' }}>Started: </span>{formatRentalStartTime(info?.startTime || rig.start)}</span>
-                                    {/* <span style={{ fontSize: '1px', opacity: 0.8 }}>
-                                      Remain: <CountdownTimer endTime={info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)} /> */}
-                                    <span style={{ fontSize: '10px', opacity: 0.8 }}>
-                                      Remain: <CountdownTimer endTime={rentalEndTime} />
-                                    </span>
-                                  </div>
-                                </div>
                               </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                  <div>
-                                    <div><span style={{ opacity: 0.8 }}>Effect:</span>
-                                      <span style={{ fontSize: '12px', color: effectTextColor, marginLeft: '4px' }}>{eff}%</span></div>
-                                    <span style={{ opacity: 0.6 }}>Target:</span> <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold' }}>{displayTarget.toFixed(2)}</span> <small style={{ opacity: 0.5 }}>{hSuffix}</small>
-                                    <div style={{ marginTop: '2px', opacity: 0.9 }}>
-                                      {rentalPriceDiff !== null && rentalMyOrderDiff !== null && <span style={{ margin: '0 4px', opacity: 0.3 }}></span>}
-                                    </div>
+
+                              {/* Right Column: Performance & Efficiency - Symmetric Redesign */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {/* Efficiency Metric with Integrated Bar */}
+                                <div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                                    <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Efficiency</div>
+                                    <div style={{ fontSize: '11px', color: effectTextColor, fontWeight: 'bold' }}>{eff}%</div>
+                                  </div>
+                                  <div style={{ width: '100%', height: '2px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${Math.min(100, effNum)}%`, height: '100%', background: effectTextColor }} />
                                   </div>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                  <div style={{ opacity: 0.7, fontSize: '8px', textTransform: 'uppercase' }}>
-                                    Hashrate (Avg / 5m / 15m)
+
+                                {/* Target Metric aligned with Pricing */}
+                                <div>
+                                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase', marginBottom: '2px' }}>Target</div>
+                                  <div style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', fontSize: '11px' }}>
+                                    {displayTarget.toFixed(2)} <small style={{ opacity: 0.5, fontWeight: 'normal' }}>{hSuffix}</small>
                                   </div>
+                                </div>
+
+                                {/* Balanced Hashrate Header */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1px' }}>
+                                  <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Hashrate</div>
+                                  {info?.isRental && (
+                                    <div style={{ fontSize: '8px', opacity: 0.8 }}>
+                                      Adv: <span style={{ color: '#34d399', fontWeight: 'bold' }}>{info.advertised}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div>
                                   <div>
                                     {(() => {
                                       if (info?.isRental) {
                                         return (
                                           <div style={{
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            background: 'rgba(255,255,255,0.05)',
-                                            padding: '5px 8px',
-                                            borderRadius: '4px',
-                                            marginTop: '4px'
+                                            background: 'rgba(0,0,0,0.15)',
+                                            padding: '6px 8px',
+                                            borderRadius: '6px',
+                                            border: '1px solid rgba(255,255,255,0.05)'
                                           }}>
-                                            <div style={{ fontWeight: 'bold' }}>{info.average || '0 N/A'}</div>
-                                            <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '1px' }}>
-                                              <span style={{ color: '#60a5fa' }}>5m:</span> {info.last5m || '0 N/A'} | <span style={{ color: '#a78bfa' }}>15m:</span> {info.last15m || '0 N/A'}
+                                            <div style={{ fontWeight: 'bold', fontSize: '10px', color: '#f1f5f9' }}>{info.average || '0 N/A'} <small style={{ fontSize: '8px', opacity: 0.5 }}>(AVG)</small></div>
+                                            <div style={{ fontSize: '10px', opacity: 0.8, marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                                              <span><span style={{ color: '#60a5fa' }}>5m:</span> {info.last5m?.split(' ')[0] || '0'}</span>
+                                              <span><span style={{ color: '#a78bfa' }}>15m:</span> {info.last15m?.split(' ')[0] || '0'}</span>
                                             </div>
                                           </div>
                                         );
@@ -894,20 +906,21 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                       }
                                       return hr;
                                     })()}
-                                    {info?.isRental && (
-                                      <div style={{ paddingRight: 'auto', fontSize: '11px', opacity: 0.7 }}>
-                                        Adv: <span style={{ color: '#34d399' }}>{info.advertised}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>                                
-                              </div>
 
+                                  </div>
+                                </div>
+                              </div>
                             </div>
+
+                            {/* Progress & Time Section */}
                             {isRented && (
-                              <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
-                                  <div style={{ width: `${timeProgress}%`, height: '100%', background: timeProgress > 90 ? '#f87171' : 'linear-gradient(90deg, #60a5fa, #a78bfa)', transition: 'width 0.5s ease' }} />
+                              <div style={{ background: 'rgba(0,0,0,0.1)', padding: '8px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', opacity: 0.8 }}>
+                                  <span title={info?.startTime || rig.start || ''}><span style={{ opacity: 0.5, textTransform: 'uppercase' }}>Started: </span>{formatRentalStartTime(info?.startTime || rig.start)}</span>
+                                  <span><span style={{ opacity: 0.5, textTransform: 'uppercase' }}>Remain: </span><CountdownTimer endTime={rentalEndTime} /></span>
+                                </div>
+                                <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                                  <div style={{ width: `${timeProgress}%`, height: '100%', background: timeProgress > 90 ? '#f87171' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)', transition: 'width 0.5s ease' }} />
                                 </div>
                               </div>
                             )}
@@ -916,7 +929,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                               <div className="rig-pool-summary" style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
                                 <div style={{ marginBottom: '6px' }}>
                                   <div style={{ fontSize: '0.7rem', opacity: 0.5, textTransform: 'uppercase' }}>Pool</div>
-                                  {/* <div style={{ fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rig.host || info?.stratumHost || 'N/A'}</div> */}
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
                                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.host || info?.stratumHost}><span style={{ opacity: 0.7 }}>Host:</span> {rig.host || info?.stratumHost || 'N/A'}</div>
@@ -926,18 +938,20 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                               </div>
                             )}
 
-                            <div style={{ display: 'flex', gap: '6px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px' }}>
+                            {/* Actions Section */}
+                            <div style={{ display: 'flex', gap: '6px', marginTop: 'auto', paddingTop: '4px' }}>
                               {(isMine || isRented) && (
                                 <button
                                   className="btn-pro secondary"
                                   style={{
                                     flex: 1,
-                                    fontSize: '10px',
+                                    fontSize: '9px',
                                     padding: '4px',
-                                    background: isRented ? 'rgba(167, 139, 250, 0.15)' : undefined,
-                                    borderColor: isRented ? '#a78bfa' : undefined,
-                                    color: isRented ? '#a78bfa' : undefined,
-                                    fontWeight: isRented ? 'bold' : 'normal'
+                                    background: isRented ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.05)',
+                                    borderColor: isRented ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)',
+                                    color: isRented ? '#a78bfa' : '#94a3b8',
+                                    fontWeight: isRented ? 'bold' : 'normal',
+                                    borderRadius: '6px'
                                   }}
                                   onClick={() => {
                                     togglePoolInfo(rig.id);

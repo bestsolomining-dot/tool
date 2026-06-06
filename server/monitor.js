@@ -176,8 +176,8 @@ function dbAllAsync(sql, params = []) {
 //  Main monitoring function
 // ==========================
 export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL') {
-  if (isMonitorRunning && !forceNotify) {
-    console.log('[Monitor] Run already in progress, skipping...');
+  if (isMonitorRunning) {
+    console.log(`[Monitor] Run already in progress (force=${forceNotify}), skipping to prevent nonce collisions...`);
     return { notifications: [], summary: { error: 'Monitor already running' } };
   }
   isMonitorRunning = true;
@@ -238,7 +238,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     try {
       // 1) Fetch rig list
       const rigsRes = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: acct });
-      await new Promise(r => setTimeout(r, 200)); // Ensure unique nonce for next call
+      await new Promise(r => setTimeout(r, 1200)); // Strict sequential gap (combined 200ms + 1000ms)
 
       if (rigsRes.statusCode === 200 && rigsRes.data?.success) {
         const rigList = extractArray(rigsRes.data);
@@ -336,10 +336,10 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
       // 2) Fetch bought + sold rentals
       const boughtRes = await mrrApiCall({ endpoint: '/rental', query: { type: 'bought' }, clientNameRaw: acct });
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 1200));
 
       const soldRes = await mrrApiCall({ endpoint: '/rental', query: { type: 'sold' }, clientNameRaw: acct });
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 1200));
 
       const allRentalsRaw = [
         ...extractArray(boughtRes.data || {}),
@@ -366,7 +366,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             } else {
               console.warn(`[${logT}] [mrr:${acct}] Harvest failed for #${hid}: ${hData?.message || 'Status ' + hRes.statusCode}`);
             }
-            await new Promise(r => setTimeout(r, 200));
+            await new Promise(r => setTimeout(r, 1200));
           } catch (err) {
             console.error(`[${new Date().toLocaleTimeString()}] Error harvesting rental #${hid}: ${err.message}`);
           }
@@ -589,6 +589,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       metric.error = true;
     }
 
+    // Add a significant gap between accounts to prevent IP-based rate limiting
+    await new Promise(r => setTimeout(r, 2000));
     accountMetrics.push(metric);
   }
 

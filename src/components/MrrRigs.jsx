@@ -914,12 +914,15 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
                             {expandedPools.has(rig.id) && (info || rig.host) && (
                               <div className="rig-pool-summary" style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <div style={{ marginBottom: '6px' }}>
+                                  <div style={{ fontSize: '0.7rem', opacity: 0.5, textTransform: 'uppercase' }}>Pool</div>
+                                  {/* <div style={{ fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rig.host || info?.stratumHost || 'N/A'}</div> */}
+                                </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
                                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.host || info?.stratumHost}><span style={{ opacity: 0.7 }}>Host:</span> {rig.host || info?.stratumHost || 'N/A'}</div>
                                   <div><span style={{ opacity: 0.7 }}>Port:</span> {rig.port || info?.stratumPort || 'N/A'}</div>
                                   <div style={{ gridColumn: 'span 2', overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.user || info?.username}><span style={{ opacity: 0.7 }}>User:</span> {rig.user || info?.username || 'N/A'}</div>
                                 </div>
-
                               </div>
                             )}
 

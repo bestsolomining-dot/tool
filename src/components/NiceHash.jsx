@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Accounting from './Accounting';
 import { useRentedRigs } from './RentedRigContext';
-import RentedRigCard from './RentedRigCard';
+import RentedRigCard from './NiceHashOrdersCard';
 
 export default function MiningRigNiceHash({ onCall, output, algorithm, market, nhClient, setNhClient }) {
   const { rentedRigs, refresh: refreshSummary } = useRentedRigs();
@@ -38,7 +38,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     }
     return list.filter(o => {
       const status = (o.status?.code || o.status || '').toUpperCase();
-      return status !== 'CANCELED' && status !== 'CANCELLED' && status !== 'COMPLETED';
+      return status !== 'CANCELED' && status !== 'CANCELLED' && status !== 'COMPLETED' && status !== 'EXPIRED';
     });
   }, [output, localOrders]);
 
@@ -335,11 +335,11 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
             <h4 style={{ margin: 0, fontSize: '13px', opacity: 0.8 }}>My Orders List</h4>
             <button className="text-button" style={{ fontSize: '10px' }} onClick={() => setLocalOrders([])}>Clear List</button>
           </div>
-          <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px' }}>
+          <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px' }}>
             <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0 }}>
                 <tr style={{ cursor: 'pointer', userSelect: 'none' }}>
-                  <th style={{ padding: '8px' }} onClick={() => requestSort('pool')}>Pool {sortConfig.key === 'pool' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
+                  <th style={{ padding: '8px' }} onClick={() => requestSort('pool')}>POOL NAME {sortConfig.key === 'pool' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
                   <th style={{ padding: '8px' }} onClick={() => requestSort('algo')}>Algo {sortConfig.key === 'algo' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
                   {nhClient === 'VN' && (
                     <th style={{ padding: '8px' }} onClick={() => requestSort('account')}>
@@ -348,7 +348,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
                   )}
                   <th style={{ padding: '8px' }} onClick={() => requestSort('price')}>Price {sortConfig.key === 'price' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
                   <th style={{ padding: '8px' }} onClick={() => requestSort('speed')}>Speed {sortConfig.key === 'speed' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
-                  <th style={{ padding: '8px' }} onClick={() => requestSort('status')}>Status {sortConfig.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
+                  {/* <th style={{ padding: '8px' }} onClick={() => requestSort('status')}>Status {sortConfig.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th> */}
                 </tr>
               </thead>
               <tbody>
@@ -363,7 +363,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
                       {nhClient === 'VN' && <td style={{ padding: '8px', opacity: 0.7 }}>{o.nhClient}</td>}
                       <td style={{ padding: '8px', color: '#f59e0b' }}>{o.price}</td>
                       <td style={{ padding: '8px' }}>{parseFloat(o.acceptedCurrentSpeed || 0).toFixed(6)}</td>
-                      <td style={{ padding: '8px', color: o.status?.code === 'ACTIVE' ? '#10b981' : 'inherit' }}>{o.status?.code}</td>
+                      {/* <td style={{ padding: '8px', color: o.status?.code === 'ACTIVE' ? '#10b981' : 'inherit' }}>{o.status?.code}</td> */}
                     </tr>
                   );
                 })}
@@ -410,7 +410,7 @@ function RentedRigsSummarySection() {
   return (
     <section style={{ marginBottom: '15px', padding: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
-        <h4 style={{ margin: 0 }}>Active Orders</h4>
+        <h4 style={{ margin: 0 }}>Orders Card</h4>
         <div style={{ fontSize: '0.6rem' }}>
           Total Paid: <span style={{ color: '#f3ba2f', fontWeight: 'bold' }}>{summary.totalPaid} BTC</span>
           <span style={{ margin: '0 10px', opacity: 0.3 }}>|</span>
@@ -419,7 +419,7 @@ function RentedRigsSummarySection() {
       </div>
       <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '5px' }}>
         {loading && <p>Updating orders...</p>}
-        {!loading && rentedRigs.length === 0 && <p style={{ fontSize: '0.8rem', opacity: 0.5 }}>No active NiceHash orders.</p>}
+        {!loading && rentedRigs.length === 0 && <p style={{ fontSize: '0.8rem', opacity: 0.5 }}>No active NiceHash orders found for the card view.</p>}
         {rentedRigs.map(rig => <RentedRigCard key={rig.id} order={rig} />)}
       </div>
     </section>

@@ -1,28 +1,29 @@
 import React from 'react';
 
-export default function RentedRigCard({ order }) {
+export default function NiceHashOrderCard({ order }) {
   return (
     <div className="rented-rig-card" style={{
-      background: 'rgba(255, 255, 255, 0.03)',
-      border: '1px solid rgba(255, 255, 255, 0.08)',
+      background: 'rgba(92, 71, 4, 0.18)',
+      border: '1px solid rgba(219, 131, 16, 0.26)',
       borderRadius: '12px',
-      padding: '16px',
+      padding: '13px',
       display: 'flex',
       flexDirection: 'column',
       gap: '8px',
       minWidth: '200px',
-      maxHeight: '150px'
+      maxHeight: '200px'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold' }}>{order.algo}</span>
         <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{order.account}</span>
-              <div style={{ fontSize: '0.6rem', color: 'var(--muted)', marginTop: '-8px' }}>{order.poolName}</div>
-
       </div>
-      <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '-4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{order.poolName}</div>
+      <div style={{ marginTop: '-4px' }}>
+        <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>Pool</div>
+        <div style={{ fontSize: '11px', color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{order.poolName}</div>
+      </div>
       
       <div style={{ margin: '4px 0' }}>
-        <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Paid Amount</div>
+        <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Paid</div>
         <div style={{ fontSize: '0.6rem', fontWeight: '600', color: '#f3ba2f' }}>{order.paid} <small>BTC</small></div>
       </div>
 

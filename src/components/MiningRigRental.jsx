@@ -113,7 +113,7 @@ function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
             <th>Algo</th>
             {mrrClient === 'ALL' && <th>Account</th>}
             <th>Avg / Ads</th>
-            <th>Active P0 Pool</th>
+            <th>POOL NAME</th>
             <th>Target to 100%</th>
             <th style={{ textAlign: 'right' }}>Price</th>
             <th style={{ width: '120px' }}>Remaining</th>

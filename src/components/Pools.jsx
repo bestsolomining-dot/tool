@@ -34,6 +34,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false)
+  const didAutoStartRef = useRef(false);
   const runTimerRef = useRef(null)
   const countdownTimerRef = useRef(null)
   const stopRef = useRef(false)
@@ -507,6 +508,18 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     const targetPools = base.filter(pool => ph.getAlgo(pool) === algorithm)
     verifyAllOnce({ targetPools })
   }
+
+  // Auto-run Verify All logic if requested via URL parameter after 5s
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('start') === 'true' && !didAutoStartRef.current && pools.length > 0 && !loading && !playing) {
+      didAutoStartRef.current = true;
+      const timer = setTimeout(() => {
+        verifyAllOnce();
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [pools, loading, playing]);
 
   function stopAutomation() {
     stopRef.current = true

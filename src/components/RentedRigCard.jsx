@@ -10,13 +10,16 @@ export default function RentedRigCard({ order }) {
       display: 'flex',
       flexDirection: 'column',
       gap: '8px',
-      minWidth: '280px'
+      minWidth: '200px',
+      maxHeight: '150px'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '0.5rem', color: '#60a5fa', fontWeight: 'bold' }}>{order.algo}</span>
-        {/* <span className="badge-status active">ACTIVE</span> */}
+        <span style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold' }}>{order.algo}</span>
+        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{order.account}</span>
+              <div style={{ fontSize: '0.6rem', color: 'var(--muted)', marginTop: '-8px' }}>{order.poolName}</div>
+
       </div>
-      <div style={{ fontSize: '0.6rem', color: 'var(--muted)', marginTop: '-8px' }}>{order.poolName}</div>
+      <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '-4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{order.poolName}</div>
       
       <div style={{ margin: '4px 0' }}>
         <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Paid Amount</div>
@@ -37,9 +40,8 @@ export default function RentedRigCard({ order }) {
           )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>NH Market Price</span>
-          <span style={{ fontWeight: 'bold', color: '#94a3b8' }}>{parseFloat(order.marketPrice || 0).toFixed(8)}</span>
-          <span style={{ opacity: 0.5, fontSize: '0.7rem' }}>{order.account}</span>
+          <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>Speed</span>
+          <span style={{ fontWeight: 'bold', color: '#10b981' }}>{parseFloat(order.speed || 0).toFixed(7)}</span>
         </div>
       </div>
     </div>

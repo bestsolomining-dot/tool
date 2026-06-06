@@ -8,6 +8,7 @@ import { TELEGRAM_CONFIG, TelegramTemplates } from '../src/shared/telegram.js';
 //  Global State (Persisted in DB)
 // ==========================
 
+let isMonitorRunning = false;
 const monitorInitTracker = new Set();
 async function maybeDelay(key) {
   if (!monitorInitTracker.has(key)) {
@@ -175,6 +176,12 @@ function dbAllAsync(sql, params = []) {
 //  Main monitoring function
 // ==========================
 export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL') {
+  if (isMonitorRunning && !forceNotify) {
+    console.log('[Monitor] Run already in progress, skipping...');
+    return { notifications: [], summary: { error: 'Monitor already running' } };
+  }
+  isMonitorRunning = true;
+  try {
   await maybeDelay('runRentalMonitor');
   const requestedScope = String(clientScope || 'ALL').trim().toUpperCase();
   const scopeList = requestedScope.split(',').map(s => s.trim());
@@ -231,6 +238,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     try {
       // 1) Fetch rig list
       const rigsRes = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: acct });
+      await new Promise(r => setTimeout(r, 200)); // Ensure unique nonce for next call
+
       if (rigsRes.statusCode === 200 && rigsRes.data?.success) {
         const rigList = extractArray(rigsRes.data);
         const rentedRigs = [];
@@ -327,7 +336,10 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
       // 2) Fetch bought + sold rentals
       const boughtRes = await mrrApiCall({ endpoint: '/rental', query: { type: 'bought' }, clientNameRaw: acct });
+      await new Promise(r => setTimeout(r, 200));
+
       const soldRes = await mrrApiCall({ endpoint: '/rental', query: { type: 'sold' }, clientNameRaw: acct });
+      await new Promise(r => setTimeout(r, 200));
 
       const allRentalsRaw = [
         ...extractArray(boughtRes.data || {}),
@@ -342,7 +354,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       // Harvest missing rental details
       const missingIds = Array.from(harvestedRentalIds).filter(hid => !rentalsMap.has(hid));
       if (missingIds.length > 0) {
-        await Promise.all(missingIds.map(async (hid) => {
+        for (const hid of missingIds) {
           try {
             const hRes = await mrrApiCall({ endpoint: `/rental/${hid}`, clientNameRaw: acct });
             const hData = hRes.data?.data || hRes.data;
@@ -354,10 +366,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             } else {
               console.warn(`[${logT}] [mrr:${acct}] Harvest failed for #${hid}: ${hData?.message || 'Status ' + hRes.statusCode}`);
             }
+            await new Promise(r => setTimeout(r, 200));
           } catch (err) {
             console.error(`[${new Date().toLocaleTimeString()}] Error harvesting rental #${hid}: ${err.message}`);
           }
-        }));
+        }
       }
 
       // Enrich with rig data where rental details are missing
@@ -473,7 +486,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const completionKey = `${r.id}_completion_70`;
           const lastAlert = lastAlertTimes.get(completionKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
-            const msg = TelegramTemplates.completion(acct, r, info, efficiency, displayTarget);
+            const msg = TelegramTemplates.completionAlert(acct, r, info, efficiency, displayTarget);
             await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Completion alert failed: ${e.message}`));
             lastAlertTimes.set(completionKey, now);
           }
@@ -484,24 +497,19 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const successKey = `${r.id}_success_95`;
           const lastAlert = lastAlertTimes.get(successKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
-            // Use a local string template for the server monitor
-            const msg = `🎉 <b>[Success] High Efficiency Completion</b>\n🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n🖥 ${escapeHtml(r.name || r.id)}\n🆔 <code>${r.id}</code>\n📉 Efficiency: <b>${efficiency.toFixed(1)}%</b>`;
+            const msg = TelegramTemplates.completionSuccess(acct, r, info.niceAverageHashrate, '', efficiency, `${info.price.paid} ${info.price.currency}`);
             await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Success alert failed: ${e.message}`));
             lastAlertTimes.set(successKey, now);
           }
         }
 
-        // Perfect Efficiency rule: Notice every 1 minute if 100%
+        // Perfect Efficiency rule: Notice every 1 hour if 100%
         if (efficiency >= 100) {
           const perfectKey = `perfect_100_${r.id}`;
           const lastPerfect = lastAlertTimes.get(perfectKey) || 0;
           if (now - lastPerfect >= 3600000) { // Every 1 hour
-            const msg = `💎 <b>[Perfect Performance] 100%</b>\n🏢 
-            <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n
-            🖥 ${escapeHtml(r.name || r.id)}\n
-            🆔 <code>${r.id}</code>\n
-            📈 Efficiency: <b>${efficiency.toFixed(1)}%</b>\n`;
-            await sendTelegramInternal(msg).catch(() => { });
+            const msg = TelegramTemplates.perfectEfficiency(acct, r, efficiency, `${info.price.paid} ${info.price.currency}`, remainingMs);
+            await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Perfect efficiency alert failed: ${e.message}`));
             lastAlertTimes.set(perfectKey, now);  
           }
         }
@@ -662,4 +670,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       activeRentals: allRentedRigs.map(r => ({ account: r.acct, id: r.id, name: r.name || r.id })),
     },
   };
+  } finally {
+    isMonitorRunning = false;
+  }
 }

@@ -12,18 +12,34 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
   const [priceInput, setPriceInput] = useState('');
   const [limitInput, setLimitInput] = useState('');
   const [refillInput, setRefillInput] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'status', direction: 'desc' });
+
+  const requestSort = (key) => {
+    let direction = 'desc';
+    if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const orders = useMemo(() => {
-    if (localOrders.length > 0) return localOrders; // localOrders is already processed
-    const raw = output; // output should now be the direct API response
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw;
-    if (Array.isArray(raw?.orders)) return raw.orders;
-    if (Array.isArray(raw?.myOrders)) return raw.myOrders;
-    if (Array.isArray(raw?.data)) return raw.data;
-    if (Array.isArray(raw?.list)) return raw.list;
-    if (Array.isArray(raw?.result)) return raw.result;
-    return [];
+    let list = [];
+    if (localOrders.length > 0) {
+      list = localOrders;
+    } else {
+      const raw = output;
+      if (!raw) list = [];
+      else if (Array.isArray(raw)) list = raw;
+      else if (Array.isArray(raw?.orders)) list = raw.orders;
+      else if (Array.isArray(raw?.myOrders)) list = raw.myOrders;
+      else if (Array.isArray(raw?.data)) list = raw.data;
+      else if (Array.isArray(raw?.list)) list = raw.list;
+      else if (Array.isArray(raw?.result)) list = raw.result;
+    }
+    return list.filter(o => {
+      const status = (o.status?.code || o.status || '').toUpperCase();
+      return status !== 'CANCELED' && status !== 'CANCELLED' && status !== 'COMPLETED';
+    });
   }, [output, localOrders]);
 
   const fetchOrders = useCallback(async () => {
@@ -104,13 +120,40 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
   // Unified sorting for dropdown and table, using localOrders or fallback output
   const sortedOrders = useMemo(() => {
     return [...orders].sort((a, b) => {
-      const aActive = (a.status?.code || a.status) === 'ACTIVE';
-      const bActive = (b.status?.code || b.status) === 'ACTIVE';
-      if (aActive && !bActive) return -1;
-      if (!aActive && bActive) return 1;
+      let aVal, bVal;
+      const key = sortConfig.key;
+
+      if (key === 'status') {
+        aVal = (a.status?.code || a.status) === 'ACTIVE' ? 1 : 0;
+        bVal = (b.status?.code || b.status) === 'ACTIVE' ? 1 : 0;
+      } else if (key === 'speed') {
+        aVal = parseFloat(a.acceptedCurrentSpeed || 0);
+        bVal = parseFloat(b.acceptedCurrentSpeed || 0);
+      } else if (key === 'algo') {
+        aVal = (typeof a.algorithm === 'object' ? a.algorithm.algorithm : a.algorithm) || '';
+        bVal = (typeof b.algorithm === 'object' ? b.algorithm.algorithm : b.algorithm) || '';
+      } else if (key === 'pool') {
+        aVal = a.pool?.name || a.pool?.stratumHostname || a.title || a.name || 'N/A';
+        bVal = b.pool?.name || b.pool?.stratumHostname || b.title || b.name || 'N/A';
+      } else if (key === 'price') {
+        aVal = parseFloat(a.price || 0);
+        bVal = parseFloat(b.price || 0);
+      } else if (key === 'account') {
+        aVal = a.nhClient || '';
+        bVal = b.nhClient || '';
+      }
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [orders]);
+  }, [orders, sortConfig]);
+
+  // Find the selected order in the list to access client info
+  const selectedOrderFromList = useMemo(() =>
+    orders.find(o => String(o.id || o.orderId) === String(selectedOrderId)),
+    [orders, selectedOrderId]
+  );
 
   // Clear local state when client changes to avoid showing data from the wrong account
   useEffect(() => {
@@ -239,6 +282,12 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
             <h4 style={{ margin: 0, color: '#3b82f6', fontSize: '14px' }}>Order Info</h4>
             <button className="text-button" style={{ fontSize: '11px' }} onClick={() => setOrderDetail(null)}>Close Info</button>
           </div>
+          {selectedOrderFromList?.nhClient && (
+            <div style={{ marginBottom: '14px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ opacity: 0.5, fontSize: '10px', textTransform: 'uppercase' }}>ACCOUNT</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#60a5fa' }}>{selectedOrderFromList.nhClient}</div>
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '12px', fontSize: '11px' }}>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>STATUS</span> <strong style={{ color: orderDetail.status?.code === 'ACTIVE' ? '#10b981' : '#f87171' }}>{orderDetail.status?.code}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>POOL NAME</span> <strong>{orderDetail.pool?.name || 'N/A'}</strong></div>
@@ -258,12 +307,10 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
                 </span>
               )}
             </div>
-            {matchingOrderInfo?.marketPrice > 0 && (
-              <div>
-                <span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>NH MARKET PRICE</span>
-                <strong style={{ color: '#94a3b8' }}>{parseFloat(matchingOrderInfo.marketPrice).toFixed(8)}</strong>
-              </div>
-            )}
+            <div>
+              <span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>SPEED</span>
+              <strong style={{ color: '#10b981' }}>{parseFloat(orderDetail.acceptedCurrentSpeed || 0).toFixed(7)}</strong>
+            </div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>LIMIT</span> <strong>{orderDetail.limit}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>REMAINING</span> <strong style={{ color: '#10b981' }}>{parseFloat(orderDetail.availableAmount || 0).toFixed(8)}</strong></div>
             <div><span style={{ opacity: 0.6, display: 'block', fontSize: '9px' }}>BUDGET PROGRESS</span> <strong style={{ color: '#60a5fa' }}>{(() => {
@@ -291,13 +338,17 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
           <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px' }}>
             <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0 }}>
-                <tr>
-                  <th style={{ padding: '8px' }}>Pool</th>
-                  <th style={{ padding: '8px' }}>Algo</th>
-                  {nhClient === 'VN' && <th style={{ padding: '8px' }}>Account</th>}
-                  <th style={{ padding: '8px' }}>Price</th>
-                  <th style={{ padding: '8px' }}>Speed</th>
-                  <th style={{ padding: '8px' }}>Status</th>
+                <tr style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <th style={{ padding: '8px' }} onClick={() => requestSort('pool')}>Pool {sortConfig.key === 'pool' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
+                  <th style={{ padding: '8px' }} onClick={() => requestSort('algo')}>Algo {sortConfig.key === 'algo' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
+                  {nhClient === 'VN' && (
+                    <th style={{ padding: '8px' }} onClick={() => requestSort('account')}>
+                      Account {sortConfig.key === 'account' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
+                    </th>
+                  )}
+                  <th style={{ padding: '8px' }} onClick={() => requestSort('price')}>Price {sortConfig.key === 'price' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
+                  <th style={{ padding: '8px' }} onClick={() => requestSort('speed')}>Speed {sortConfig.key === 'speed' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
+                  <th style={{ padding: '8px' }} onClick={() => requestSort('status')}>Status {sortConfig.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</th>
                 </tr>
               </thead>
               <tbody>

@@ -36,6 +36,7 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
             account: o.nhClient || nhClient,
             algo: algoCode,
             market: marketCode,
+            speed: o.acceptedCurrentSpeed || 0,
             poolName: o.pool?.name || o.pool?.stratumHostname || o.title || o.name || 'N/A'
           };
         });
@@ -75,7 +76,7 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
           const cur = parseFloat(p.price);
         const diff = mkt > 0 ? calculatePriceComparison(cur, 'TH', mkt, mktData.unit) : null;
         return { ...p, marketPrice: mkt, marketUnit: mktData.unit, priceDiff: diff };
-        });
+        }).sort((a, b) => parseFloat(b.speed || 0) - parseFloat(a.speed || 0));
 
         const totalPaid = activeOrders.reduce((sum, o) => sum + parseFloat(o.payedAmount || 0), 0).toFixed(8);
         setRentedRigs(processed);

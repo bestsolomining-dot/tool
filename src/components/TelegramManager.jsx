@@ -55,9 +55,9 @@ const TelegramTemplates = {
     `${divider}\n` +
     `<b>Paid:</b> ${paid}`,
 
-  perfectEfficiency: (account, r, efficiency, paid) => `💎 <b>[Perfect Performance] 100%</b>\n` +
+  perfectEfficiency: (account, r, efficiency, paid, remainingMs) => `💎 <b>[Perfect Performance] 100%</b>\n` +
     `<b>Efficiency:</b> <b>${efficiency.toFixed(1)}%</b>\n` +
-    `<b>Left:</b> ${Math.round(remainingMs / 60000)}m\n` +
+    `<b>Left:</b> ${remainingMs ? Math.round(remainingMs / 60000) + 'm' : 'N/A'}\n` +
     `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
     `${divider}\n` +
     `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
@@ -75,6 +75,14 @@ const TelegramTemplates = {
 
   completion: (account, r, avg, suffix, efficiency, paid) => `🏁 <b>[Completion Alert]</b>\n` +
     `<b>Account:</b><code>${escapeHtml(account)}</code>\n` +
+    `${divider}\n` +
+    `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+    `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
+    `${divider}\n` +
+    `<b>Paid:</b> ${paid}`,
+
+  completionSuccess: (account, r, avg, suffix, efficiency, paid) => `🎉 <b>[Success] High Efficiency Completion</b>\n` +
+    `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
     `${divider}\n` +
     `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
     `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
@@ -269,7 +277,8 @@ export function useTelegram(onCall, mrrClient) {
     const account = getTelegramAccount(r, mrrClient);
     const efficiencyVal = parseFloat(efficiency || 0);
     const paid = getPaidAmount(r);
-    const msg = TelegramTemplates.perfectEfficiency(account, r, efficiencyVal, paid);
+    const remainingMs = r.end ? (new Date(r.end + (String(r.end).endsWith('UTC') ? '' : ' UTC')).getTime() - Date.now()) : 0;
+    const msg = TelegramTemplates.perfectEfficiency(account, r, efficiencyVal, paid, remainingMs);
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 

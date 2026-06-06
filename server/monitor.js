@@ -495,8 +495,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         if (efficiency >= 100) {
           const perfectKey = `perfect_100_${r.id}`;
           const lastPerfect = lastAlertTimes.get(perfectKey) || 0;
-          if (now - lastPerfect >= 9000000) {
-            const msg = `💎 <b>[Perfect Performance] 100%</b>\n🏢 <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n🖥 ${escapeHtml(r.name || r.id)}\n🆔 <code>${r.id}</code>\n📈 Efficiency: <b>${efficiency.toFixed(1)}%</b>\n🚀 Efficiency is optimal!`;
+          if (now - lastPerfect >= 3600000) { // Every 1 hour
+            const msg = `💎 <b>[Perfect Performance] 100%</b>\n🏢 
+            <b><u>[<code>${escapeHtml(acct)}</code>]</u></b>\n
+            🖥 ${escapeHtml(r.name || r.id)}\n
+            🆔 <code>${r.id}</code>\n
+            📈 Efficiency: <b>${efficiency.toFixed(1)}%</b>\n`;
             await sendTelegramInternal(msg).catch(() => { });
             lastAlertTimes.set(perfectKey, now);  
           }

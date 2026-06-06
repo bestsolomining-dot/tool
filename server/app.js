@@ -46,8 +46,19 @@ export async function initializeApp(env) {
   const syncManager = new SyncManager({ db, nhConfigs, mrrConfigs, mrrApiCall, resolveNhClient, getNiceHashApp });
   syncManager.run();
 
-  // Start the monitor
-  setInterval(() => runRentalMonitor(), 60000);
+  // Start the monitor with a safe recursive pattern to prevent overlaps
+  const startMonitor = async () => {
+    try {
+      await runRentalMonitor();
+    } catch (err) {
+      console.error('[Monitor] Loop error:', err.message);
+    } finally {
+      // Schedule next run in 60s
+      setTimeout(startMonitor, 60000);
+    }
+  };
+
+  startMonitor();
 
   // Delay first heartbeat until sync/app load is complete (15s)
   setTimeout(() => runRentalMonitor(true), 15000);

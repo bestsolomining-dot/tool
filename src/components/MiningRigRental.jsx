@@ -302,7 +302,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           if (Notification.permission === 'granted') {
             new Notification(`Rig Rented: ${fresh.name || fresh.id}`, { body: `New rental active for ${fresh.hours}h` });
           }
-          tg.notifyNewRental(fresh).catch(() => { });
+          // Telegram notification handled by server monitor
         }
 
         // Monitoring Logic for Telegram Alerts
@@ -326,9 +326,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
             if (timers.lowStart === 0) timers.lowStart = now;
             if (now - timers.lowStart >= 900000) { // 15 mins
               if (!notifiedAlerts.current.has(lowPerfKey)) {
-                tg.notifyLowEfficiency(r, remainingMs, efficiency).then(() => {
-                  notifiedAlerts.current.add(lowPerfKey);
-                }).catch(() => { });
+                notifiedAlerts.current.add(lowPerfKey);
               }
             }
           } else {
@@ -342,9 +340,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
             if (timers.zeroStart === 0) timers.zeroStart = now;
             if (now - timers.zeroStart >= 300000) { // 5 mins
               if (!notifiedAlerts.current.has(zeroHashKey)) {
-                tg.notifyZeroHashrate(r, now - timers.zeroStart).then(() => {
-                  notifiedAlerts.current.add(zeroHashKey);
-                }).catch(() => { });
+                notifiedAlerts.current.add(zeroHashKey);
               }
             }
           } else {

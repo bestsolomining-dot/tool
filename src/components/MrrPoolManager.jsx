@@ -44,6 +44,33 @@ export default function MrrPoolManager({ rentalIds, onCall, onClose }) {
     fetchPools();
   }, [rentalIds, onCall]);
 
+  const handlePriorityChange = async (rig, poolIndex, newPriority) => {
+    const updatedPools = [...rig.pools];
+    updatedPools[poolIndex] = {
+      ...updatedPools[poolIndex],
+      priority: parseInt(newPriority) || 0
+    };
+
+    setLoading(true);
+    try {
+      const response = await onCall(`/api/v2/mrr/rig/${rig.rigid}/pool`, {
+        method: 'PUT',
+        body: { pools: updatedPools },
+        silent: true
+      });
+
+      if (response?.success) {
+        await fetchPools();
+      } else {
+        setError(response?.message || 'Failed to update priority');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEditPool = (pool, rigid) => {
     setEditorState({
       initialData: {
@@ -70,7 +97,15 @@ export default function MrrPoolManager({ rentalIds, onCall, onClose }) {
             <div className="pool-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {rig.pools.map((pool, idx) => (
                 <div key={idx} className="pool-item" style={{ display: 'grid', gridTemplateColumns: '50px 100px 1fr 200px 80px', gap: '1rem', alignItems: 'center', fontSize: '0.85rem' }}>
-                  <div style={{ opacity: 0.5 }}>PR {pool.priority}</div>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <input 
+                      type="number" 
+                      className="input-pro" 
+                      style={{ width: '45px', padding: '2px', fontSize: '0.75rem', textAlign: 'center' }}
+                      value={pool.priority}
+                      onChange={(e) => handlePriorityChange(rig, idx, e.target.value)}
+                    />
+                  </div>
                   <div style={{ fontWeight: 'bold', color: '#34d399' }}>{pool.type}</div>
                   <div style={{ opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pool.host}:{pool.port}</div>
                   <div style={{ opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pool.user}</div>

@@ -38,14 +38,14 @@ export function corsMiddleware(req, res, next) {
 
 export function logRequestMiddleware(req, res, next) {
   const start = Date.now();
-  const requestId = Math.random().toString(36).slice(2, 8);
+  const clientTag = String(req.query.client || req.body?.client || 'system').toUpperCase();
   const time = new Date().toLocaleTimeString();
   const body = req.method === 'GET' ? '' : ` body=${JSON.stringify(maskSensitive(req.body || {}))}`;
 
-  console.info(`[${time}] [api:${requestId}] -> ${req.method} ${req.originalUrl}${body}`);
+  console.info(`[${time}] [api:${clientTag}] -> ${req.method} ${req.originalUrl}${body}`);
 
   res.on('finish', () => {
-    console.info(`[${time}] [api:${requestId}] <- ${res.statusCode} ${req.method} ${req.originalUrl} ${Date.now() - start}ms`);
+    console.info(`[${time}] [api:${clientTag}] <- ${res.statusCode} ${req.method} ${req.originalUrl} ${Date.now() - start}ms`);
   });
 
   next();

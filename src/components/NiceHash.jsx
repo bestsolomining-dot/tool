@@ -301,7 +301,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
                   marginLeft: '6px',
                   fontSize: '9px',
                   fontWeight: 'bold',
-                  color: parseFloat(matchingOrderInfo.priceDiff) <= 0 ? '#10b981' : '#f87171'
+                  color: parseFloat(matchingOrderInfo.priceDiff) >= 0 ? '#10b981' : '#f87171'
                 }}>
                   ({parseFloat(matchingOrderInfo.priceDiff) > 0 ? '+' : ''}{matchingOrderInfo.priceDiff}%)
                 </span>

@@ -127,12 +127,15 @@ export async function syncMrrClock(force = false) {
       }
 
       const body = await res.json();
-      const serverTimeMs = extractEpochMs(body) ?? BigInt(Date.now());
+      const extracted = extractEpochMs(body);
+      const serverTimeMs = extracted ?? BigInt(Date.now());
       const localTimeMs = Date.now();
       mrrClockOffset = serverTimeMs - BigInt(localTimeMs);
       mrrClockSynced = true;
 
-      if (Math.abs(Number(mrrClockOffset)) > 1000) {
+      if (!extracted) {
+        console.warn('[mrr:clock] Could not parse server time from MRR response. Using local clock.');
+      } else if (Math.abs(Number(mrrClockOffset)) > 1000) {
         console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (MRR Server: ${serverTimeMs}, Local: ${localTimeMs})`);
       } else {
         console.info(`[mrr:clock] Synced with MRR. Offset: ${mrrClockOffset}ms.`);
@@ -157,7 +160,13 @@ export function nextMrrNonce(apiKey, clientLabel) {
   
   const lastNonce = BigInt(mrrLastNonceByClient.get(apiKey) || 0n);
 
-  // Safety: Nếu nonce trong DB/Map quá lớn (> 19 chữ số) hoặc quá xa tương lai (> 24h), reset về hiện tại.
+  // Safety: If nonce approaches the 64-bit unsigned limit or is massively in the future, reset it.
+  // 18.4 quintillion is the limit for uint64; we reset if we cross into that dangerous territory.
+  if (lastNonce > 18000000000000000000n) {
+    console.warn(`[mrr:${clientLabel}] Nonce overflow safety triggered. Resetting baseline.`);
+    mrrLastNonceByClient.set(apiKey, 0n);
+  }
+
   const oneDayNano = 24n * 60n * 60n * 1000n * 1000000n;
   const nowNano = (BigInt(Date.now()) + mrrClockOffset) * 1000000n;
   if (lastNonce > 9999999999999999999n || lastNonce > (nowNano + oneDayNano)) {
@@ -276,15 +285,17 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     await syncMrrClock();
   }
 
-  // 3. GLOBAL SERIALIZATION: Ép mọi request MRR phải chạy nối đuôi nhau
-  // Điều này loại bỏ hoàn toàn khả năng 2 request bắn cùng 1 lúc gây Bad Nonce
+  // 3. GLOBAL SERIALIZATION: Ensures nonces for the same API key are always increasing
+  // and helps respect MRR API rate limits across multiple concurrent operations.
   const lockKey = "GLOBAL_MRR_LOCK"; 
 
   return runMrrCallInOrder(lockKey, async () => {
-    const normalizedEndpoint = sanitizeMrrEndpoint(endpoint);
+    const normalizedPath = sanitizeMrrEndpoint(endpoint);
     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
-    const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedEndpoint}`);
-    const sigEndpoint = normalizedEndpoint;
+    const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedPath}`);
+    
+    // MRR V2 requires the full URI path in the signature string
+    const sigEndpoint = `/api/v2${normalizedPath}`;
 
     if (Object.keys(cleanQuery).length > 0) {
       for (const [key, value] of Object.entries(cleanQuery)) {
@@ -306,8 +317,9 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     });
 
     let currentNonce = nextMrrNonce(clientConfig.apiKey, clientName);
-    let signString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
-    const signatureV2 = createHmac('sha1', clientConfig.apiSecret).update(signString).digest('hex');
+    const signString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
+    // V2 uses HMAC-SHA256
+    const signatureV2 = createHmac('sha256', clientConfig.apiSecret).update(signString).digest('hex');
 
     let response = await send(currentNonce, signatureV2, {
       'x-api-key': clientConfig.apiKey,
@@ -324,11 +336,12 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     }
 
     let authMessage = String(data?.data?.message || data?.message || '');
-    let isAuthFailureMessage = /signature|unauthorized|authenticated|missing api key/i.test(authMessage);
-    const isBadNonce = /nonce/i.test(authMessage);
+    let isAuthFailureMessage = /signature|unauthorized|authenticated|invalid key|missing api key/i.test(authMessage);
+    // Only attempt a jump if it's specifically a nonce error and the key hasn't been flagged as invalid
+    const isBadNonce = /nonce/i.test(authMessage) && !/invalid key/i.test(authMessage);
 
-    // Optimizer: If "Bad Nonce" is received, force clock re-sync and retry ONCE.
-    if (isBadNonce || (response.status === 401 && /nonce/i.test(text))) {
+    // Optimizer: If "Bad Nonce" is received, force clock re-sync and retry with a baseline jump
+    if (isBadNonce || (response.status === 401 && /nonce/i.test(authMessage))) {
       // Force immediate clock re-sync
       await syncMrrClock(true);
       
@@ -339,13 +352,13 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
       const baseForJump = failedNonce > nowNano ? failedNonce : nowNano;
       const newJumpedNonce = baseForJump + MRR_NONCE_RECOVERY_JUMP;
 
-      console.warn(`[mrr:${clientName}] ☢️ NUCLEAR JUMP: Baseline reset to ${newJumpedNonce} (+10m) for key ${clientConfig.apiKey.slice(0, 6)}...`);
+      console.warn(`[mrr:${clientName}] ☢️ NUCLEAR JUMP: Baseline reset to ${newJumpedNonce} (+1m) for key ${clientConfig.apiKey.slice(0, 6)}...`);
       mrrLastNonceByClient.set(clientConfig.apiKey, newJumpedNonce);
       db.run('INSERT OR REPLACE INTO mrr_nonces (client, last_nonce) VALUES (?, ?)', [clientConfig.apiKey, newJumpedNonce.toString()]);
 
       currentNonce = nextMrrNonce(clientConfig.apiKey, clientName);
-      signString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
-      const retrySig = createHmac('sha1', clientConfig.apiSecret).update(signString).digest('hex');
+      const retrySignString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
+      const retrySig = createHmac('sha256', clientConfig.apiSecret).update(retrySignString).digest('hex');
 
       const retryRes = await send(currentNonce, retrySig, {
         'x-api-key': clientConfig.apiKey,
@@ -402,7 +415,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     }
 
     const logTime = new Date().toLocaleTimeString();
-    console.log(`[${logTime}] [mrr:${clientName}] endpoint=${normalizedEndpoint} nonce=${currentNonce} status=${finalStatus} msg=${authMessage || 'OK'}`);
+    console.log(`[${logTime}] [mrr:${clientName}] endpoint=${normalizedPath} nonce=${currentNonce} status=${finalStatus} msg=${authMessage || 'OK'}`);
 
     return { statusCode: finalStatus, data, clientName };
   });

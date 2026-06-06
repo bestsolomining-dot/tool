@@ -188,6 +188,8 @@ export function registerRoutes(app) {
         poolUser: o.pool?.username || '',
         poolPass: o.pool?.password || '',
         status: typeof o.status === 'object' ? o.status.code : o.status,
+        DEAD: ((o.status?.code || o.status) === 'ACTIVE' && parseFloat(o.acceptedCurrentSpeed || 0) === 0 && parseInt(o.rigsCount || 0) === 0) ? 'DEAD' : '',
+        isDead: (o.status?.code || o.status) === 'ACTIVE' && parseFloat(o.acceptedCurrentSpeed || 0) === 0 && parseInt(o.rigsCount || 0) === 0,
         pool: o.pool,                                // Preserved for UI components (NiceHash.jsx)
         nhClient: o.nhClient,                        // Preserved for aggregation tracking
         ts: new Date().toISOString(),

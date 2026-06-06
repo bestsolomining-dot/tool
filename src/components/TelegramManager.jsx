@@ -212,13 +212,14 @@ const TelegramTemplates = {
     `<code>${info?.price?.paid || fr.price || '0.00'} ${info?.price?.currency || fr.currency || 'BTC'}</code>\n` +
     `${divider}\n`,
   
-  heartbeatSummary: (barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime) =>
+  heartbeatSummary: (barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime, rented24h) =>
     `📊 <b>[Summary]</b>\n` +
     `<b>Online</b> <code>${String(onlineAll).padStart(4)}</code> ` +
     `(<b>Offline</b> <code>${String(offlineAll).padStart(4)}</code>)\n` +
     `<b>Total</b>   <code>${String(totalAll).padStart(4)}</code> ` +
     `(<b>Disabled</b> <code>${String(disabledAll).padStart(4)}</code>)\n` +
-    `♻️ <b>Rented</b> <code>${String(rentedAll).padStart(4)}</code>\n` +
+    `♻️ <b>Rented</b> <code>${String(rentedAll).padStart(4)}</code> ` +
+    `(24h: <code>${String(rented24h || 0).padStart(3)}</code>)\n` +
     `${barChart ? `${barChart}\n` : ''}` +
     `${divider}\n` +
     `<b>Active Rentals:</b>\n` +

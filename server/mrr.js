@@ -19,7 +19,7 @@ let mrrGlobalCounter = 0; // Biến đếm phụ để chống trùng lặp tuy�
 const mrrRequestCache = new Map();
 const mrrInflight = new Map();
 const MRR_CACHE_TTL = 10000; // 10 seconds cache
-const MRR_NONCE_RECOVERY_JUMP = 600000000000n; // 10 PHÚT - Nhảy vọt cực mạnh để phá băng Bad Nonce
+const MRR_NONCE_RECOVERY_JUMP = 60000000000n; // 1 PHÚT - Đủ để thoát kẹt mà không bị đẩy quá xa tương lai
 
 const mrrInstances = new Map(); // This map will store resolved client configs
 
@@ -28,14 +28,17 @@ export function initMrrConfigs(env) {
     BT: {
       apiKey: normalizeCredential(env.MRR_KEY_RIG_BT),
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_BT),
+      nonceOverride: env.MRR_NONCE_OVERRIDE_BT ? BigInt(env.MRR_NONCE_OVERRIDE_BT) : null,
     },
     SL: {
       apiKey: normalizeCredential(env.MRR_KEY_RIG_SL),
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_SL),
+      nonceOverride: env.MRR_NONCE_OVERRIDE_SL ? BigInt(env.MRR_NONCE_OVERRIDE_SL) : null,
     },
     LN: {
       apiKey: normalizeCredential(env.MRR_KEY_RIG_LN),
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_LN),
+      nonceOverride: env.MRR_NONCE_OVERRIDE_LN ? BigInt(env.MRR_NONCE_OVERRIDE_LN) : null,
     },
   };
 
@@ -47,6 +50,7 @@ export function initMrrConfigs(env) {
         mrrConfigs[acct] = {
           apiKey: normalizeCredential(env[key]),
           apiSecret: normalizeCredential(env[`MRR_SECRET_RIG_${acct}`] || env[`MRR_API_SECRET_${acct}`]),
+          nonceOverride: env[`MRR_NONCE_OVERRIDE_${acct}`] ? BigInt(env[`MRR_NONCE_OVERRIDE_${acct}`]) : null,
         };
       };
     }
@@ -76,6 +80,18 @@ export async function initNonces() {
           } catch (e) { }
         });
       }
+
+      // Apply manual overrides from environment variables if provided
+      Object.values(mrrConfigs).forEach(cfg => {
+        if (cfg.nonceOverride && cfg.apiKey) {
+          const current = mrrLastNonceByClient.get(cfg.apiKey) || 0n;
+          if (cfg.nonceOverride > current) {
+            console.log(`[mrr:init] Applying manual nonce override for Key ${cfg.apiKey.slice(0, 8)}...: ${cfg.nonceOverride}`);
+            mrrLastNonceByClient.set(cfg.apiKey, cfg.nonceOverride);
+          }
+        }
+      });
+
       resolve();
     });
   });
@@ -117,32 +133,54 @@ export async function syncMrrClock(force = false) {
   if (mrrSyncPromise) return mrrSyncPromise;
   console.log('[mrr:clock] Synchronizing with MiningRigRentals server time...');
   mrrSyncPromise = (async () => {
+    const trySync = async (url) => {
+      try {
+        const res = await fetch(url, { 
+          headers: { 'user-agent': 'Ben Tre Mining Tool/2.0' },
+          signal: AbortSignal.timeout(5000)
+        });
+        if (!res.ok) return null;
+
+        // Robust fallback: use the Date header from the HTTP response
+        const dateHeader = res.headers.get('Date');
+        let headerTimeMs = null;
+        if (dateHeader) {
+          const parsed = new Date(dateHeader).getTime();
+          if (Number.isFinite(parsed) && parsed > 0) headerTimeMs = BigInt(parsed);
+        }
+
+        const text = await res.text();
+        let body = {};
+        try { body = JSON.parse(text); } catch { }
+        const extracted = extractEpochMs(body);
+        
+        return extracted ?? headerTimeMs;
+      } catch {
+        return null;
+      }
+    };
+
     try {
-      // Nonces must be close to MRR's server time. Syncing with NiceHash (which may drift) is risky.
-      const res = await fetch('https://www.miningrigrentals.com/api/v2/info/time', {
-        headers: { 'user-agent': 'Ben Tre Mining Tool/2.0' },
-      });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+      // Try API time first, then fallback to landing page for headers (bypasses most rate limits)
+      let serverTimeMs = await trySync('https://www.miningrigrentals.com/api/v2/info/time');
+      if (!serverTimeMs) {
+        serverTimeMs = await trySync('https://www.miningrigrentals.com/');
       }
 
-      const body = await res.json();
-      const extracted = extractEpochMs(body);
-      const serverTimeMs = extracted ?? BigInt(Date.now());
+      const finalTimeMs = serverTimeMs ?? BigInt(Date.now());
       const localTimeMs = Date.now();
-      mrrClockOffset = serverTimeMs - BigInt(localTimeMs);
+      mrrClockOffset = finalTimeMs - BigInt(localTimeMs);
       mrrClockSynced = true;
 
-      if (!extracted) {
-        console.warn('[mrr:clock] Could not parse server time from MRR response. Using local clock.');
+      if (!serverTimeMs) {
+        console.warn('[mrr:clock] Could not sync with MRR. Using local clock.');
       } else if (Math.abs(Number(mrrClockOffset)) > 1000) {
-        console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (MRR Server: ${serverTimeMs}, Local: ${localTimeMs})`);
+        console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (MRR Server: ${finalTimeMs}, Local: ${localTimeMs})`);
       } else {
         console.info(`[mrr:clock] Synced with MRR. Offset: ${mrrClockOffset}ms.`);
       }
     } catch (err) {
       console.warn(`[mrr:clock] MRR time sync failed: ${err.message}. Using local clock.`);
-      mrrClockSynced = true;
     } finally {
       mrrSyncPromise = null;
     }
@@ -167,10 +205,12 @@ export function nextMrrNonce(apiKey, clientLabel) {
     mrrLastNonceByClient.set(apiKey, 0n);
   }
 
-  const oneDayNano = 24n * 60n * 60n * 1000n * 1000000n;
+  // Safety: If nonce is massively in the future compared to our best known time, reset it.
+  // Increased limit to 60 mins to ensure manual high nonces aren't immediately reset.
+  const futureLimitNano = (mrrClockSynced ? 60n : 1440n) * 60n * 1000n * 1000000n;
   const nowNano = (BigInt(Date.now()) + mrrClockOffset) * 1000000n;
-  if (lastNonce > 9999999999999999999n || lastNonce > (nowNano + oneDayNano)) {
-    console.warn(`[mrr:${clientLabel}] Resetting outlier/future high-watermark nonce (${lastNonce}) to current time.`);
+  if (lastNonce > 9999999999999999999n || lastNonce > (nowNano + futureLimitNano)) {
+    console.warn(`[mrr:${clientLabel}] Resetting future-drifted nonce baseline (${lastNonce}) to current time. (Safety Limit: ${futureLimitNano/1000000n/60000n}m)`);
     mrrLastNonceByClient.set(apiKey, nowNano);
   }
 
@@ -294,8 +334,8 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedPath}`);
     
-    // MRR V2 requires the full URI path in the signature string
-    const sigEndpoint = `/api/v2${normalizedPath}`;
+    // MRR V2 signature string uses the relative path (e.g., /rig/mine)
+    const sigEndpoint = normalizedPath;
 
     if (Object.keys(cleanQuery).length > 0) {
       for (const [key, value] of Object.entries(cleanQuery)) {
@@ -318,8 +358,8 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
 
     let currentNonce = nextMrrNonce(clientConfig.apiKey, clientName);
     const signString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
-    // V2 uses HMAC-SHA256
-    const signatureV2 = createHmac('sha256', clientConfig.apiSecret).update(signString).digest('hex');
+    // Most MRR V2 implementations use HMAC-SHA1
+    const signatureV2 = createHmac('sha1', clientConfig.apiSecret).update(signString).digest('hex');
 
     let response = await send(currentNonce, signatureV2, {
       'x-api-key': clientConfig.apiKey,
@@ -337,8 +377,9 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
 
     let authMessage = String(data?.data?.message || data?.message || '');
     let isAuthFailureMessage = /signature|unauthorized|authenticated|invalid key|missing api key/i.test(authMessage);
-    // Only attempt a jump if it's specifically a nonce error and the key hasn't been flagged as invalid
-    const isBadNonce = /nonce/i.test(authMessage) && !/invalid key/i.test(authMessage);
+    
+    // Trigger recovery if "nonce" appears anywhere in the message, even if "invalid key" is also present
+    const isBadNonce = /nonce/i.test(authMessage);
 
     // Optimizer: If "Bad Nonce" is received, force clock re-sync and retry with a baseline jump
     if (isBadNonce || (response.status === 401 && /nonce/i.test(authMessage))) {
@@ -348,7 +389,6 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
       const nowNano = (BigInt(Date.now()) + mrrClockOffset + 1000n) * 1000000n;
       const failedNonce = BigInt(currentNonce);
       
-      // Lấy giá trị lớn nhất giữa (nonce vừa xịt, thời điểm hiện tại) rồi cộng thêm 10 phút
       const baseForJump = failedNonce > nowNano ? failedNonce : nowNano;
       const newJumpedNonce = baseForJump + MRR_NONCE_RECOVERY_JUMP;
 
@@ -358,7 +398,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
 
       currentNonce = nextMrrNonce(clientConfig.apiKey, clientName);
       const retrySignString = `${clientConfig.apiKey}${currentNonce}${sigEndpoint}`;
-      const retrySig = createHmac('sha256', clientConfig.apiSecret).update(retrySignString).digest('hex');
+      const retrySig = createHmac('sha1', clientConfig.apiSecret).update(retrySignString).digest('hex');
 
       const retryRes = await send(currentNonce, retrySig, {
         'x-api-key': clientConfig.apiKey,

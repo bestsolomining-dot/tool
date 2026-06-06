@@ -209,6 +209,10 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   let warningAll = 0;
   let onlineAll = 0;
 
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const todayStartTs = todayStart.getTime();
+
   if (mrrAccts.length === 0) {
     console.warn(`[${new Date().toLocaleTimeString()}] No accounts for scope: ${requestedScope}`);
     return { notifications: [], summary: { error: 'No accounts configured' } };
@@ -594,6 +598,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     accountMetrics.push(metric);
   }
 
+  const rented24hRow = await dbGetAsync(
+    "SELECT COUNT(*) as count FROM rentals WHERE start_time >= ?",
+    [todayStartTs]
+  );
+  const rented24hCount = rented24hRow ? rented24hRow.count : 0;
+
   // ------------------------------------------------------------------
   //  Detect and notify finished rentals (no longer present in API)
   // ------------------------------------------------------------------
@@ -645,7 +655,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     }).join('\n');
 
     const finishTime = new Date().toLocaleTimeString();
-    const allSummaryMsg = TelegramTemplates.heartbeatSummary(barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, finishTime);
+    const allSummaryMsg = TelegramTemplates.heartbeatSummary(barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, finishTime, rented24hCount);
 
     try {
       await sendTelegramInternal(allSummaryMsg);

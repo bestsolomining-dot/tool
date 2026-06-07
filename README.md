@@ -1,5 +1,3 @@
-# NiceHash v2 Toolbox
-
 This project is a React + Vite application with a backend proxy for NiceHash API v2.
 
 The frontend uses `/api/v2/*` routes, and the backend server in `index.js` forwards requests to NiceHash using your API key, secret, and organization ID.

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import Modal from './Modal'
 import { poolHelpers as ph, apiFetch, poolApi } from '../core/poolUtils' // Assuming nhClient is passed as a prop
 
-export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySuccess, initialPoolData, isNew, isPopout = false, nhClient }) {
+export default function PoolEditor({ pool, onClose, onSave, onSaveSuccess, onVerifySuccess, initialPoolData, isNew, isPopout = false, nhClient }) {
   const [editorBody, setEditorBody] = useState('')
   const [editorVerifyBody, setEditorVerifyBody] = useState(null) // This is the payload for verification
   const [editorResponse, setEditorResponse] = useState(null)
@@ -15,6 +15,8 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
 
   const currentPoolId = pool?.id || pool?.key
   const currentPoolLabel = pool?.label
+
+  const isMrrPool = !!onSave;
 
   useEffect(() => {
     let cancelled = false
@@ -168,6 +170,19 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
       return
     }
 
+    if (onSave) {
+      try {
+        await onSave(poolDetails);
+        if (onSaveSuccess) onSaveSuccess();
+        onClose();
+      } catch (err) {
+        setEditorError(err.message || String(err));
+      } finally {
+        setEditorSaving(false);
+      }
+      return;
+    }
+
     const savePayload = ph.buildSaveBody(poolDetails)
     const missingFields = ph.getMissingSaveFields(savePayload)
     if (missingFields.length > 0) {
@@ -254,12 +269,14 @@ export default function PoolEditor({ pool, onClose, onSaveSuccess, onVerifySucce
           <div className="code-block-wrapper">
             <div className="code-block-header">
               <h3>Save request body</h3>
-              <span>POST /api/v2/pool</span>
+              <span>{isMrrPool ? 'PUT MRR Profile' : 'POST /api/v2/pool'}</span>
             </div>
             <pre className="code-block-content">
               {(() => {
                 try {
-                  return JSON.stringify(ph.buildSaveBody(JSON.parse(editorBody)), null, 2)
+                  const parsed = JSON.parse(editorBody);
+                  if (isMrrPool) return JSON.stringify(parsed, null, 2);
+                  return JSON.stringify(ph.buildSaveBody(parsed), null, 2);
                 } catch {
                   return 'Invalid JSON.'
                 }

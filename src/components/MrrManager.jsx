@@ -16,6 +16,27 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
   const [activeRigId, setActiveRigId] = useState(null);
   const [draggedItemIndex, setDraggedItemIndex] = useState(null);
 
+  /** Helper to merge new rig data into existing state to preserve metadata */
+  const updateRigsState = (newData) => {
+    setRigs(prev => {
+      const incoming = Array.isArray(newData) ? newData : [newData];
+      const existingMap = new Map(prev.map(r => [String(r.rigid || r.id), r]));
+      
+      incoming.forEach(item => {
+        if (!item) return;
+        const id = String(item.rigid || item.id);
+        if (existingMap.has(id)) {
+          // Merge: new data overwrites, existing data is preserved if not in update
+          existingMap.set(id, { ...existingMap.get(id), ...item });
+        } else {
+          existingMap.set(id, item);
+        }
+      });
+      
+      return Array.from(existingMap.values());
+    });
+  };
+
   // Synchronize activeRigId with external selection or pick the first available
   useEffect(() => {
     if (externalRigId) {
@@ -30,15 +51,28 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
     setLoading(true);
     setError(null);
     try {
-      // Refactored to use the account-level pool endpoint
-      const path = targetIds 
-        ? `/api/v2/mrr/account/pool/${encodeURIComponent(targetIds)}`
-        : '/api/v2/mrr/account/pool';
-        
-      const response = await onCall(path, { method: 'GET', query: { client: mrrClient }, silent: true });
+      // If we are fetching for a specific rig, use the rig endpoint. 
+      // Otherwise, use the account-level pool profile endpoint.
+      const isSingleRig = targetIds && !Array.isArray(rentalIds) && !targetIds.includes(';');
+      const path = isSingleRig 
+        ? `/api/v2/mrr/rig/${encodeURIComponent(targetIds)}/pool`
+        : `/api/v2/mrr/account/pool/${targetIds ? encodeURIComponent(targetIds) : ''}`;
+
+      const query = { client: mrrClient };
+
+      const response = await onCall(path, { method: 'GET', query, silent: true });
       if (response?.success) {
-        const data = Array.isArray(response.data) ? response.data : [response.data];
-        setRigs(data);
+        const rawData = Array.isArray(response.data) ? response.data : [response.data];
+        // Normalize flat pool configurations (profiles) to the rig/pools structure used by the UI
+        const normalized = rawData.map(item => {
+          // A Profile specifically has host/port info and lacks rig-specific 'status'
+          const isActualProfile = item && !item.pools && item.host && item.port;
+          if (isActualProfile) {
+            return { ...item, rigid: item.rigid || item.id, pools: [item], isProfile: true };
+          }
+          return item;
+        });
+        updateRigsState(normalized);
       } else {
         setError(response?.message || 'API responded with failure');
       }
@@ -56,7 +90,7 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
       // Refactored to use the new general rig listing endpoint
       const response = await onCall('/api/v2/mrr/rig', { method: 'GET', query: { client: mrrClient }, silent: true });
       if (response?.success) {
-        setRigs(Array.isArray(response.data) ? response.data : []);
+        updateRigsState(Array.isArray(response.data) ? response.data : []);
       }
     } catch (err) {
       setError(err.message);
@@ -66,10 +100,23 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
   };
 
   useEffect(() => {
+    // Clear current rigs when switching client context to ensure clean state
+    setRigs([]);
+    setActiveRigId(null);
+  }, [mrrClient]);
+
+  useEffect(() => {
     if (externalPoolData) {
-      // Use the data already fetched by the parent if available
-      const data = Array.isArray(externalPoolData.data) ? externalPoolData.data : [externalPoolData.data || externalPoolData];
-      setRigs(data.filter(r => r && (r.rigid || r.pools)));
+      const rawData = Array.isArray(externalPoolData.data) ? externalPoolData.data : [externalPoolData.data || externalPoolData];
+      // Normalize external data if it's a flat pool list
+      const normalized = rawData.map(item => {
+        if (item && !item.pools && (item.host || item.name)) {
+          return { ...item, rigid: item.rigid || item.id, pools: [item], isProfile: true };
+        }
+        return item;
+      });
+      const validData = normalized.filter(r => r && (r.rigid || r.pools));
+      if (validData.length > 0) updateRigsState(validData);
     } else {
       (externalRigId || rentalIds) ? fetchPools() : fetchRigs();
     }
@@ -78,9 +125,10 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
   const updateRigConfig = async (rigId, config) => {
     setLoading(true);
     try {
+      const rig = rigs.find(r => String(r.rigid || r.id) === String(rigId));
       const response = await onCall(`/api/v2/mrr/rig/${rigId}`, {
-        method: 'POST',
-        body: config,
+        method: 'PUT',
+        body: { ...config, name: rig?.name },
         query: { client: mrrClient },
         showModal: true
       });
@@ -97,9 +145,14 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
   const updatePools = async (rig, pools) => {
     setLoading(true);
     try {
-      const response = await onCall(`/api/v2/mrr/rig/${rig.rigid || rig.id}/pool`, {
+      const rigId = rig.rigid || rig.id;
+      const endpoint = rig.isProfile ? `/api/v2/mrr/account/pool/${rigId}` : `/api/v2/mrr/rig/${rigId}/pool`;
+      // For account profiles, send the pool object directly. For rigs, send the wrapped pools array.
+      const body = rig.isProfile ? (pools[0] || {}) : { pools };
+
+      const response = await onCall(endpoint, {
         method: 'PUT',
-        body: { pools },
+        body,
         query: { client: mrrClient },
         showModal: true
       });
@@ -140,13 +193,11 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
     await updatePools(rig, updatedPools);
   };
 
-  const handleEditPool = (pool, rigid) => {
+  const handleEditPool = (pool, rig) => {
     setEditorState({
-      initialData: {
-        ...pool,
-        algo: pool.type, // Map 'type' from MRR API to internal 'algo' field
-        rigid
-      },
+      initialData: pool, // Pass raw MRR pool data without metadata pollution
+      label: pool.name || rig.name || (rig.isProfile ? 'Pool Profile' : 'Rig Pool'),
+      rig,
       isNew: false
     });
   };
@@ -164,7 +215,7 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
               onChange={(e) => setActiveRigId(e.target.value)}
             >
               {rigs.map(r => (
-                <option key={r.rigid || r.id} value={r.rigid || r.id}>Rig ID: {r.rigid || r.id}</option>
+                <option key={r.rigid || r.id} value={r.rigid || r.id}>{r.name || (r.isProfile ? 'Pool' : 'Rig')} (ID: {r.rigid || r.id})</option>
               ))}
             </select>
           )}
@@ -179,26 +230,28 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
         {!loading && !error && rigs.filter(r => !activeRigId || String(r.rigid || r.id) === String(activeRigId)).map((rig) => (
           <div key={rig.rigid} style={{ marginBottom: '2rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px' }}>
             <div style={{ marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: '1rem', color: '#60a5fa' }}>Rig ID: {rig.rigid}</h3>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <label style={{ fontSize: '10px', opacity: 0.6 }}>Price:</label>
-                  <input 
-                    type="number" 
-                    className="input-pro" 
-                    style={{ width: '100px', height: '24px', fontSize: '11px' }}
-                    defaultValue={rig.price || rig.min_price}
-                    onBlur={(e) => updateRigConfig(rig.rigid || rig.id, { price: e.target.value })}
-                  />
+              <h3 style={{ margin: 0, fontSize: '1rem', color: '#60a5fa' }}>{rig.name || (rig.isProfile ? 'Pool Profile' : 'Rig')} (ID: {rig.rigid || rig.id})</h3>
+              {!rig.isProfile && (
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <label style={{ fontSize: '10px', opacity: 0.6 }}>Price:</label>
+                    <input 
+                      type="number" 
+                      className="input-pro" 
+                      style={{ width: '100px', height: '24px', fontSize: '11px' }}
+                      defaultValue={rig.price || rig.min_price}
+                      onBlur={(e) => updateRigConfig(rig.rigid || rig.id, { price: e.target.value })}
+                    />
+                  </div>
+                  <button 
+                    className="text-button" 
+                    style={{ color: rig.status === 'disabled' ? '#10b981' : '#f87171', fontSize: '11px' }}
+                    onClick={() => updateRigConfig(rig.rigid || rig.id, { status: rig.status === 'disabled' ? 'available' : 'disabled' })}
+                  >
+                    {rig.status === 'disabled' ? 'Enable Rig' : 'Disable Rig'}
+                  </button>
                 </div>
-                <button 
-                  className="text-button" 
-                  style={{ color: rig.status === 'disabled' ? '#10b981' : '#f87171', fontSize: '11px' }}
-                  onClick={() => updateRigConfig(rig.rigid || rig.id, { status: rig.status === 'disabled' ? 'available' : 'disabled' })}
-                >
-                  {rig.status === 'disabled' ? 'Enable Rig' : 'Disable Rig'}
-                </button>
-              </div>
+              )}
             </div>
 
             <div className="pool-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -210,20 +263,46 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
                   onDragStart={(e) => handleDragStart(e, idx)}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, idx, rig)}
-                  style={{ display: 'grid', gridTemplateColumns: '30px 45px 70px 1fr 130px 50px', gap: '0.8rem', alignItems: 'center', fontSize: '0.75rem', background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px', cursor: 'grab' }}
+                  style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '24px 45px 1.2fr 1.5fr 1fr 60px', 
+                    gap: '12px', 
+                    alignItems: 'center', 
+                    fontSize: '11px', 
+                    background: 'rgba(255,255,255,0.02)', 
+                    padding: '10px 12px', 
+                    borderRadius: '6px', 
+                    cursor: 'grab',
+                    border: '1px solid rgba(255,255,255,0.03)',
+                    marginBottom: '2px'
+                  }}
                 >
-                  <div style={{ opacity: 0.3, cursor: 'grab' }}>☰</div>
+                  <div style={{ opacity: 0.2, cursor: 'grab', fontSize: '14px' }}>⋮⋮</div>
                   <input 
                     type="number" 
                     className="input-pro" 
-                    style={{ width: '40px', padding: '2px', fontSize: '10px', textAlign: 'center' }}
+                    style={{ width: '100%', height: '26px', padding: '2px', fontSize: '10px', textAlign: 'center', background: 'rgba(0,0,0,0.2)' }}
                     value={pool.priority}
                     onChange={(e) => handlePriorityChange(rig, idx, e.target.value)}
                   />
-                  <div style={{ fontWeight: 'bold', color: '#34d399', fontSize: '10px' }}>{pool.type}</div>
-                  <div style={{ opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pool.host}:{pool.port}</div>
-                  <div style={{ opacity: 0.6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pool.user}</div>
-                  <button className="text-button" onClick={() => handleEditPool(pool, rig.rigid)}>Edit</button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                    <div style={{ fontWeight: '600', color: '#f8fafc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {pool.name || 'Unnamed Pool'}
+                    </div>
+                    <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#60a5fa', opacity: 0.8, letterSpacing: '0.02em' }}>
+                      {pool.type || 'N/A'}
+                    </div>
+                  </div>
+
+                  <div style={{ opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '10px' }}>
+                    <span style={{ opacity: 0.4 }}>host:</span> {pool.host}:{pool.port}
+                  </div>
+                  <div style={{ opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '10px' }}>
+                    <span style={{ opacity: 0.4 }}>user:</span> {pool.user}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <button className="text-button" style={{ color: '#60a5fa', fontWeight: '600' }} onClick={() => handleEditPool(pool, rig)}>Edit</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -234,7 +313,20 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
           <PoolEditorPopup
             editor={editorState}
             onClose={() => setEditorState(null)}
-            onSaveSuccess={() => { setEditorState(null); fetchPools(); }}
+            onSave={async (updatedData) => {
+              const rig = editorState.rig;
+              const updatedPools = [...(rig.pools || [])];
+              // Find and replace the edited pool in the local array
+              const idx = updatedPools.findIndex(p => 
+                (p.id && p.id === updatedData.id) || (p.priority === updatedData.priority)
+              );
+              if (idx > -1) updatedPools[idx] = updatedData;
+              else updatedPools[0] = updatedData;
+
+              await updatePools(rig, updatedPools);
+              setEditorState(null);
+              fetchPools();
+            }}
           />
         )}
       </div>

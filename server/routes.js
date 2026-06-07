@@ -604,6 +604,7 @@ export function registerRoutes(app) {
   app.get('/api/v2/mrr/rig', asyncHandler(async (req, res) => mrrRequest('/rig', req, res)));
   app.get('/api/v2/mrr/rig/:rigIds', asyncHandler(async (req, res) => mrrRequest(`/rig/${req.params.rigIds}`, req, res)));
   app.get('/api/v2/mrr/rig/:rigIds/pool', asyncHandler(async (req, res) => mrrRequest(`/rig/${req.params.rigIds}/pool`, req, res)));
+  app.put('/api/v2/mrr/rig/:rigId', asyncHandler(async (req, res) => { await mrrRequest(`/rig/${req.params.rigId}`, req, res, 'PUT', req.body); }));
 
   app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();

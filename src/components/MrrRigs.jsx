@@ -20,7 +20,7 @@ const MRR_BASE_POWER = UNIT_TO_POWER[MRR_BASE_UNIT];
 const clean = (u) => {
   const str = String(u || '').toUpperCase().trim();
   // Special case: ignore algorithm names that contain unit letters or have specific base units
-  if (str.includes('SHA256')) return 'PH';
+  if (str.includes('SHA256')) return 'EH';
   if (str.includes('SCRYPT')) return 'MH';
   if (str.includes('RANDOMX')) return 'KH';
 
@@ -88,8 +88,8 @@ export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
   const mrrPriceNorm = mrrPriceNum / Math.pow(10, mrrP);
   const nhPriceNorm = nhPriceNum / Math.pow(10, nhP);
 
-  // Seller ROI = (Your Price - Market Benchmark) / Your Price
-  return ((mrrPriceNorm - nhPriceNorm) / mrrPriceNorm * 100).toFixed(1);
+  // ROI = (Market Benchmark - Your Price) / Market Benchmark
+  return ((nhPriceNorm - mrrPriceNorm) / nhPriceNorm * 100).toFixed(1);
 }
 
 /** Deeply searches for a rig array in the MRR response */
@@ -355,8 +355,14 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           if (String(nhAlgo).toUpperCase() === 'RANDOMX') nhAlgo = 'RANDOMX';
 
           const fetchPrice = async (path) => {
+            // Ensure authenticated endpoints use a valid sub-account client even if global filter is 'VN'
+            const query = { 
+              algorithm: nhAlgo, 
+              market: 'USA',
+              client: (mrrClient === 'VN' || !mrrClient) ? 'BT' : mrrClient
+            };
             const data = await onCall(path, {
-              query: { algorithm: nhAlgo, market: 'USA' },
+              query,
               silent: true
             });
             // Filter out error objects returned by callApi (App.jsx) on 400/500 responses

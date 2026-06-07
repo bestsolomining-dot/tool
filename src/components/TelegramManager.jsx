@@ -199,15 +199,15 @@ const TelegramTemplates = {
     `${divider}\n` +
     `🏢<code>${escapeHtml(fr.client)}</code>\n` +
     `🖥 ${escapeHtml(fr.name || fr.id)}\n` +
+    `🎯 <b>Efficiency</b>\n` +
+    `<b>${typeof info?.percent !== 'undefined' ? info.percent + '%' : 'N/A'}</b>\n` +
     // `🆔<code>${fr.id}</code>\n` +
     `⚙️<code>${escapeHtml(info?.algo || fr.algo || '')}</code>\n` +
     `${divider}\n` +
     `⚡ <b>Hashrate (avg / cur)</b>\n` +
     `<code>${info?.niceAverageHashrate || 'N/A'} / ${info?.niceHashrate || 'N/A'}</code>\n` +
     `\n` +
-    `🎯 <b>Efficiency</b>\n` +
-    `<b>${typeof info?.percent !== 'undefined' ? info.percent + '%' : 'N/A'}</b>\n` +
-    `\n` +
+    
     `💸 <b>Paid</b>\n` +
     `<code>${info?.price?.paid || fr.price || '0.00'} ${info?.price?.currency || fr.currency || 'BTC'}</code>\n` +
     `${divider}\n`,

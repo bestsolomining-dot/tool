@@ -188,7 +188,6 @@ export default function App() {
               />
             </article>
           </div>
-
           <article className="panel">
             <MiningRigRental
               onCall={handleMiningCall}
@@ -197,11 +196,11 @@ export default function App() {
               onOpenCompletionCalculator={openCompletionCalculator}
             />
           </article>
-        </section>
-
-        <section className="pools-section">
+          <section className="pools-section">
           <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
         </section>
+        </section>
+        
       </main>
 
       <Modal

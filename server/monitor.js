@@ -209,6 +209,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   let warningAll = 0;
   let onlineAll = 0;
 
+  // Ensure history table exists for accurate 24h counting
+  await dbRunAsync("CREATE TABLE IF NOT EXISTS rental_history (id TEXT PRIMARY KEY, start_time INTEGER)").catch(() => {});
+  // Cleanup history older than 2 days
+  await dbRunAsync("DELETE FROM rental_history WHERE start_time < ?", [Date.now() - 172800000]).catch(() => {});
+
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
   const todayStartTs = todayStart.getTime();
@@ -554,6 +559,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
                low_hashrate_start=excluded.low_hashrate_start, zero_hashrate_start=excluded.zero_hashrate_start`,
             [String(r.id), r.name || r.id, acct, startT, endT, info.algo, displayTarget, now, lowHashStart, zeroHashStart]
           );
+
+          // Record in history to maintain count even after the rental ends
+          if (startT > 0) {
+            await dbRunAsync("INSERT OR IGNORE INTO rental_history (id, start_time) VALUES (?, ?)", [String(r.id), startT]);
+          }
         } catch (err) {
           console.error(`[${new Date().toLocaleTimeString()}] [monitor:db] Upsert error for ${r.id}: ${err.message}`);
         }
@@ -599,7 +609,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   }
 
   const rented24hRow = await dbGetAsync(
-    "SELECT COUNT(*) as count FROM rentals WHERE start_time >= ?",
+    "SELECT COUNT(*) as count FROM rental_history WHERE start_time >= ?",
     [todayStartTs]
   );
   const rented24hCount = rented24hRow ? rented24hRow.count : 0;

@@ -670,6 +670,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         <select className="select-pro" value={nhClient} onChange={(e) => setNhClient(e.target.value)}>
           <option value="BT">NiceHash Client: BT</option>
           <option value="PH">NiceHash Client: PH</option>
+          <option value="KIMLOAN">NiceHash Client: KIMLOAN</option>
+          <option value="NHATLINH">NiceHash Client: NHATLINH</option>
           <option value="VN">NiceHash Client: VN (all NH Pools)</option>
         </select>
         <div className="pool-automation-main" style={{ flex: 1, minWidth: '600px', display: 'flex', flexDirection: 'column', gap: '20px' }}>

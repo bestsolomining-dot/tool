@@ -7,6 +7,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
   const { rentedRigs, refresh: refreshSummary } = useRentedRigs();
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [localOrders, setLocalOrders] = useState([]);
+  const [localAccounting, setLocalAccounting] = useState(null);
   const [orderDetail, setOrderDetail] = useState(null);
   const [loadingLocal, setLoadingLocal] = useState(false);
   const [priceInput, setPriceInput] = useState('');
@@ -23,20 +24,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
   };
 
   const orders = useMemo(() => {
-    let list = [];
-    if (localOrders.length > 0) {
-      list = localOrders;
-    } else {
-      const raw = output;
-      if (!raw) list = [];
-      else if (Array.isArray(raw)) list = raw;
-      else if (Array.isArray(raw?.orders)) list = raw.orders;
-      else if (Array.isArray(raw?.myOrders)) list = raw.myOrders;
-      else if (Array.isArray(raw?.data)) list = raw.data;
-      else if (Array.isArray(raw?.list)) list = raw.list;
-      else if (Array.isArray(raw?.result)) list = raw.result;
-    }
-    return list.filter(o => {
+    return localOrders.filter(o => {
       const status = (o.status?.code || o.status || '').toUpperCase();
       return status !== 'CANCELED' && status !== 'CANCELLED' && status !== 'COMPLETED' && status !== 'EXPIRED';
     });
@@ -55,11 +43,22 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     setLoadingLocal(false);
   }, [onCall, nhClient]);
 
+  const fetchAccounting = useCallback(async () => {
+    const data = await onCall('/api/v2/accounting/balances', {
+      query: { client: nhClient },
+      silent: true
+    });
+    if (data && !data.error) {
+      setLocalAccounting(data);
+    }
+  }, [onCall, nhClient]);
+
   // Unified refresh for both the list and the summary context
   const handleManualRefresh = useCallback(() => {
     fetchOrders();
+    fetchAccounting();
     refreshSummary();
-  }, [fetchOrders, refreshSummary]);
+  }, [fetchOrders, fetchAccounting, refreshSummary]);
 
   const fetchOrderDetail = async (orderId) => {
     const id = String(orderId || '').trim();
@@ -159,13 +158,15 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
   useEffect(() => {
     setLocalOrders([]);
     setOrderDetail(null);
+    setLocalAccounting(null);
 
     // We check if we are currently mounted and have a client before fetching
     if (nhClient && typeof onCall === 'function') {
       fetchOrders();
+      fetchAccounting();
       refreshSummary(); // Ensure the active orders summary is also fetched
     }
-  }, [nhClient, fetchOrders, onCall, refreshSummary]);
+  }, [nhClient, fetchOrders, fetchAccounting, onCall, refreshSummary]);
 
   // Find market comparison data for the currently selected order
   const matchingOrderInfo = useMemo(() =>
@@ -184,6 +185,8 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
           <option value="VN">VN (All Clients)</option>
           <option value="BT">BT Account</option>
           <option value="PH">PH Account</option>
+          <option value="NHATLINH">NhatLinh</option>
+          <option value="KIMLOAN">KimLoan</option>
         </select>
         <RentedRigsSummarySection />
       </div>
@@ -380,20 +383,20 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
         </div>
         <Accounting onCall={onCall} />
 
-        {output?.total && output?.currencies && (
+        {localAccounting?.total && localAccounting?.currencies && (
           <div className="balance-summary-pro" style={{ marginTop: '15px', padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px' }}>
               <div>
                 <small style={{ opacity: 0.6, display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Available</small>
-                <strong style={{ fontSize: '16px', color: '#10b981' }}>{output.total.available} {output.total.currency}</strong>
+                <strong style={{ fontSize: '16px', color: '#10b981' }}>{localAccounting.total.available} {localAccounting.total.currency}</strong>
               </div>
               <div>
                 <small style={{ opacity: 0.6, display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Pending</small>
-                <strong style={{ fontSize: '16px', color: '#f59e0b' }}>{output.total.pending} {output.total.currency}</strong>
+                <strong style={{ fontSize: '16px', color: '#f59e0b' }}>{localAccounting.total.pending} {localAccounting.total.currency}</strong>
               </div>
               <div>
                 <small style={{ opacity: 0.6, display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Total Balance</small>
-                <strong style={{ fontSize: '16px' }}>{output.total.totalBalance} {output.total.currency}</strong>
+                <strong style={{ fontSize: '16px' }}>{localAccounting.total.totalBalance} {localAccounting.total.currency}</strong>
               </div>
             </div>
           </div>

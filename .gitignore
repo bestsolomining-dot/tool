@@ -1,4 +1,4 @@
-mrr_monitor.*
+mrr_monitor.db
 mrr_monitor.db-shm
 mrr_monitor.db-wal
 orders.csv
@@ -10,7 +10,4 @@ package-lock.json
 *.log
 *.xlsx
 /dist
-/node_modules
-mrr_monitor.db
-orders.csv
-server/nh.js
+/node_modules    

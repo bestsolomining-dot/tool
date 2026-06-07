@@ -19,14 +19,15 @@ const MRR_BASE_POWER = UNIT_TO_POWER[MRR_BASE_UNIT];
 /** Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH') */
 const clean = (u) => {
   const str = String(u || '').toUpperCase().trim();
-  // Special case: ignore algorithm names that contain unit letters
-  if (str.includes('SHA256')) return 'PH'; 
+  // Special case: ignore algorithm names that contain unit letters or have specific base units
+  if (str.includes('SHA256')) return 'PH';
   if (str.includes('SCRYPT')) return 'MH';
+  if (str.includes('RANDOMX')) return 'KH';
 
-  const m = str.match(/(EH|PH|TH|GH|MH|KH|EHS|PHS|THS|GHS|MHS|E|P|T|G|M|K|H)/);
+  const m = str.match(/(EHS|PHS|THS|GHS|MHS|EH|PH|TH|GH|MH|KH)/) || str.match(/\b(E|P|T|G|M|K|H)\b/);
   if (!m) return 'TH';
   let unit = m[0];
-  const singleMap = { 'E': 'EH', 'P': 'PH', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH', 'EHS': 'EH', 'PHS': 'PH', 'THS': 'TH', 'GHS': 'GH', 'MHS': 'MH' };
+  const singleMap = { 'E': 'EH', 'P': 'PH', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };
   return singleMap[unit] || unit;
 };
 
@@ -113,6 +114,7 @@ const getClientBadgeStyle = (client) => {
     'SL': { background: '#d97706', color: '#fff' }, // Orange
     'LN': { background: '#0891b2', color: '#fff' }, // Cyan
     'VN': { background: '#10b981', color: '#fff' }, // Green
+    'LUCKY': { background: '#ec4899', color: '#fff' }, // Pink
   };
   return styles[c] || { background: 'rgba(255,255,255,0.1)', color: '#94a3b8' };
 };
@@ -312,6 +314,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       total: rigs.length,
       available: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('available')).length,
       rented: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('rented')).length,
+      offline: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('offline')).length,
+      disabled: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('disabled')).length,
     };
   }, [rigs]);
 
@@ -343,18 +347,25 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     uniqueAlgos.forEach(async (algo) => {
       if (algo && algo !== 'N/A' && !algoMarketPrices[algo]) {
         try {
-          const nhAlgo = normalizeAlgoForNiceHash(algo);
+          let nhAlgo = normalizeAlgoForNiceHash(algo);
+
+          // Fix: NiceHash uses 'DAGGERHASHIMOTO' for Ethash/Hashimoto.
+          // MRR often provides 'HASHIMOTO' or variants that normalize incorrectly to 'HASHIMOTOS'.
+          if (String(nhAlgo).toUpperCase().includes('HASHIMOTO')) nhAlgo = 'DAGGERHASHIMOTO';
+          if (String(nhAlgo).toUpperCase() === 'RANDOMX') nhAlgo = 'RANDOMX';
 
           const fetchPrice = async (path) => {
             const data = await onCall(path, {
               query: { algorithm: nhAlgo, market: 'USA' },
               silent: true
             });
+            // Filter out error objects returned by callApi (App.jsx) on 400/500 responses
+            if (!data || data.error || data.errors || data.success === false) return null;
             return data?.price || data;
           };
 
           let nhPriceData = await fetchPrice('/api/v2/hashpower/business/order');
-          if (!nhPriceData || getNiceHashPriceValue(nhPriceData) <= 0) {
+          if (!nhPriceData) {
             nhPriceData = await fetchPrice('/api/v2/hashpower/order/price');
           }
 
@@ -562,6 +573,19 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           </small>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <select 
+            className="select-pro" 
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ fontSize: '11px', padding: '2px 8px', height: '30px', minWidth: '130px' }}
+          >
+            <option value="all">All Statuses</option>
+            <option value="available">Available</option>
+            {/* <option value="online">Online</option> */}
+            <option value="offline">Offline</option>
+            <option value="rented">Rented</option>
+            <option value="disabled">Disabled</option>
+          </select>
           <button className="btn-pro secondary" onClick={fetchRigs} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -571,34 +595,26 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       {error && <div className="error-message" style={{ margin: '15px 0', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '6px', color: '#f87171' }}><strong>Error:</strong> {error}</div>}
 
       {/* Status Dashboard */}
-      <div className="rigs-summary-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px', marginBottom: '20px' }}>
-        <div className="stat-card-mini" style={{ background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+      <div className="rigs-summary-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+        <div className="stat-card-mini" style={{ maxWidth: '120px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ fontSize: '10px', opacity: 0.5, textTransform: 'uppercase' }}>Total Rigs</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold' }}>{stats.total}</div>
         </div>
-        <div className="stat-card-mini" style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+        <div className="stat-card-mini" style={{ maxWidth: '120px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ fontSize: '10px', color: '#10b981', textTransform: 'uppercase' }}>Available</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10b981' }}>{stats.available}</div>
         </div>
-        <div className="stat-card-mini" style={{ background: 'rgba(167, 139, 250, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(167, 139, 250, 0.2)' }}>
+        <div className="stat-card-mini" style={{ maxWidth: '120px', background: 'rgba(167, 139, 250, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(167, 139, 250, 0.2)' }}>
           <div style={{ fontSize: '10px', color: '#a78bfa', textTransform: 'uppercase' }}>Rented</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#a78bfa' }}>{stats.rented}</div>
         </div>
-        <div className="stat-card-mini" style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-          {(() => {
-            const effs = rigs.map(r => parseFloat(r.percent || r.hashrate?.average?.percent || 0)).filter(e => e > 0);
-            const avg = effs.length ? (effs.reduce((a, b) => a + b, 0) / effs.length) : 100;
-            const roi = avg - 100;
-            const roiColor = getRoiColor(roi);
-            return (
-              <>
-                <div style={{ fontSize: '10px', color: roiColor, textTransform: 'uppercase' }}>Global Avg ROI</div>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: roiColor }}>
-                  {roi > 0 ? '+' : ''}{roi.toFixed(1)}%
-                </div>
-              </>
-            );
-          })()}
+        <div className="stat-card-mini" style={{ maxWidth: '120px', background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+          <div style={{ fontSize: '10px', color: '#f87171', textTransform: 'uppercase' }}>Offline</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#f87171' }}>{stats.offline}</div>
+        </div>
+        <div className="stat-card-mini" style={{ maxWidth: '120px', background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+          <div style={{ fontSize: '10px', color: '#861504', textTransform: 'uppercase' }}>Disabled</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#8f0202' }}>{stats.disabled}</div>
         </div>
       </div>
 
@@ -950,8 +966,13 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
                             {expandedPools.has(rig.id) && (info || rig.host) && (
                               <div className="rig-pool-summary" style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <div style={{ marginBottom: '6px' }}>
-                                  <div style={{ fontSize: '0.7rem', opacity: 0.5, textTransform: 'uppercase' }}>Pool</div>
+                                <div style={{ marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ fontSize: '0.7rem', opacity: 0.5, textTransform: 'uppercase' }}>Current Pool</div>
+                                  <button 
+                                    className="text-button" 
+                                    style={{ fontSize: '10px', color: '#60a5fa', padding: 0 }}
+                                    onClick={() => onOpenPool?.(rig, info)}
+                                  >Edit</button>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
                                   <div style={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={rig.host || info?.stratumHost}><span style={{ opacity: 0.7 }}>Host:</span> {rig.host || info?.stratumHost || 'N/A'}</div>

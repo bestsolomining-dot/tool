@@ -14,6 +14,7 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
   const [error, setError] = useState(null);
   const [editorState, setEditorState] = useState(null);
   const [activeRigId, setActiveRigId] = useState(null);
+  const [draggedItemIndex, setDraggedItemIndex] = useState(null);
 
   // Synchronize activeRigId with external selection or pick the first available
   useEffect(() => {
@@ -73,6 +74,62 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
       (externalRigId || rentalIds) ? fetchPools() : fetchRigs();
     }
   }, [rentalIds, externalPoolData, externalRigId, onCall, mrrClient]);
+
+  const updateRigConfig = async (rigId, config) => {
+    setLoading(true);
+    try {
+      const response = await onCall(`/api/v2/mrr/rig/${rigId}`, {
+        method: 'POST',
+        body: config,
+        query: { client: mrrClient },
+        showModal: true
+      });
+      if (response?.success) {
+        externalRigId || rentalIds ? fetchPools() : fetchRigs();
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updatePools = async (rig, pools) => {
+    setLoading(true);
+    try {
+      const response = await onCall(`/api/v2/mrr/rig/${rig.rigid || rig.id}/pool`, {
+        method: 'PUT',
+        body: { pools },
+        query: { client: mrrClient },
+        showModal: true
+      });
+      if (response?.success) {
+        fetchPools();
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDragStart = (e, index) => {
+    setDraggedItemIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e) => { e.preventDefault(); };
+
+  const handleDrop = async (e, index, rig) => {
+    e.preventDefault();
+    if (draggedItemIndex === null || draggedItemIndex === index) return;
+    const updatedPools = [...rig.pools];
+    const [movedItem] = updatedPools.splice(draggedItemIndex, 1);
+    updatedPools.splice(index, 0, movedItem);
+    const prioritized = updatedPools.map((p, i) => ({ ...p, priority: i }));
+    await updatePools(rig, prioritized);
+    setDraggedItemIndex(null);
+  };
 
   const handlePriorityChange = async (rig, poolIndex, newPriority) => {
     const updatedPools = [...rig.pools];

@@ -25,7 +25,8 @@ export default function App() {
   }, []);
   const [algorithm, setAlgorithm] = useState('');
   const [market, setMarket] = useState('');
-  const [nhClient, setNhClient] = useState('VN');
+  const [nhOrderClient, setNhOrderClient] = useState('VN');
+  const [nhPoolClient, setNhPoolClient] = useState('BT');
   const [mrrClient, setMrrClient] = useState('VN');
   const [mrrPoolData, setMrrPoolData] = useState(null);
   const [mrrPoolRigId, setMrrPoolRigId] = useState('');
@@ -47,8 +48,8 @@ export default function App() {
     if (path.startsWith('/api/v2/')) {
       if (!enrichedQuery.ts) enrichedQuery.ts = Date.now();
       if (!enrichedQuery.client) {
-        enrichedQuery.client = nhClient;
-        console.log(`[App.jsx:callApi] Using nhClient: ${nhClient}`);
+        enrichedQuery.client = nhOrderClient;
+        console.log(`[App.jsx:callApi] Using nhOrderClient: ${nhOrderClient}`);
       }
     }
 
@@ -146,7 +147,7 @@ export default function App() {
     } finally {
       if (!options.silent && !isBackground) setLoading(false);
     }
-  }, [nhClient, addDebugLog]);
+  }, [nhOrderClient, addDebugLog]);
 
   const forceCheckStatus = useCallback(async () => {
     addDebugLog('Force checking system status...', 'warn');
@@ -163,10 +164,10 @@ export default function App() {
   useEffect(() => {
     setOutput(null);
     setError('');
-    addDebugLog(`Account switch detected. nhClient: ${nhClient}, mrrClient: ${mrrClient}`);
+    addDebugLog(`Account switch detected. nhOrderClient: ${nhOrderClient}, mrrClient: ${mrrClient}`);
     // Background silent fetch to populate main dashboard data for new account
     callApi('/api/v2/mining/address', { silent: true, background: true });
-  }, [nhClient, mrrClient, callApi, addDebugLog]);
+  }, [nhOrderClient, mrrClient, callApi, addDebugLog]);
 
   useEffect(() => {
     addDebugLog('App initialized. Current origin: ' + (window.location.origin || 'local'));
@@ -175,12 +176,12 @@ export default function App() {
   // Setup periodic silent background updates for dashboard data (Balance, etc)
   useEffect(() => {
     const intervalId = setInterval(() => {
-      if (nhClient) {
+      if (nhOrderClient) {
         callApi('/api/v2/mining/address', { silent: true, background: true });
       }
     }, 60000); // 60 seconds
     return () => clearInterval(intervalId);
-  }, [nhClient, callApi]);
+  }, [nhOrderClient, callApi]);
 
   const handleMiningCall = useCallback((path, opts = {}) => {
     return callApi(path, { ...opts, section: 'mining' });
@@ -225,7 +226,7 @@ export default function App() {
   }, [handleMiningCall, mrrClient]);
 
   return (
-    <RentedRigProvider nhClient={nhClient} callApi={callApi}>
+    <RentedRigProvider nhClient={nhOrderClient} callApi={callApi}>
       <div className="app-shell" style={{ padding: '0 20px 40px', maxWidth: '1600px', margin: '0 auto' }}>
         <header className="app-header" style={{
           padding: '40px 0',
@@ -264,20 +265,20 @@ export default function App() {
             minHeight: '200px'
           }}
         >
-          <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhClient} setNhClient={setNhClient} />
+          <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhPoolClient} setNhClient={setNhPoolClient} />
         </section>
         <main className="dashboard">
           <section className="quick-actions">
             <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <article className="panel">
                 <NiceHash
-                  key={nhClient}
+                  key={nhOrderClient}
                   onCall={handleMiningCall}
                   output={output}
                   algorithm={algorithm}
                   market={market}
-                  nhClient={nhClient}
-                  setNhClient={setNhClient}
+                  nhClient={nhOrderClient}
+                  setNhClient={setNhOrderClient}
                 />
               </article>
               

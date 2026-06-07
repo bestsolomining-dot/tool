@@ -13,9 +13,9 @@ export class NiceHashClient {
 
   async _delayFirstTime(key) {
     if (!this.initializedPaths.has(key)) {
+      this.initializedPaths.add(key); // Mark immediately to prevent concurrent duplicate logs
       console.log(`[NiceHash] First-time function delay (1s): ${key}`);
       await new Promise(resolve => setTimeout(resolve, 1000));
-      this.initializedPaths.add(key);
     }
   }
 

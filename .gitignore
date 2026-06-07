@@ -1,7 +1,7 @@
 mrr_monitor.db
 mrr_monitor.db-shm
 mrr_monitor.db-wal
-orders.csv
+*.csv
 .env
 *.db
 wrangler.toml
@@ -10,8 +10,4 @@ package-lock.json
 *.log
 *.xlsx
 /dist
-/node_modules    
-mrr_monitor.db
-orders.csv
-mrr_monitor.db
-orders.csv
+/node_modules

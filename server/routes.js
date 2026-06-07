@@ -8,6 +8,23 @@ import { resolveNhClient, getNiceHashApp, nhConfigs, isAggregate, normalizeAlgoF
 import { sendTelegramInternal, runRentalMonitor, getTelegramStatus, setTelegramStatus } from './monitor.js';
 import { db } from './db.js';
 
+/** Helper to save JSON data as a CSV "database" file */
+async function exportDatabaseCsv(filename, items) {
+  if (!items || !Array.isArray(items) || items.length === 0) return;
+  try {
+    const headers = Object.keys(items[0]).join(',');
+    const rows = items.map(item =>
+      Object.values(item).map(v => {
+        const str = typeof v === 'object' ? JSON.stringify(v) : String(v ?? '');
+        return `"${str.replace(/"/g, '""')}"`;
+      }).join(',')
+    ).join('\n');
+    await fs.writeFile(path.join(process.cwd(), filename), `${headers}\n${rows}`, 'utf-8');
+  } catch (err) {
+    console.error(`[export] Failed to save ${filename}:`, err.message);
+  }
+}
+
 export function registerRoutes(app) {
   app.use('/api/v2', (req, res, next) => {
     if (req.path.startsWith('/mrr/') || req.path === '/algos/mapping') return next();
@@ -195,20 +212,7 @@ export function registerRoutes(app) {
         ts: new Date().toISOString(),
       }));
 
-    if (processedList.length > 0) {
-      try {
-        const headers = Object.keys(processedList[0]).join(',');
-        const rows = processedList.map(row =>
-          Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
-        ).join('\n');
-
-        const csvContent = `${headers}\n${rows}`;
-        const filePath = path.join(process.cwd(), 'orders.csv');
-        await fs.writeFile(filePath, csvContent, 'utf-8');
-      } catch (csvErr) {
-        console.error('[export] Failed to save orders:', csvErr.message);
-      }
-    }
+    await exportDatabaseCsv('nh_orders.csv', processedList);
 
     res.json(typeof data === 'object' && !Array.isArray(data) ? { ...data, list: processedList } : processedList);
   }));
@@ -398,6 +402,7 @@ export function registerRoutes(app) {
   app.get('/api/v2/mrr/monitor/snapshot', asyncHandler(async (req, res) => {
     db.all(`SELECT * FROM rentals ORDER BY last_updated DESC`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
+      exportDatabaseCsv('monitor_snapshot.csv', rows);
       res.json({ success: true, data: rows });
     });
   }));
@@ -470,6 +475,8 @@ export function registerRoutes(app) {
         if (res.rigs) allRigs.push(...res.rigs);
         if (res.error) errors.push(res.error);
       });
+
+      await exportDatabaseCsv('mrr_rigs.csv', allRigs);
 
       res.json({ success: true, rigs: allRigs, errors: errors.length > 0 ? errors : undefined });
     } else {
@@ -549,6 +556,25 @@ export function registerRoutes(app) {
   app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => mrrRequest('/info/algos', req, res)));
   app.get('/api/v2/mrr/profiles', asyncHandler(async (req, res) => mrrRequest('/profile', req, res)));
 
+  app.get('/api/v2/mrr/account/pool', asyncHandler(async (req, res) => {
+    const { client: clientQuery, ...forwardQuery } = req.query || {};
+    const targetClient = isAggregate(clientQuery) ? defaultMrrClient : clientQuery;
+    const { statusCode, data, clientName } = await mrrApiCall({
+      endpoint: '/account/pool',
+      method: 'GET',
+      clientNameRaw: targetClient,
+      query: forwardQuery,
+    });
+    if (statusCode === 200 && data?.success) {
+      await exportDatabaseCsv('mrr_account_pools.csv', data.data || []);
+    }
+    res.set('X-MRR-Client', clientName);
+    res.status(statusCode).json(data);
+  }));
+  app.get('/api/v2/mrr/account/pool/:poolIds', asyncHandler(async (req, res) => mrrRequest(`/account/pool/${req.params.poolIds}`, req, res)));
+  app.put('/api/v2/mrr/account/pool', asyncHandler(async (req, res) => mrrRequest('/account/pool', req, res, 'PUT', req.body)));
+  app.put('/api/v2/mrr/account/pool/:poolIds', asyncHandler(async (req, res) => mrrRequest(`/account/pool/${req.params.poolIds}`, req, res, 'PUT', req.body)));
+
   app.get('/api/v2/mrr/compare', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
     const algoParam = req.query.algorithm || req.query.algo;
@@ -588,6 +614,9 @@ export function registerRoutes(app) {
   app.get('/api/v2/mrr/rentals', asyncHandler(async (req, res) => {
     const { client: clientQuery, ...forwardQuery } = req.query || {};
     const result = await fetchAggregatedRentals(forwardQuery, String(clientQuery || defaultMrrClient).toUpperCase());
+    
+    await exportDatabaseCsv('mrr_rentals.csv', result.data?.data?.rentals || []);
+
     res.set('X-MRR-Client', result.clientName);
     res.status(result.statusCode).json(result.data);
   }));
@@ -595,6 +624,9 @@ export function registerRoutes(app) {
   app.get('/api/v2/mrr/rental/history', asyncHandler(async (req, res) => {
     const { client: clientQuery, ...forwardQuery } = req.query || {};
     const result = await fetchAggregatedRentals({ ...forwardQuery, history: '1' }, String(clientQuery || defaultMrrClient).toUpperCase());
+    
+    await exportDatabaseCsv('mrr_rental_history.csv', result.data?.data?.rentals || []);
+
     res.set('X-MRR-Client', result.clientName);
     res.status(result.statusCode).json(result.data);
   }));

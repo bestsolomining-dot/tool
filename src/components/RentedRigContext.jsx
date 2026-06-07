@@ -71,12 +71,13 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
         }));
 
         const processed = tempProcessed.map(p => {
-        const isSha256 = p.algo.includes('SHA256');
-        const mktData = marketPrices[`${p.algo}:${p.market}`] || { value: 0, unit: isSha256 ? 'EH' : 'TH' };
+        const isSha2 = p.algo.includes('SHA256');
+        const isRx = p.algo.includes('RANDOMX');
+        const mktData = marketPrices[`${p.algo}:${p.market}`] || { value: 0, unit: isSha2 ? 'EH' : isRx ? 'MH' : 'TH' };
         const mkt = mktData.value;
         const cur = parseFloat(p.price);
-        // For NH buying, swap arguments so "Savings" is positive: (Market - MyPrice) / Market
-        const diff = mkt > 0 ? calculatePriceComparison(mkt, mktData.unit, cur, mktData.unit) : null;
+        // ROI = (Market Benchmark - My Price) / Market Benchmark
+        const diff = mkt > 0 ? calculatePriceComparison(cur, mktData.unit, mkt, mktData.unit) : null;
         return { ...p, marketPrice: mkt, marketUnit: mktData.unit, priceDiff: diff };
         }).sort((a, b) => parseFloat(b.speed || 0) - parseFloat(a.speed || 0));
 

@@ -97,6 +97,7 @@ export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
     const str = String(u || '').toUpperCase();
     if (str.includes('SHA256')) return 'EH';
     if (str.includes('SCRYPT')) return 'MH';
+    if (str.includes('RANDOMX')) return 'KH';
 
     const m = str.match(/(EH|PH|TH|GH|MH|KH|EHS|PHS|THS|GHS|MHS|E|P|T|G|M|K|H)/);
     if (!m) return 'TH';
@@ -117,6 +118,6 @@ export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
   const mrrPriceNorm = mrrPriceNum / Math.pow(10, mrrP);
   const nhPriceNorm = nhPriceNum / Math.pow(10, nhP);
 
-  // Seller ROI = (Your Price - Market Benchmark) / Your Price
-  return ((mrrPriceNorm - nhPriceNorm) / mrrPriceNorm * 100).toFixed(1);
+  // ROI = (Market Benchmark - Your Price) / Market Benchmark
+  return ((nhPriceNorm - mrrPriceNorm) / nhPriceNorm * 100).toFixed(1);
 }

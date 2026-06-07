@@ -125,6 +125,22 @@ const MrrPoolsManager = ({ defaultClient = 'ALL' }) => {
                 <td>{rig.user || '-'}</td>
                 <td>
                   <button onClick={() => handleEditPool(rig)}>Edit Pool</button>
+                  <button 
+                    className="text-button"
+                    style={{ marginLeft: '10px', color: rig.status === 'disabled' ? '#10b981' : '#f87171', fontSize: '12px' }}
+                    onClick={async () => {
+                      const targetStatus = rig.status === 'disabled' ? 'available' : 'disabled';
+                      const resp = await fetch(`/api/v2/mrr/rig/${rig.id}?client=${rig.mrrClient || selectedClient}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: targetStatus })
+                      });
+                      const result = await resp.json();
+                      if (result.success) fetchRigs();
+                    }}
+                  >
+                    {rig.status === 'disabled' ? 'Enable' : 'Disable'}
+                  </button>
                 </td>
               </tr>
             ))}

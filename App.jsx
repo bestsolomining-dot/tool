@@ -194,9 +194,9 @@ export default function App() {
   const handleOpenMrrPools = useCallback(async (rig) => {
     if (!rig || !mrrClient) return;
 
-    // Resolve the specific client (BT or SL) from the rig metadata if the global filter is 'ALL'
-    const targetClient = (mrrClient === 'ALL' && rig.mrrClient) ? rig.mrrClient : mrrClient;
-    if (targetClient === 'ALL') return;
+    // Resolve the specific client (BT or SL) from the rig metadata if the global filter is 'VN'
+    const targetClient = (mrrClient === 'VN' && rig.mrrClient) ? rig.mrrClient : mrrClient;
+    if (targetClient === 'VN') return;
 
     // Support both rig object and raw ID (fallback)
     const rigObj = typeof rig === 'object' ? rig : { id: rig };
@@ -212,6 +212,7 @@ export default function App() {
     // Logic: Always fetch pool of the physical rig id, not the rig card (rental) id.
     if (!rigId) return;
 
+    // Use the rig-specific pool endpoint to avoid 404 errors for Rig IDs
     const path = `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
     const result = await handleMiningCall(path, { query: { client: targetClient }, silent: true });
 

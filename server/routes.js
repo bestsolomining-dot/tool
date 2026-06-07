@@ -4,7 +4,7 @@ import { Builder, By, until } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import { asyncHandler, maskSensitive, extractAlgorithmItems, extractRentalInfo, extractRigInfo } from './utils.js';
 import { mrrApiCall, mrrRequest, fetchAggregatedRentals, mrrConfigs, defaultMrrClient } from './mrr.js';
-import { resolveNhClient, getNiceHashApp, nhConfigs, isAggregate, normalizeAlgoForNiceHash, mapNiceHashToMRR } from './nh.js';
+import { resolveNhClient, getNiceHashApp, nhConfigs, isAggregate, normalizeAlgoForNiceHash, mapNiceHashToMRR, getCachedNhPools } from './nh.js';
 import { sendTelegramInternal, runRentalMonitor, getTelegramStatus, setTelegramStatus } from './monitor.js';
 import { db } from './db.js';
 
@@ -278,7 +278,7 @@ export function registerRoutes(app) {
   
   // Sanitize query to remove tool-specific params (client, ts) before sending to NiceHash
   app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
-    const { algorithm } = req.query;
+    const algorithm = String(req.query.algorithm || req.query.algo || '').toUpperCase();
     const market = ['USA', 'EU'].includes(String(req.query.market).toUpperCase()) ? req.query.market.toUpperCase() : 'USA';
     res.json(await req.nhApp.hashpower.getOrderPrice({ algorithm, market }));
   }));
@@ -286,7 +286,7 @@ export function registerRoutes(app) {
   // FIX: Resolved 405 error. Using getOrderPrice for both standard and business 
   // as they share the /order/calculate GET endpoint for price data.
   app.get('/api/v2/hashpower/business/order', asyncHandler(async (req, res) => {
-    const { algorithm } = req.query;
+    const algorithm = String(req.query.algorithm || req.query.algo || '').toUpperCase();
     const market = ['USA', 'EU'].includes(String(req.query.market).toUpperCase()) ? req.query.market.toUpperCase() : 'USA';
     res.json(await req.nhApp.hashpower.getOrderPrice({ algorithm, market }));
   }));
@@ -443,9 +443,18 @@ export function registerRoutes(app) {
             const rigIds = rigs.map(r => r.id).join(';');
             const { data: poolsData } = await mrrApiCall({ endpoint: `/rig/${rigIds}/pool`, clientNameRaw: clientName });
             if (poolsData && poolsData.success) {
+              const nhPools = await getCachedNhPools(clientName);
+
               const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (poolsData.data?.result || []);
               const poolMap = new Map(poolItems.map(item => {
                 const id = String(item.rigId || item.rigid || item.id || item.rentalid || '');
+                if (Array.isArray(item.pools)) {
+                  item.pools.forEach(p => {
+                    const mrrUser = String(p.user || p.username || '').trim().toLowerCase();
+                    const nhMatch = nhPools.find(nhp => String(nhp.username || '').trim().toLowerCase() === mrrUser);
+                    if (nhMatch) p.nhPoolName = nhMatch.name;
+                  });
+                }
                 return [id, item.pools];
               }).filter(i => i[0]));
 
@@ -571,9 +580,46 @@ export function registerRoutes(app) {
     res.set('X-MRR-Client', clientName);
     res.status(statusCode).json(data);
   }));
-  app.get('/api/v2/mrr/account/pool/:poolIds', asyncHandler(async (req, res) => mrrRequest(`/account/pool/${req.params.poolIds}`, req, res)));
+
+  app.get('/api/v2/mrr/account/pool/:poolIds', asyncHandler(async (req, res) => {
+    const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
+    const { statusCode, data, clientName } = await mrrApiCall({ endpoint: `/account/pool/${req.params.poolIds}`, clientNameRaw: clientParam });
+
+    if (statusCode === 200 && data?.success) {
+      const nhPools = await getCachedNhPools(clientName);
+
+      const items = Array.isArray(data.data) ? data.data : [data.data];
+      items.forEach(item => {
+        const mrrUser = String(item.user || item.username || '').trim().toLowerCase();
+        const nhMatch = nhPools.find(nhp => String(nhp.username || '').trim().toLowerCase() === mrrUser);
+        if (nhMatch) item.nhPoolName = nhMatch.name;
+
+        if (Array.isArray(item.pools)) {
+          item.pools.forEach(p => {
+            const pUser = String(p.user || p.username || '').trim().toLowerCase();
+            const pMatch = nhPools.find(nhp => String(nhp.username || '').trim().toLowerCase() === pUser);
+            if (pMatch) p.nhPoolName = pMatch.name;
+          });
+        }
+      });
+    }
+    res.set('X-MRR-Client', clientName);
+    res.status(statusCode).json(data);
+  }));
+
+  app.post('/api/v2/mrr/account/pool', asyncHandler(async (req, res) => {
+    const { client } = req.query;
+    const { statusCode, data, clientName } = await mrrApiCall({ endpoint: '/account/pool', method: 'PUT', clientNameRaw: client, body: req.body });
+    // MRR returns only {"id": "..."} on creation. We merge the name from the request for UI consistency.
+    if (statusCode === 200 && data?.success && data.data?.id && !data.data.name && req.body?.name) {
+      data.data.name = req.body.name;
+    }
+    res.set('X-MRR-Client', clientName);
+    res.status(statusCode).json(data);
+  }));
   app.put('/api/v2/mrr/account/pool', asyncHandler(async (req, res) => mrrRequest('/account/pool', req, res, 'PUT', req.body)));
   app.put('/api/v2/mrr/account/pool/:poolIds', asyncHandler(async (req, res) => mrrRequest(`/account/pool/${req.params.poolIds}`, req, res, 'PUT', req.body)));
+  app.delete('/api/v2/mrr/account/pool/:poolIds', asyncHandler(async (req, res) => mrrRequest(`/account/pool/${req.params.poolIds}`, req, res, 'DELETE')));
 
   app.get('/api/v2/mrr/compare', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
@@ -635,7 +681,29 @@ export function registerRoutes(app) {
   app.get('/api/v2/mrr/whoami', asyncHandler(async (req, res) => mrrRequest('/account/whoami', req, res)));
   app.get('/api/v2/mrr/rig', asyncHandler(async (req, res) => mrrRequest('/rig', req, res)));
   app.get('/api/v2/mrr/rig/:rigIds', asyncHandler(async (req, res) => mrrRequest(`/rig/${req.params.rigIds}`, req, res)));
-  app.get('/api/v2/mrr/rig/:rigIds/pool', asyncHandler(async (req, res) => mrrRequest(`/rig/${req.params.rigIds}/pool`, req, res)));
+
+  app.get('/api/v2/mrr/rig/:rigIds/pool', asyncHandler(async (req, res) => {
+    const clientParam = String(req.query.client || defaultMrrClient).toUpperCase();
+    const { statusCode, data, clientName } = await mrrApiCall({ endpoint: `/rig/${req.params.rigIds}/pool`, clientNameRaw: clientParam });
+    
+    if (statusCode === 200 && data?.success) {
+      const nhPools = await getCachedNhPools(clientName);
+
+      const items = Array.isArray(data.data) ? data.data : [data.data];
+      items.forEach(item => {
+        if (Array.isArray(item.pools)) {
+          item.pools.forEach(p => {
+            const mrrUser = String(p.user || p.username || '').trim().toLowerCase();
+            const nhMatch = nhPools.find(nhp => String(nhp.username || '').trim().toLowerCase() === mrrUser);
+            if (nhMatch) p.nhPoolName = nhMatch.name;
+          });
+        }
+      });
+    }
+    res.set('X-MRR-Client', clientName);
+    res.status(statusCode).json(data);
+  }));
+
   app.put('/api/v2/mrr/rig/:rigId', asyncHandler(async (req, res) => { await mrrRequest(`/rig/${req.params.rigId}`, req, res, 'PUT', req.body); }));
 
   app.get('/api/v2/mrr/rental/:rentalIds', asyncHandler(async (req, res) => {

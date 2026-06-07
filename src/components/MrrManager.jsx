@@ -288,6 +288,7 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
                     <div style={{ fontWeight: '600', color: '#f8fafc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {pool.name || 'Unnamed Pool'}
+                      {pool.nhPoolName && <span style={{ color: '#10b981', marginLeft: '6px', fontSize: '9px', fontWeight: 'normal' }}>({pool.nhPoolName})</span>}
                     </div>
                     <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#60a5fa', opacity: 0.8, letterSpacing: '0.02em' }}>
                       {pool.type || 'N/A'}

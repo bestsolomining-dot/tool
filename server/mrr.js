@@ -17,9 +17,10 @@ export let defaultMrrClient = 'BT'; // Declare as mutable
 async function saveRigEndpointToCsv(endpoint, client) {
   const filePath = path.join(process.cwd(), 'rig.csv');
   const ts = new Date().toISOString();
+  const header = 'timestamp,client,endpoint\n';
   const line = `"${ts}","${client}","${endpoint}"\n`;
   try {
-    await fs.appendFile(filePath, line, 'utf-8');
+    await fs.writeFile(filePath, header + line, 'utf-8');
   } catch (err) {
     console.error(`[mrr:csv] Error saving to rig.csv: ${err.message}`);
   }
@@ -362,6 +363,8 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     let sigEndpoint = normalizedPath;
     const queryEntries = Object.entries(cleanQuery).filter(([_, v]) => v !== undefined && v !== null && v !== '');
     if (queryEntries.length > 0) {
+      // Sort query entries alphabetically by key for consistent signature generation
+      queryEntries.sort((a, b) => a[0].localeCompare(b[0]));
       const sp = new URLSearchParams();
       for (const [k, v] of queryEntries) {
         sp.set(k, String(v));

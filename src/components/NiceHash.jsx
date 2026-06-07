@@ -163,7 +163,6 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     // We check if we are currently mounted and have a client before fetching
     if (nhClient && typeof onCall === 'function') {
       fetchOrders();
-      fetchAccounting();
       refreshSummary(); // Ensure the active orders summary is also fetched
     }
   }, [nhClient, fetchOrders, fetchAccounting, onCall, refreshSummary]);

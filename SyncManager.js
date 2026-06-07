@@ -67,9 +67,23 @@ export class SyncManager {
                         const pools = poolMap.get(String(rig.id)) || [];
                         syncSnapshot.mrrRigs.push({ id: rig.id, name: rig.name, client: acct, pools });
                         pools.forEach(p => {
-                            const mrrUser = String(p.user || p.username || '').trim();
-                            const nhMatch = syncSnapshot.nhPools.find(nhp => String(nhp.username || '').trim() === mrrUser);
-                            if (nhMatch) syncSnapshot.matches.push({ mrrRigId: rig.id, mrrRigName: rig.name, mrrClient: acct, nhPoolName: nhMatch.name, username: mrrUser, nhClient: nhMatch.client });
+                            const mrrUser = String(p.user || p.username || '').trim().toLowerCase();
+                            if (!mrrUser) return;
+                            
+                            const nhMatch = syncSnapshot.nhPools.find(nhp => 
+                                String(nhp.username || '').trim().toLowerCase() === mrrUser
+                            );
+                            
+                            if (nhMatch) {
+                                syncSnapshot.matches.push({ 
+                                    mrrRigId: rig.id, 
+                                    mrrRigName: rig.name, 
+                                    mrrClient: acct, 
+                                    nhPoolName: nhMatch.name, 
+                                    username: mrrUser, 
+                                    nhClient: nhMatch.client 
+                                });
+                            }
                         });
                     });
                 } catch (e) { console.warn(`[sync:mrr] Error for ${acct}: ${e.message}`); }

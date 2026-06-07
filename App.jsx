@@ -15,6 +15,8 @@ export default function App() {
   const [error, setError] = useState('');
   const [output, setOutput] = useState(null);
   const [lastCall, setLastCall] = useState(null);
+  const [responseModalOpen, setResponseModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState(null);
   const [activeSection, setActiveSection] = useState(null);
   const [calculatorModalOpen, setCalculatorModalOpen] = useState(false);
   const [debugModalOpen, setDebugModalOpen] = useState(false);
@@ -118,6 +120,10 @@ export default function App() {
 
       if (!isAppError && (res.status === 304 || res.ok)) {
         setError('');
+        if (options.showModal) {
+          setModalContent(data || { success: true });
+          setResponseModalOpen(true);
+        }
         if (data && (!options.silent || isBackground)) {
           setOutput(data);
         }
@@ -127,6 +133,10 @@ export default function App() {
             ? data
             : data?.error || data?.message || data?.data?.message || res.statusText || 'Unknown API Error';
 
+        if (options.showModal) {
+          setModalContent(data || { error: errorMsg });
+          setResponseModalOpen(true);
+        }
         setError(errorMsg);
         setOutput(null);
       }
@@ -282,8 +292,6 @@ export default function App() {
                   setNhClient={setNhOrderClient}
                 />
               </article>
-              
-
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
@@ -302,7 +310,6 @@ export default function App() {
                   onOpenMrrPools={handleOpenMrrPools}
                 />
               </article>
-
             <article className="panel">
               <MrrPoolsManager
                 onCall={handleMiningCall}
@@ -314,6 +321,23 @@ export default function App() {
             </article>
           </section>
         </main>
+
+        <Modal
+          isOpen={responseModalOpen}
+          onClose={() => setResponseModalOpen(false)}
+          title="API Operation Result"
+          maxWidth="800px"
+        >
+          {lastCall && (
+            <div style={{ marginBottom: '15px', opacity: 0.7, fontSize: '11px', fontFamily: 'monospace' }}>
+              {lastCall.method} {lastCall.path} — {lastCall.status} ({lastCall.durationMs}ms)
+            </div>
+          )}
+          <pre className="response-body" style={{ maxHeight: '50vh', overflow: 'auto' }}>
+            {JSON.stringify(modalContent, null, 2)}
+          </pre>
+        </Modal>
+
         <Modal
           isOpen={calculatorModalOpen}
           onClose={() => setCalculatorModalOpen(false)}

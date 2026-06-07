@@ -1,3 +1,5 @@
+import fs from 'fs/promises';
+import path from 'path';
 import { createHash, createHmac } from 'crypto';
 import { db } from './db.js';
 import { normalizeCredential, sanitizeMrrEndpoint } from './utils.js';
@@ -12,6 +14,17 @@ let mrrSyncPromise = null;
 export let mrrConfigs = {}; // Declare as mutable
 export let defaultMrrClient = 'BT'; // Declare as mutable
 
+async function saveRigEndpointToCsv(endpoint, client) {
+  const filePath = path.join(process.cwd(), 'rig.csv');
+  const ts = new Date().toISOString();
+  const line = `"${ts}","${client}","${endpoint}"\n`;
+  try {
+    await fs.appendFile(filePath, line, 'utf-8');
+  } catch (err) {
+    console.error(`[mrr:csv] Error saving to rig.csv: ${err.message}`);
+  }
+}
+
 const mrrQueueByClient = new Map(); // Serialized queue storage to prevent parallel nonce usage
 let mrrGlobalCounter = 0; // Biến đếm phụ để chống trùng lặp tuyệt đối
 
@@ -19,7 +32,8 @@ let mrrGlobalCounter = 0; // Biến đếm phụ để chống trùng lặp tuy�
 const mrrRequestCache = new Map();
 const mrrInflight = new Map();
 const MRR_CACHE_TTL = 10000; // 10 seconds cache
-const MRR_NONCE_RECOVERY_JUMP = 60000000000n; // 1 PHÚT - Đủ để thoát kẹt mà không bị đẩy quá xa tương lai
+const MRR_NONCE_RECOVERY_JUMP_SMALL = 60000000000n; // 1 minute
+const MRR_NONCE_RECOVERY_JUMP_LARGE = 3600000000000n; // 1 hour
 
 const mrrInstances = new Map(); // This map will store resolved client configs
 
@@ -139,6 +153,7 @@ export async function syncMrrClock(force = false) {
   if (mrrSyncPromise) return mrrSyncPromise;
   console.log('[mrr:clock] Synchronizing with MiningRigRentals server time...');
   mrrSyncPromise = (async () => {
+    const startSync = Date.now();
     const trySync = async (url) => {
       try {
         const res = await fetch(url, { 
@@ -173,15 +188,18 @@ export async function syncMrrClock(force = false) {
         serverTimeMs = await trySync('https://www.miningrigrentals.com/');
       }
 
-      const finalTimeMs = serverTimeMs ?? BigInt(Date.now());
-      const localTimeMs = Date.now();
-      mrrClockOffset = finalTimeMs - BigInt(localTimeMs);
+      const endSync = Date.now();
+      const rtt = BigInt(endSync - startSync);
+      // NTP-style: Estimate server time at the moment of 'endSync'
+      // by adding half the round-trip time to the server's reported time.
+      const estimatedServerTimeAtEnd = (serverTimeMs ?? BigInt(endSync)) + (rtt / 2n);
+      mrrClockOffset = estimatedServerTimeAtEnd - BigInt(endSync);
       mrrClockSynced = true;
 
       if (!serverTimeMs) {
         console.warn('[mrr:clock] Could not sync with MRR. Using local clock.');
       } else if (Math.abs(Number(mrrClockOffset)) > 1000) {
-        console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (MRR Server: ${finalTimeMs}, Local: ${localTimeMs})`);
+        console.info(`[mrr:clock] Significant drift detected! Offset: ${mrrClockOffset}ms. (RTT: ${rtt}ms)`);
       } else {
         console.info(`[mrr:clock] Synced with MRR. Offset: ${mrrClockOffset}ms.`);
       }
@@ -220,12 +238,12 @@ export function nextMrrNonce(apiKey, clientLabel) {
     mrrLastNonceByClient.set(apiKey, nowNano);
   }
 
-  const nowMs = BigInt(Date.now()) + mrrClockOffset;
+  const nowMs = BigInt(Date.now()) + (mrrClockSynced ? mrrClockOffset : 0n);
   const now19 = BigInt(nowMs) * 1000000n;
 
   // Đảm bảo nonce luôn tăng và cộng thêm biến đếm toàn cục để tránh va chạm mili giây
   mrrGlobalCounter = (mrrGlobalCounter + 1) % 1000;
-  const baseNonce = (now19 > lastNonce) ? now19 : (lastNonce + 1000n);
+  const baseNonce = (now19 > lastNonce) ? now19 : (lastNonce + 1n);
   const nonce = baseNonce + BigInt(mrrGlobalCounter);
 
   mrrLastNonceByClient.set(apiKey, nonce); // Update synchronously to block concurrent reads
@@ -339,9 +357,17 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     const normalizedPath = sanitizeMrrEndpoint(endpoint);
     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedPath}`);
-    
-    // MRR V2 signature string uses the relative path (e.g., /rig/mine)
-    const sigEndpoint = normalizedPath;
+
+    // MRR V2 signature string must include the full path AND query string
+    let sigEndpoint = normalizedPath;
+    const queryEntries = Object.entries(cleanQuery).filter(([_, v]) => v !== undefined && v !== null && v !== '');
+    if (queryEntries.length > 0) {
+      const sp = new URLSearchParams();
+      for (const [k, v] of queryEntries) {
+        sp.set(k, String(v));
+      }
+      sigEndpoint += '?' + sp.toString();
+    }
 
     if (Object.keys(cleanQuery).length > 0) {
       for (const [key, value] of Object.entries(cleanQuery)) {
@@ -373,11 +399,18 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
       'x-api-sign': signatureV2,
     });
 
-    let text = await response.text();
+    let text;
+    try {
+      text = await response.text();
+    } catch (e) {
+      text = '{"success":false,"message":"Network Error"}';
+    }
+
     let data;
     try {
       data = text ? JSON.parse(text) : { success: false, message: 'Empty response' };
     } catch {
+      // Handle cases where MRR returns non-JSON error pages (Cloudflare, etc)
       data = { success: false, message: text };
     }
 
@@ -392,13 +425,17 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
       // Force immediate clock re-sync
       await syncMrrClock(true);
       
-      const nowNano = (BigInt(Date.now()) + mrrClockOffset + 1000n) * 1000000n;
+      const nowNano = (BigInt(Date.now()) + mrrClockOffset + 2000n) * 1000000n;
       const failedNonce = BigInt(currentNonce);
       
+      // If the failed nonce is already significantly ahead of 'now', it suggests a massive 
+      // discrepancy (e.g. key used elsewhere). Use a 1-hour jump to recover faster.
+      const isSignificantFuture = failedNonce > (nowNano + 60000000000n);
+      const jumpSize = isSignificantFuture ? MRR_NONCE_RECOVERY_JUMP_LARGE : MRR_NONCE_RECOVERY_JUMP_SMALL;
       const baseForJump = failedNonce > nowNano ? failedNonce : nowNano;
-      const newJumpedNonce = baseForJump + MRR_NONCE_RECOVERY_JUMP;
+      const newJumpedNonce = baseForJump + jumpSize;
 
-      console.warn(`[mrr:${clientName}] ☢️ NUCLEAR JUMP: Baseline reset to ${newJumpedNonce} (+1m) for key ${clientConfig.apiKey.slice(0, 6)}...`);
+      console.warn(`[mrr:${clientName}] ☢️ NUCLEAR JUMP: Baseline reset to ${newJumpedNonce} (${isSignificantFuture ? '+1h' : '+1m'}) for key ${clientConfig.apiKey.slice(0, 6)}...`);
       mrrLastNonceByClient.set(clientConfig.apiKey, newJumpedNonce);
       db.run('INSERT OR REPLACE INTO mrr_nonces (client, last_nonce) VALUES (?, ?)', [clientConfig.apiKey, newJumpedNonce.toString()]);
 
@@ -462,6 +499,10 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
 
     const logTime = new Date().toLocaleTimeString();
     console.log(`[${logTime}] [mrr:${clientName}] endpoint=${normalizedPath} nonce=${currentNonce} status=${finalStatus} msg=${authMessage || 'OK'}`);
+
+    if (finalStatus === 200 && normalizedPath.startsWith('/rig/')) {
+      saveRigEndpointToCsv(normalizedPath, clientName);
+    }
 
     return { statusCode: finalStatus, data, clientName };
   });

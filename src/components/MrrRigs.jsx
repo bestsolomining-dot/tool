@@ -392,6 +392,49 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     }));
   };
 
+  const exportToCsv = () => {
+    if (filteredRigs.length === 0) return;
+
+    const headers = ['ID', 'Name', 'Algorithm', 'Status', 'Advertised', 'Average', 'Efficiency', 'Price', 'Currency', 'Started', 'Remaining'];
+    const rows = filteredRigs.map(rig => {
+      const info = enrichedInfo[rig.id];
+      const statusValue = typeof rig.status === 'object' ? rig.status.status : rig.status;
+      const algo = info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A';
+      const advertised = info?.advertised || getRentalAdvertisedHashrate(rig);
+      const average = info?.average || getRentalAverageHashrate(rig);
+      const efficiency = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
+      const priceData = getPriceDataLocal(rig.price || info?.price || rig.min_price);
+      
+      const startTime = info?.startTime || rig.start;
+      const endTime = info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null);
+      
+      return [
+        rig.id,
+        `"${(rig.name || '').replace(/"/g, '""')}"`,
+        algo,
+        statusValue,
+        advertised,
+        average,
+        `${efficiency}%`,
+        priceData.value,
+        priceData.currency,
+        startTime || 'N/A',
+        endTime || 'N/A'
+      ];
+    });
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `rigs_${mrrClient}_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const fetchRigs = async () => {
     setLoading(true);
     setError('');
@@ -523,14 +566,16 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   useEffect(() => {
     if (loading || typeof onCall !== 'function') return;
 
+    let isSubscribed = true;
     const syncRentedDetails = async () => {
       const rentedWithoutInfo = filteredRigs.filter(r => {
         const s = String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase();
         return (s.includes('rented') || s.includes('active')) && !enrichedInfo[r.id] && !loadingInfoIds.has(r.id);
       });
 
-      if (rentedWithoutInfo.length > 0) {
+      if (isSubscribed && rentedWithoutInfo.length > 0) {
         for (const rig of rentedWithoutInfo) {
+          if (!isSubscribed) break;
           // Sequential await prevents nonce overlap for the same account
           await fetchRigDetailInfo(rig);
           // Add a small safety gap
@@ -540,6 +585,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     };
 
     syncRentedDetails();
+    return () => { isSubscribed = false; };
   }, [filteredRigs, enrichedInfo, loading, loadingInfoIds, onCall]);
 
   const getStatusClass = (status) => {
@@ -592,6 +638,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             <option value="rented">Rented</option>
             <option value="disabled">Disabled</option>
           </select>
+          <button className="btn-pro secondary" onClick={exportToCsv} disabled={filteredRigs.length === 0} style={{ fontSize: '11px', padding: '2px 12px', height: '30px' }}>
+            Export CSV
+          </button>
           <button className="btn-pro secondary" onClick={fetchRigs} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>

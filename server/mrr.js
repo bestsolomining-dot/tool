@@ -360,19 +360,9 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     const hasBody = body !== undefined && body !== null && requestMethod !== 'GET' && requestMethod !== 'DELETE';
     const baseUrl = new URL(`https://www.miningrigrentals.com/api/v2${normalizedPath}`);
 
-    // MRR V2 signature string must include the full path AND query string
-    let sigEndpoint = normalizedPath;
+    // MRR V2 signature string base: API_KEY + NONCE + ENDPOINT_PATH (relative to /api/v2)
+    const sigEndpoint = normalizedPath;
     const queryEntries = Object.entries(cleanQuery).filter(([_, v]) => v !== undefined && v !== null && v !== '');
-    if (queryEntries.length > 0) {
-      // Sort query entries alphabetically by key for consistent signature generation
-      queryEntries.sort((a, b) => a[0].localeCompare(b[0]));
-      const sp = new URLSearchParams();
-      for (const [k, v] of queryEntries) {
-        sp.set(k, String(v));
-      }
-      sigEndpoint += '?' + sp.toString();
-    }
-
     if (Object.keys(cleanQuery).length > 0) {
       for (const [key, value] of Object.entries(cleanQuery)) {
         if (value === undefined || value === null || value === '') continue;
@@ -476,8 +466,8 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     if (shouldRetry && !isBadNonce) {
       console.warn(`[mrr:${clientName}] HMAC failed (${authMessage || 'Unauthorized'}), retrying with Legacy SHA1 Concatenation...`);
       currentNonce = nextMrrNonce(clientConfig.apiKey, clientName);
-      // Correct V1 Legacy concatenation: apiKey + nonce + apiSecret
-      const legacyStr = `${clientConfig.apiKey}${currentNonce}${clientConfig.apiSecret}`;
+      // Correct V1 Legacy concatenation: apiKey + nonce + endpoint + apiSecret
+      const legacyStr = `${clientConfig.apiKey}${currentNonce}${normalizedPath}${clientConfig.apiSecret}`;
       const legacySig = createHash('sha1').update(legacyStr).digest('hex');
 
       const retryRes = await send(currentNonce, legacySig, {

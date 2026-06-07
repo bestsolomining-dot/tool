@@ -353,6 +353,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           // MRR often provides 'HASHIMOTO' or variants that normalize incorrectly to 'HASHIMOTOS'.
           if (String(nhAlgo).toUpperCase().includes('HASHIMOTO')) nhAlgo = 'DAGGERHASHIMOTO';
           if (String(nhAlgo).toUpperCase() === 'RANDOMX') nhAlgo = 'RANDOMX';
+          if (String(nhAlgo).toUpperCase() === 'SHA3') nhAlgo = 'KECCAK';
+          // Ensure the identifier is uppercase as required by NiceHash API v2
+          nhAlgo = String(nhAlgo).toUpperCase();
 
           const fetchPrice = async (path) => {
             // Ensure authenticated endpoints use a valid sub-account client even if global filter is 'VN'
@@ -588,6 +591,30 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     return () => { isSubscribed = false; };
   }, [filteredRigs, enrichedInfo, loading, loadingInfoIds, onCall]);
 
+  const handleRigStatus = async (rig, targetStatus) => {
+    await onCall(`/api/v2/mrr/rig/${rig.id}`, {
+      method: 'PUT',
+      body: { status: targetStatus, name: rig.name },
+      query: { client: rig.mrrClient || mrrClient },
+      showModal: true
+    });
+    fetchRigs();
+  };
+
+  const handleBulkRigStatus = async (rigsToUpdate, targetStatus) => {
+    const ownedRigs = rigsToUpdate.filter(r => userRigIds.has(String(r.id)));
+    if (ownedRigs.length === 0) return;
+    
+    const rigIds = ownedRigs.map(r => r.id).join(';');
+    await onCall(`/api/v2/mrr/rig/${rigIds}`, {
+      method: 'PUT',
+      body: { status: targetStatus },
+      query: { client: ownedRigs[0].mrrClient || mrrClient },
+      showModal: true
+    });
+    fetchRigs();
+  };
+
   const getStatusClass = (status) => {
     const statusValue = typeof status === 'object' ? status.status : status;
     const s = String(statusValue || '').toLowerCase();
@@ -638,9 +665,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             <option value="rented">Rented</option>
             <option value="disabled">Disabled</option>
           </select>
-          <button className="btn-pro secondary" onClick={exportToCsv} disabled={filteredRigs.length === 0} style={{ fontSize: '11px', padding: '2px 12px', height: '30px' }}>
+          {/* <button className="btn-pro secondary" onClick={exportToCsv} disabled={filteredRigs.length === 0} style={{ fontSize: '11px', padding: '2px 12px', height: '30px' }}>
             Export CSV
-          </button>
+          </button> */}
           <button className="btn-pro secondary" onClick={fetchRigs} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -707,6 +734,16 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ fontSize: '14px', color: isExpanded ? '#60a5fa' : '#94a3b8', fontWeight: 'bold' }}>{algoName}</span>
                     <span style={{ fontSize: '10px', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: '10px', opacity: 0.7 }}>{rigsInGroup.length} Rigs</span>
+                    {rigsInGroup.some(r => userRigIds.has(String(r.id))) && (
+                      <div style={{ display: 'flex', gap: '8px', marginLeft: '10px' }} onClick={e => e.stopPropagation()}>
+                        <button className="text-button" style={{ fontSize: '10px', color: '#10b981', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'available')}>
+                          Enable All
+                        </button>
+                        <button className="text-button" style={{ fontSize: '10px', color: '#f87171', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'disabled')}>
+                          Disable All
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <span style={{ fontSize: '12px', opacity: 0.5 }}>{isExpanded ? '▲' : '▼'}</span>
                 </div>
@@ -1058,6 +1095,16 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                                   }}
                                 >
                                   {expandedPools.has(rig.id) ? 'Hide Pools' : 'Pools'}
+                                </button>
+                              )}
+
+                              {isMine && !isRented && (
+                                <button
+                                  className="btn-pro secondary"
+                                  style={{ flex: 1, fontSize: '10px', padding: '4px', color: statusStr === 'disabled' ? '#10b981' : '#f87171', borderColor: statusStr === 'disabled' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(248, 113, 113, 0.3)' }}
+                                  onClick={() => handleRigStatus(rig, statusStr === 'disabled' ? 'available' : 'disabled')}
+                                >
+                                  {statusStr === 'disabled' ? 'Enable' : 'Disable'}
                                 </button>
                               )}
 

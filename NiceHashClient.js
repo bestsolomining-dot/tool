@@ -89,8 +89,9 @@ export class NiceHashClient {
     // as it is only intended for our backend's internal routing.
     queryParams.delete('client');
 
-    // For Hashpower Private API, ts and nonce MUST be in the query string
-    if (cleanPath.includes('/hashpower/')) {
+    // For Hashpower Private API, ts and nonce MUST be in the query string.
+    // We skip this for public endpoints to avoid malformed request errors.
+    if (cleanPath.includes('/hashpower/') && !cleanPath.includes('/public/')) {
       queryParams.set('ts', time);
       queryParams.set('nonce', nonce);
     }

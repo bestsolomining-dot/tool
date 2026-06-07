@@ -3,6 +3,9 @@ import { mapNiceHashToMRR, normalizeAlgoForNiceHash } from '../src/core/algoMapp
 import { normalizeCredential } from './utils.js';
 
 export const AGGREGATE_CLIENT = 'VN';
+const poolCache = new Map();
+const POOL_CACHE_TTL = 60000; // 1 minute cache
+
 export { mapNiceHashToMRR, normalizeAlgoForNiceHash }; // Keep these exports
 
 export let nhConfigs = {}; // Declare as mutable
@@ -83,6 +86,40 @@ export function resolveNhClient(clientNameRaw) {
   return { client: nhInstances.get(targetName) || nhInstances.get('BT'), clientName: targetName };
 }
 
+/** Fetches and caches NiceHash pools to prevent API hammering */
+export async function getCachedNhPools(clientNameRaw) {
+  const { client, clientName } = resolveNhClient(clientNameRaw);
+  if (!client) return [];
+
+  const cached = poolCache.get(clientName);
+  if (cached && (Date.now() - cached.ts < POOL_CACHE_TTL)) {
+    return cached.pools;
+  }
+
+  try {
+    const allPools = [];
+    let page = 0;
+    const size = 100;
+    while (true) {
+      const res = await client.call({
+        method: 'GET',
+        path: '/main/api/v2/pools',
+        query: { page: page.toString(), size: size.toString() }
+      });
+      const list = res?.list;
+      if (!Array.isArray(list) || list.length === 0) break;
+      allPools.push(...list);
+      if (list.length < size) break;
+      page++;
+    }
+    poolCache.set(clientName, { pools: allPools, ts: Date.now() });
+    return allPools;
+  } catch (e) {
+    console.warn(`[nh:pools] Cache fetch failed for ${clientName}:`, e.message);
+    return cached ? cached.pools : []; // Fallback to stale data if available
+  }
+}
+
 const nhInstances = new Map();
 
 export const getNiceHashApp = (client) => ({
@@ -159,7 +196,7 @@ export const getNiceHashApp = (client) => ({
     refillOrder: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/refill`, body, query: { orgId: client.orgId } }),
     updatePriceLimit: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/updatePriceAndLimit`, body, query: { orgId: client.orgId } }),
     getVmmOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/vmm/orders', query: { ts: Date.now().toString() } }),
-    getOrderPrice: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/order/price', query }),
+    getOrderPrice: (query) => client.call({ method: 'GET', path: '/main/api/v2/public/hashpower/order/price', query }),
     getBusinessOrder: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/business/order', query }),
     getOrderBook: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/orderBook', query: { ts: Date.now().toString(), ...query } }),
     getGlobalStats24h: () => client.call({ method: 'GET', path: '/main/api/v2/public/stats/global/24h' }),

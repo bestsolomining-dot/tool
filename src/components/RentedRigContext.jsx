@@ -46,7 +46,7 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
         const priceKeys = [...new Set(tempProcessed.map(p => `${p.algo}:${p.market}`))];
         const marketPrices = {};
         
-        await Promise.all(priceKeys.map(async (key) => {
+        for (const key of priceKeys) {
           const [algoName, marketName] = key.split(':');
           if (!algoName) return;
           try {
@@ -67,8 +67,11 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
           const priceValue = parseFloat(rawPrice?.fixedPrice || rawPrice?.standardPrice?.fast || rawPrice?.standardPrice || rawPrice?.price || 0);
           const priceUnit = rawPrice?.speedUnit || rawPrice?.unit || (algoName.toUpperCase().includes('SHA256') ? 'EH' : 'TH');
           marketPrices[key] = { value: priceValue, unit: priceUnit };
-        } catch (e) { marketPrices[key] = { value: 0, unit: 'TH' }; }
-        }));
+          
+          // Sequential fetch gap
+          await new Promise(r => setTimeout(r, 150));
+          } catch (e) { marketPrices[key] = { value: 0, unit: 'TH' }; }
+        }
 
         const processed = tempProcessed.map(p => {
         const isSha2 = p.algo.includes('SHA256');

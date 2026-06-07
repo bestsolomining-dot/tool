@@ -350,9 +350,10 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     await syncMrrClock();
   }
 
-  // 3. GLOBAL SERIALIZATION: Ensures nonces for the same API key are always increasing
-  // and helps respect MRR API rate limits across multiple concurrent operations.
-  const lockKey = "GLOBAL_MRR_LOCK"; 
+  // 3. ACCOUNT SERIALIZATION: Ensures nonces for the same API key are always increasing.
+  // Use the API Key as the lock key to allow parallel requests across different MRR accounts
+  // while maintaining strict sequential order for requests sharing the same credentials.
+  const lockKey = apiKey || clientName;
 
   return runMrrCallInOrder(lockKey, async () => {
     const normalizedPath = sanitizeMrrEndpoint(endpoint);

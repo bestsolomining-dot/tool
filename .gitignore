@@ -11,3 +11,6 @@ package-lock.json
 *.xlsx
 /dist
 /node_modules
+mrr_monitor.db
+orders.csv
+server/nh.js

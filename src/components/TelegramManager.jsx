@@ -220,7 +220,7 @@ const TelegramTemplates = {
     `(<b>Disabled</b> <code>${String(disabledAll).padStart(4)}</code>)\n` +
     `♻️ <b>Rented</b> <code>${String(rentedAll).padStart(4)}</code> ` +
     `(24h: <code>${String(rented24h || 0).padStart(3)}</code>)\n` +
-    `${barChart ? `${barChart}\n` : ''}` +
+    // `${barChart ? `${barChart}\n` : ''}` +
     `${divider}\n` +
     `<b>Active Rentals:</b>\n` +
     `${divider}\n` +

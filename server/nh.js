@@ -195,10 +195,47 @@ export const getNiceHashApp = (client) => ({
     cancelOrder: (orderId) => client.call({ method: 'DELETE', path: `/main/api/v2/hashpower/order/${orderId}`, query: { orgId: client.orgId } }),
     refillOrder: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/refill`, body, query: { orgId: client.orgId } }),
     updatePriceLimit: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/updatePriceAndLimit`, body, query: { orgId: client.orgId } }),
-    getVmmOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/vmm/orders', query: { ts: Date.now().toString() } }),
-    getOrderPrice: (query) => client.call({ method: 'GET', path: '/main/api/v2/public/hashpower/order/price', query }),
-    getBusinessOrder: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/business/order', query }),
-    getOrderBook: (query) => client.call({ method: 'GET', path: '/main/api/v2/hashpower/orderBook', query: { ts: Date.now().toString(), ...query } }),
+    getVmmOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/vmm/orders' }),
+    getOrderPrice: (query) => {
+      const { algorithm, market, client: _c, ts: _t, ...rest } = query || {};
+      return client.call({
+        method: 'GET',
+        path: '/main/api/v2/hashpower/order/calculate',
+        query: {
+          algorithm: normalizeAlgoForNiceHash(algorithm),
+          market,
+          type: query.type || 'STANDARD',
+          price: query.price || '0.001',
+          limit: query.limit || '0.01',
+          amount: query.amount || '0.005',
+          ...rest
+        }
+      });
+    },
+    getBusinessOrder: (query) => {
+      const { algorithm, market, client: _c, ts: _t, ...rest } = query || {};
+      return client.call({
+        method: 'GET',
+        path: '/main/api/v2/hashpower/order/calculate',
+        query: {
+          algorithm: normalizeAlgoForNiceHash(algorithm),
+          market,
+          type: query.type || 'STANDARD',
+          price: query.price || '0.001',
+          limit: query.limit || '0.01',
+          amount: query.amount || '0.005',
+          ...rest
+        }
+      });
+    },
+    getOrderBook: (query) => {
+      const { client: _c, ts: _t, ...rest } = query || {};
+      return client.call({
+        method: 'GET',
+        path: '/main/api/v2/hashpower/orderBook',
+        query: { ...rest }
+      });
+    },
     getGlobalStats24h: () => client.call({ method: 'GET', path: '/main/api/v2/public/stats/global/24h' }),
   },
   easyMining: {

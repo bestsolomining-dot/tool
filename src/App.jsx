@@ -197,12 +197,10 @@ export default function App() {
             />
           </article>
           <section className="pools-section">
-          <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
+            <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
+          </section>
         </section>
-        </section>
-        
       </main>
-
       <Modal
         isOpen={responseModalOpen}
         onClose={() => setResponseModalOpen(false)}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import Pools from './src/components/Pools';
 import Modal from './src/components/Modal';
 import HashpowerBot from './src/components/HashpowerBot';
@@ -33,6 +33,10 @@ export default function App() {
   const [mrrPoolData, setMrrPoolData] = useState(null);
   const [mrrPoolRigId, setMrrPoolRigId] = useState('');
   const [mrrPoolRentalId, setMrrPoolRentalId] = useState('');
+
+  const apiCache = useRef(new Map());
+  const inFlightRequests = useRef(new Map());
+
   const scrollToPools = useCallback(() => {
     const poolsEl = document.querySelector('.pools-section');
     if (poolsEl) poolsEl.scrollIntoView({ behavior: 'smooth' });
@@ -43,16 +47,46 @@ export default function App() {
     const method = options.method || 'GET';
     const { query, section, ...fetchOptions } = options;
     const isBackground = !!options.background;
-    let finalPath = path;
+
+    // Normalize headers and body early for consistent cache key
+    const headers = { ...fetchOptions.headers };
+    let body = fetchOptions.body;
+    if (body && typeof body === 'object' && !(body instanceof FormData)) {
+      body = JSON.stringify(body);
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    }
+
+    // Prepare base query parameters
     const enrichedQuery = { ...query };
-    addDebugLog(`Starting ${method} call to ${path}`, 'api');
-    // NiceHash API v2 requires 'ts'. For MRR, we add it to prevent browser-side caching of GET requests.
-    if (path.startsWith('/api/v2/')) {
-      if (!enrichedQuery.ts) enrichedQuery.ts = Date.now();
-      if (!enrichedQuery.client) {
-        enrichedQuery.client = nhOrderClient;
-        console.log(`[App.jsx:callApi] Using nhOrderClient: ${nhOrderClient}`);
+    if (path.startsWith('/api/v2/') && !enrichedQuery.client) {
+      enrichedQuery.client = nhOrderClient;
+    }
+
+    // Generate Cache Key (excluding dynamic 'ts' which changes every call)
+    const queryEntriesForCache = Object.entries(enrichedQuery).filter(([k]) => k !== 'ts').sort();
+    const cacheQueryPart = queryEntriesForCache.map(([k, v]) => `${k}=${v}`).join('&');
+    const cacheKey = `${method}:${path}:${cacheQueryPart}:${body || ''}`;
+
+    // 1. Deduplication: If an identical request is already in flight, return its existing promise
+    if (inFlightRequests.current.has(cacheKey)) {
+      addDebugLog(`Deduplicating overlapping call: ${path}`, 'api');
+      return inFlightRequests.current.get(cacheKey);
+    }
+
+    // 2. Cache: For GET requests, return cached data if fresh (5s TTL)
+    if (method === 'GET' && !options.noCache) {
+      const cached = apiCache.current.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 5000) {
+        addDebugLog(`Serving ${path} from cache`, 'api');
+        if (cached.data && (!options.silent || isBackground)) setOutput(cached.data);
+        return Promise.resolve(cached.data);
       }
+    }
+
+    // Final Path construction for the network request (adding cache-busting 'ts')
+    let finalPath = path;
+    if (path.startsWith('/api/v2/') && !enrichedQuery.ts) {
+      enrichedQuery.ts = Date.now();
     }
 
     if (Object.keys(enrichedQuery).length > 0) {
@@ -64,6 +98,8 @@ export default function App() {
       if (qs) finalPath += (finalPath.includes('?') ? '&' : '?') + qs;
     }
 
+    addDebugLog(`API Call: ${method} ${finalPath}`, 'api');
+
     if (!options.silent && !isBackground) {
       setActiveSection(section || null);
       setLoading(true);
@@ -74,89 +110,97 @@ export default function App() {
       setLastCall({ method, path: finalPath, status: 'Pending', durationMs: null });
     }
 
-    // Use relative API paths so development proxy and production same-origin routing both work.
     const apiBase = '';
-
-    const headers = { ...fetchOptions.headers };
-    let body = fetchOptions.body;
-
-    // Automatically stringify object bodies and set the default Content-Type
-    if (body && typeof body === 'object' && !(body instanceof FormData)) {
-      body = JSON.stringify(body);
-      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
-    }
-
-    try {
-      const res = await fetch(`${apiBase}${finalPath}`, {
-        ...fetchOptions,
-        method,
-        headers,
-        body,
-        mode: 'cors',
-        credentials: 'omit',
-      });
-
-      let data = null;
-      if (res.status !== 204 && res.status !== 205) {
-        const text = await res.text();
-        try {
-          data = text ? JSON.parse(text) : null;
-        } catch {
-          data = text;
-        }
-      }
-
-      if (!options.silent && !isBackground) {
-        setLastCall({
+    const requestPromise = (async () => {
+      try {
+        const res = await fetch(`${apiBase}${finalPath}`, {
+          ...fetchOptions,
           method,
-          path: finalPath,
-          status: `${res.status} ${res.statusText}`,
-          durationMs: Math.round(performance.now() - startedAt),
+          headers,
+          body,
+          mode: 'cors',
+          credentials: 'omit',
         });
-      }
 
-      const isAppError = !res.ok || (data && typeof data === 'object' && (data.success === false || data.error));
-      addDebugLog(`Response ${res.status} from ${path}`, isAppError ? 'error' : 'success');
-
-      if (!isAppError && (res.status === 304 || res.ok)) {
-        setError('');
-        if (options.showModal) {
-          setModalContent(data || { success: true });
-          setResponseModalOpen(true);
+        let data = null;
+        if (res.status !== 204 && res.status !== 205) {
+          const text = await res.text();
+          try {
+            data = text ? JSON.parse(text) : null;
+          } catch {
+            data = text;
+          }
         }
-        if (data && (!options.silent || isBackground)) {
-          setOutput(data);
-        }
-      } else if (!options.silent && !isBackground) {
-        const errorMsg =
-          typeof data === 'string' && data.length > 0
-            ? data
-            : data?.error || data?.message || data?.data?.message || res.statusText || 'Unknown API Error';
 
-        if (options.showModal) {
-          setModalContent(data || { error: errorMsg });
-          setResponseModalOpen(true);
+        if (!options.silent && !isBackground) {
+          setLastCall({
+            method,
+            path: finalPath,
+            status: `${res.status} ${res.statusText}`,
+            durationMs: Math.round(performance.now() - startedAt),
+          });
         }
-        setError(errorMsg);
-        setOutput(null);
-      }
 
-      return data || (res.ok ? { success: true } : null);
-    } catch (err) {
-      if (!options.silent) {
-        setError(err.message || String(err));
-        setLastCall((prev) => ({
-          ...prev,
-          status: 'Failed',
-          durationMs: Math.round(performance.now() - startedAt),
-        }));
+        const isAppError = !res.ok || (data && typeof data === 'object' && (data.success === false || data.error));
+        addDebugLog(`Response ${res.status} from ${path}`, isAppError ? 'error' : 'success');
+
+        if (!isAppError && (res.status === 304 || res.ok)) {
+          setError('');
+          if (options.showModal) {
+            setModalContent(data || { success: true });
+            setResponseModalOpen(true);
+          }
+          if (data && (!options.silent || isBackground)) {
+            setOutput(data);
+          }
+        } else if (!options.silent && !isBackground) {
+          const errorMsg =
+            typeof data === 'string' && data.length > 0
+              ? data
+              : data?.error || data?.message || data?.data?.message || res.statusText || 'Unknown API Error';
+
+          if (options.showModal) {
+            setModalContent(data || { error: errorMsg });
+            setResponseModalOpen(true);
+          }
+          setError(errorMsg);
+          setOutput(null);
+        }
+
+        // Cache successful GET responses
+        if (!isAppError && method === 'GET' && data) {
+          apiCache.current.set(cacheKey, { data, timestamp: Date.now() });
+        }
+
+        return data || (res.ok ? { success: true } : null);
+      } catch (err) {
+        let errorMsg = err.message || String(err);
+
+        // Handle generic network errors that mean the server is down
+        if (errorMsg.includes('Failed to fetch') || errorMsg.includes('ERR_CONNECTION_REFUSED')) {
+          errorMsg = 'Backend server unreachable. Please ensure the Node.js process is running.';
+        }
+
+        if (!options.silent) {
+          setError(errorMsg);
+          setLastCall((prev) => ({
+            ...prev,
+            status: 'Failed',
+            durationMs: Math.round(performance.now() - startedAt),
+          }));
+        }
+
+        // Return a structured object even on network failure to prevent downstream crashes
+        if (options.silent) return { success: false, error: errorMsg };
+        throw err;
+      } finally {
+        inFlightRequests.current.delete(cacheKey);
+        if (!options.silent && !isBackground) setLoading(false);
       }
-      // Return a structured object even on network failure to prevent downstream crashes
-      if (options.silent) return { success: false, error: err.message };
-      throw err;
-    } finally {
-      if (!options.silent && !isBackground) setLoading(false);
-    }
+    })();
+
+    inFlightRequests.current.set(cacheKey, requestPromise);
+    return requestPromise;
   }, [nhOrderClient, addDebugLog]);
 
   const forceCheckStatus = useCallback(async () => {
@@ -225,6 +269,14 @@ export default function App() {
     // Use the rig-specific pool endpoint to avoid 404 errors for Rig IDs
     const path = `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
     const result = await handleMiningCall(path, { query: { client: targetClient }, silent: true });
+
+    // Inject rig name into the pool response data so the Pool Manager UI can display it
+    if (result && result.success && result.data && rigObj.name) {
+      const items = Array.isArray(result.data) ? result.data : [result.data];
+      items.forEach(item => {
+        if (item && !item.name) item.name = rigObj.name;
+      });
+    }
 
     setMrrPoolData(result);
     setMrrPoolRigId(rigId);

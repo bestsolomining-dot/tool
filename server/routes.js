@@ -89,23 +89,30 @@ export function registerRoutes(app) {
     const clientParam = String(req.query.client || 'BT').toUpperCase();
     if (isAggregate(clientParam)) {
       const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
-      const results = [];
-      const processedClients = new Set();
+
+      // Group by resolved client name to avoid redundant calls to the same underlying account
+      const clientMap = new Map();
       for (const acct of nhAccounts) {
         const { client, clientName } = resolveNhClient(acct);
-        if (!client || (acct !== 'BT' && clientName === 'BT') || processedClients.has(clientName)) continue;
-        processedClients.add(clientName);
-        try {
-          const data = await getNiceHashApp(client).accounting.getBalances();
-          if (data) results.push({ client: clientName, data });
-        } catch (e) { }
+        if (client && !clientMap.has(clientName) && (acct === 'BT' || clientName !== 'BT')) {
+          clientMap.set(clientName, client);
+        }
       }
 
-      if (results.length === 0) return res.json({ currencies: [], total: { available: '0', pending: '0', totalBalance: '0', currency: 'BTC' } });
+      const results = await Promise.all(Array.from(clientMap.entries()).map(async ([clientName, client]) => {
+        try {
+          const data = await getNiceHashApp(client).accounting.getBalances();
+          return data ? { client: clientName, data } : null;
+        } catch (e) { return null; }
+      }));
+
+      const filteredResults = results.filter(Boolean);
+
+      if (filteredResults.length === 0) return res.json({ currencies: [], total: { available: '0', pending: '0', totalBalance: '0', currency: 'BTC' } });
 
       const total = { available: 0, pending: 0, totalBalance: 0, currency: 'BTC' };
       const allCurrencies = [];
-      results.forEach(r => {
+      filteredResults.forEach(r => {
         total.available += parseFloat(r.data.total?.available || 0);
         total.pending += parseFloat(r.data.total?.pending || 0);
         total.totalBalance += parseFloat(r.data.total?.totalBalance || 0);
@@ -133,20 +140,23 @@ export function registerRoutes(app) {
     const clientParam = String(req.query.client || 'BT').toUpperCase();
     if (isAggregate(clientParam)) {
       const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
-      const allRigs = [];
-      const processedClients = new Set();
+
+      const clientMap = new Map();
       for (const acct of nhAccounts) {
         const { client, clientName } = resolveNhClient(acct);
-        if (!client || (acct !== 'BT' && clientName === 'BT') || processedClients.has(clientName)) continue;
-        processedClients.add(clientName);
+        if (client && !clientMap.has(clientName) && (acct === 'BT' || clientName !== 'BT')) {
+          clientMap.set(clientName, client);
+        }
+      }
+
+      const results = await Promise.all(Array.from(clientMap.entries()).map(async ([clientName, client]) => {
         try {
           const data = await getNiceHashApp(client).mining.getRigs();
-          if (data?.miningRigs) {
-            allRigs.push(...data.miningRigs.map(r => ({ ...r, nhClient: clientName })));
-          }
-        } catch (e) { }
-      }
-      return res.json({ miningRigs: allRigs });
+          return (data?.miningRigs || []).map(r => ({ ...r, nhClient: clientName }));
+        } catch (e) { return []; }
+      }));
+
+      return res.json({ miningRigs: results.flat() });
     }
     res.json(await req.nhApp.mining.getRigs());
   }));
@@ -165,20 +175,23 @@ export function registerRoutes(app) {
     let data;
     if (isAggregate(clientParam)) {
       const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
-      const allOrders = [];
-      const processedClients = new Set();
+
+      const clientMap = new Map();
       for (const acct of nhAccounts) {
         const { client, clientName } = resolveNhClient(acct);
-        if (!client || (acct !== 'BT' && clientName === 'BT') || processedClients.has(clientName)) continue;
-        processedClients.add(clientName);
+        if (client && !clientMap.has(clientName) && (acct === 'BT' || clientName !== 'BT')) {
+          clientMap.set(clientName, client);
+        }
+      }
+
+      const results = await Promise.all(Array.from(clientMap.entries()).map(async ([clientName, client]) => {
         try {
           const result = await getNiceHashApp(client).hashpower.getMyOrders(query);
-          if (result?.list) {
-            allOrders.push(...result.list.map(o => ({ ...o, nhClient: clientName })));
-          }
-        } catch (e) { }
-      }
-      data = { list: allOrders };
+          return (result?.list || []).map(o => ({ ...o, nhClient: clientName }));
+        } catch (e) { return []; }
+      }));
+
+      data = { list: results.flat() };
     } else {
       data = await req.nhApp.hashpower.getMyOrders(query);
     }
@@ -212,7 +225,7 @@ export function registerRoutes(app) {
         ts: new Date().toISOString(),
       }));
 
-    await exportDatabaseCsv('nh_orders.csv', processedList);
+    await exportDatabaseCsv('orders.csv', processedList.filter(o => o.status === 'ACTIVE'));
 
     res.json(typeof data === 'object' && !Array.isArray(data) ? { ...data, list: processedList } : processedList);
   }));
@@ -231,13 +244,17 @@ export function registerRoutes(app) {
     let totalPaid = 0;
     const matchingOrders = [];
 
-    for (const acct of nhAccounts) {
+    const results = await Promise.all(nhAccounts.map(async (acct) => {
       const { client, clientName } = resolveNhClient(acct);
-      if (!client || (acct !== 'BT' && clientName === 'BT' && acct !== 'LN')) continue;
+      if (!client || (acct !== 'BT' && clientName === 'BT' && acct !== 'LN')) return null;
       try {
-        const result = await getNiceHashApp(client).hashpower.getMyOrders({ limit: 1000 });
-        const list = result?.list || [];
-        list.forEach(o => {
+        const data = await getNiceHashApp(client).hashpower.getMyOrders({ limit: 1000 });
+        return { clientName, list: data?.list || [] };
+      } catch (e) { return null; }
+    }));
+
+    results.filter(Boolean).forEach(({ clientName, list }) => {
+      list.forEach(o => {
           const status = typeof o.status === 'object' ? o.status.code : o.status;
           const price = parseFloat(o.price);
           if (status === 'ACTIVE' && price < maxPrice) {
@@ -246,8 +263,7 @@ export function registerRoutes(app) {
             matchingOrders.push({ id: o.id, account: clientName, price: o.price, paid: o.payedAmount });
           }
         });
-      } catch (e) { }
-    }
+    });
 
     res.json({ success: true, maxPrice, totalPaid: totalPaid.toFixed(8), count: matchingOrders.length, orders: matchingOrders });
   }));
@@ -279,16 +295,34 @@ export function registerRoutes(app) {
   // Sanitize query to remove tool-specific params (client, ts) before sending to NiceHash
   app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
     const algorithm = String(req.query.algorithm || req.query.algo || '').toUpperCase();
-    const market = ['USA', 'EU'].includes(String(req.query.market).toUpperCase()) ? req.query.market.toUpperCase() : 'USA';
-    res.json(await req.nhApp.hashpower.getOrderPrice({ algorithm, market }));
+    const marketStr = String(req.query.market || 'USA').toUpperCase();
+    const market = (marketStr === 'USA' || marketStr === '1') ? 'USA' : 'EU';
+
+    let app = req.nhApp;
+    if (!app || isAggregate(req.query.client)) {
+      const firstReal = Object.keys(nhConfigs).find(k => nhConfigs[k].apiKey && !isAggregate(k));
+      if (firstReal) app = getNiceHashApp(resolveNhClient(firstReal).client);
+    }
+    if (!app) return res.status(400).json({ error: 'No NiceHash client configured' });
+
+    res.json(await app.hashpower.getOrderPrice({ algorithm, market }));
   }));
 
   // FIX: Resolved 405 error. Using getOrderPrice for both standard and business 
   // as they share the /order/calculate GET endpoint for price data.
   app.get('/api/v2/hashpower/business/order', asyncHandler(async (req, res) => {
     const algorithm = String(req.query.algorithm || req.query.algo || '').toUpperCase();
-    const market = ['USA', 'EU'].includes(String(req.query.market).toUpperCase()) ? req.query.market.toUpperCase() : 'USA';
-    res.json(await req.nhApp.hashpower.getOrderPrice({ algorithm, market }));
+    const marketStr = String(req.query.market || 'USA').toUpperCase();
+    const market = (marketStr === 'USA' || marketStr === '1') ? 'USA' : 'EU';
+
+    let app = req.nhApp;
+    if (!app || isAggregate(req.query.client)) {
+      const firstReal = Object.keys(nhConfigs).find(k => nhConfigs[k].apiKey && !isAggregate(k));
+      if (firstReal) app = getNiceHashApp(resolveNhClient(firstReal).client);
+    }
+    if (!app) return res.status(400).json({ error: 'No NiceHash client configured' });
+
+    res.json(await app.hashpower.getOrderPrice({ algorithm, market }));
   }));
 
   app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.cancelOrder(req.params.orderId))));
@@ -298,21 +332,24 @@ export function registerRoutes(app) {
   app.get('/api/v2/pools', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || 'BT').toUpperCase();
     if (isAggregate(clientParam)) {
-      const allPools = [];
       const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
-      const processedClients = new Set();
+
+      const clientMap = new Map();
       for (const acct of nhAccounts) {
         const { client, clientName } = resolveNhClient(acct);
-        if (!client || (acct !== 'BT' && clientName === 'BT') || processedClients.has(clientName)) continue;
-        processedClients.add(clientName);
-        try {
-          const result = await getNiceHashApp(client).pools.getPools();
-          if (result?.list) {
-            allPools.push(...result.list.map(p => ({ ...p, nhClient: clientName })));
-          }
-        } catch (e) { }
+        if (client && !clientMap.has(clientName) && (acct === 'BT' || clientName !== 'BT')) {
+          clientMap.set(clientName, client);
+        }
       }
-      return res.json({ list: allPools, totalCount: allPools.length });
+
+      const results = await Promise.all(Array.from(clientMap.entries()).map(async ([clientName, client]) => {
+        try {
+          const data = await getNiceHashApp(client).pools.getPools();
+          return (data?.list || []).map(p => ({ ...p, nhClient: clientName }));
+        } catch (e) { return []; }
+      }));
+
+      return res.json({ list: results.flat(), totalCount: results.flat().length });
     }
     res.json(await req.nhApp.pools.getPools());
   }));
@@ -523,26 +560,32 @@ export function registerRoutes(app) {
 
     if (isAggregate(clientParam)) {
       const allClientNames = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret && !isAggregate(c));
-      const allResults = [];
-      const errors = [];
 
-      for (const clientName of allClientNames) {
+      const results = await Promise.all(allClientNames.map(async (clientName) => {
         try {
           const { data: rigsData } = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: clientName });
           const rigs = Array.isArray(rigsData?.data) ? rigsData.data : (Array.isArray(rigsData?.data?.rigs) ? rigsData.data.rigs : []);
-
           if (rigsData?.success && rigs.length > 0) {
             const rigIds = rigs.map(r => r.id).join(';');
             const { data: poolsData } = await mrrApiCall({ endpoint: `/rig/${rigIds}/pool`, clientNameRaw: clientName });
             if (poolsData?.success) {
               const items = Array.isArray(poolsData.data) ? poolsData.data : [poolsData.data];
-              allResults.push(...items.map(item => ({ ...item, mrrClient: clientName })));
+              return { pools: items.map(item => ({ ...item, mrrClient: clientName })) };
             }
           }
         } catch (err) {
-          errors.push({ client: clientName, message: err.message });
+          return { error: { client: clientName, message: err.message } };
         }
-      }
+        return { pools: [] };
+      }));
+
+      const allResults = [];
+      const errors = [];
+      results.forEach(res => {
+        if (res.pools) allResults.push(...res.pools);
+        if (res.error) errors.push(res.error);
+      });
+
       res.set('X-MRR-Client', 'ALL');
       return res.json({ success: true, data: allResults, errors: errors.length > 0 ? errors : undefined });
     }
@@ -635,7 +678,7 @@ export function registerRoutes(app) {
     const priceMap = new Map();
     for (const a of uniqueAlgos) {
       try {
-        priceMap.set(a, await nhApp.hashpower.getOrderPrice({ algorithm: a, market: 'USA' }));
+        priceMap.set(a, await nhApp.hashpower.getOrderPrice({ algorithm: a, market: 1 }));
       } catch (e) { }
     }
 
@@ -741,7 +784,7 @@ export function registerRoutes(app) {
         if (nhAlgo && nhAlgo !== 'UNKNOWN' && nhAlgo !== 'N/A' && nhAlgo !== '') {
           try {
             const { client: nhClient } = resolveNhClient(clientParam);
-            rental.nicehashPrice = await getNiceHashApp(nhClient).hashpower.getOrderPrice({ algorithm: nhAlgo, market: 'USA' });
+            rental.nicehashPrice = await getNiceHashApp(nhClient).hashpower.getOrderPrice({ algorithm: nhAlgo, market: 1 });
           } catch (e) { }
         }
 
@@ -787,7 +830,7 @@ export function registerRoutes(app) {
         if (nhAlgo && nhAlgo !== 'N/A' && nhAlgo !== '' && nhAlgo !== 'UNKNOWN') {
           try {
             const { client: nhClient } = resolveNhClient(req.query.client);
-            info.nicehashPrice = await getNiceHashApp(nhClient).hashpower.getOrderPrice({ algorithm: nhAlgo, market: 'USA' });
+            info.nicehashPrice = await getNiceHashApp(nhClient).hashpower.getOrderPrice({ algorithm: nhAlgo, market: 1 });
           } catch (e) { }
         }
         return { rigId: id, success: true, ...info };

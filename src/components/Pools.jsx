@@ -409,7 +409,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
           if (result.status === 429) {
             const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
-            const seconds = parseInt(retryAfter, 10) || 30;
+            const seconds = parseInt(retryAfter, 3) || 5;
             setRateLimitStatus(`Rate limit hit on verify. Waiting ${seconds}s...`);
             try {
               await new Promise(r => setTimeout(r, seconds * 1000));

@@ -12,14 +12,18 @@ export const algoMap = {
   // Common GPU Algorithms
   'ETHASH': 'DAGGERHASHIMOTO',
   'DAGGERHASHIMOTO': 'DAGGERHASHIMOTO',
+  'HASHIMOTO': 'DAGGERHASHIMOTO',
   'ETCHASH': 'ETCHASH',
   'ETC': 'ETCHASH',
   'ETHEREUMCLASSIC': 'ETCHASH',
   'KAWPOW': 'KAWPOW',
   'RVN': 'KAWPOW',
+  'RAVEN': 'KAWPOW',
   'OCTOPUS': 'OCTOPUS',
   'CFX': 'OCTOPUS',
   'AUTOLYKOS': 'AUTOLYKOS',
+  'AUTOLYKOSV2': 'AUTOLYKOS',
+  'ERGO': 'AUTOLYKOS',
   'ERG': 'AUTOLYKOS',
   'FISHHASH': 'FISHHASH',
 
@@ -30,18 +34,26 @@ export const algoMap = {
   'BTC': 'SHA256',
   'SCRYPT': 'SCRYPT',
   'LTC': 'SCRYPT',
+  'LITECOIN': 'SCRYPT',
   'X11': 'X11',
   'DASH': 'X11',
   'QUARK': 'QUARK',
   'X13': 'X13',
   'KECCAK': 'KECCAK',
+  'SHA3': 'KECCAK',
+  'KECCAKSHA3': 'KECCAK',
+  'RANDOMX': 'RANDOMX',
+  'MONERO': 'RANDOMX',
+  'XMR': 'RANDOMX',
 
   // Equihash Variants
   'EQUIHASH': 'EQUIHASH',
   'ZHASH': 'ZHASH',
   'EQUIHASH1445': 'ZHASH',
+  'EQUIHASH1927': 'ZHASH',
   'BEAMV3': 'BEAMV3',
   'EQUIHASH1254': 'BEAMV3',
+  'BEAM': 'BEAMV3',
 
   // Modern/Newer Algorithms
   'IRONFISH': 'IRONFISH',
@@ -52,7 +64,25 @@ export const algoMap = {
   'KLS': 'KARLSENHASH',
   'PYRINHASH': 'PYRINHASH',
   'PYI': 'PYRINHASH',
-  'NEXA': 'NEXA'
+  'NEXA': 'NEXA',
+  'KHEAVYHASH': 'KHEAVYHASH',
+  'KASPA': 'KHEAVYHASH',
+  'KAS': 'KHEAVYHASH',
+  'VERUSHASH': 'VERUSHASH',
+  'VRSC': 'VERUSHASH',
+  'NEOSCRYPT': 'NEOSCRYPT',
+  'LYRA2REV3': 'LYRA2REV3',
+  'X16R': 'X16R',
+  'X16RV2': 'X16RV2',
+  'CUCKAROO29': 'GRINCUCKAROO29',
+  'GRINCUCKAROO29': 'GRINCUCKAROO29',
+  'CUCKATOO31': 'GRINCUCKATOO31',
+  'GRINCUCKATOO31': 'GRINCUCKATOO31',
+  'CUCKATOO32': 'GRINCUCKATOO32',
+  'GRINCUCKATOO32': 'GRINCUCKATOO32',
+  'HANDSHAKE': 'HANDSHAKE',
+  'HNS': 'HANDSHAKE',
+  'LBRY': 'LBRY'
 };
 
 /**
@@ -61,8 +91,13 @@ export const algoMap = {
  */
 export function normalizeAlgoForNiceHash(algo) {
   if (!algo) return '';
-  const cleanAlgo = String(algo).toUpperCase().trim().replace(/\s*\(.*\)/g, '').replace(/[^A-Z0-9]/g, '');
-  return algoMap[cleanAlgo] || cleanAlgo;
+  // 1. Remove parentheses and content (e.g. "RandomX (Monero)" -> "RandomX")
+  let clean = String(algo).toUpperCase().trim().replace(/\s*\(.*\)/g, '');
+  // 2. Take only the first word to handle aliases like "RandomX Monero" -> "RandomX"
+  const firstWord = clean.split(/\s+/)[0];
+  
+  // Check full string match, then first word match, then fallback to original cleaned
+  return algoMap[clean] || algoMap[firstWord] || clean.replace(/[^A-Z0-9]/g, '');
 }
 
 /**

@@ -252,6 +252,14 @@ export default function App() {
     const path = `/api/v2/mrr/rig/${encodeURIComponent(rigId)}/pool`;
     const result = await handleMiningCall(path, { query: { client: targetClient }, silent: true });
     
+    // Inject rig name into the pool response data so the Pool Manager UI can display it
+    if (result && result.success && result.data && rigObj.name) {
+      const items = Array.isArray(result.data) ? result.data : [result.data];
+      items.forEach(item => {
+        if (item && !item.name) item.name = rigObj.name;
+      });
+    }
+
     setMrrPoolData(result);
     setMrrPoolRigId(rigId);
 

@@ -87,7 +87,7 @@ function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
           {String(errMsg).includes('401') || errMsg === 'Unauthorized' ? 'Authentication Failed (401)' : 'Data Fetch Error'}
         </div>
         <div style={{ opacity: 0.8, fontSize: '13px', maxWidth: '500px', margin: '0 auto' }}>{errMsg}</div>
-        <p style={{ marginTop: '20px', fontSize: '11px', opacity: 0.5 }}>Ensure MRR_KEY_RIG_BT and MRR_SECRET_RIG_BT are set correctly in your .env file.</p>
+        <p style={{ marginTop: '20px', fontSize: '11px', opacity: 0.5 }}>Ensure the MRR API Key and Secret for client "{mrrClient}" are set correctly in your server-side .env file.</p>
       </div>
     );
   }
@@ -204,6 +204,7 @@ export function MrrPoolsTable({ data }) {
       <div style={{ padding: '30px', textAlign: 'center' }}>
         <div style={{ color: '#f87171', fontWeight: 'bold' }}>Pool Data Error</div>
         <div style={{ opacity: 0.7, fontSize: '12px', marginTop: '5px' }}>{errMsg}</div>
+        <p style={{ marginTop: '15px', fontSize: '11px', opacity: 0.5 }}>Ensure MRR API credentials for the selected client are correctly defined in your <code>.env</code> file.</p>
       </div>
     );
   }
@@ -458,7 +459,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           <option value="BT">MRR Client: BT</option>
           <option value="SL">MRR Client: SL</option>
           <option value="LN">MRR Client: LN</option>
-
+          <option value="LUCKY">MRR Client: LUCKY</option>
         </select>
       </div>
 

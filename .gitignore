@@ -10,4 +10,4 @@ package-lock.json
 *.log
 *.xlsx
 /dist
-/node_modules
+/node_modules    

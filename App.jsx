@@ -6,7 +6,7 @@ import NiceHash from './src/components/NiceHash';
 import MiningRigRental from './src/components/MiningRigRental';
 import MiningRigSection from './src/components/MiningRigSection';
 import HashrateCalculator from './src/components/HashrateCalculator';
-import MrrPoolsManager from './src/components/MrrPoolsManager';
+import MrrPoolsManager from './src/components/MrrManager';
 import { RentedRigProvider } from './src/components/RentedRigContext';
 import './src/App.css';
 
@@ -16,9 +16,13 @@ export default function App() {
   const [output, setOutput] = useState(null);
   const [lastCall, setLastCall] = useState(null);
   const [activeSection, setActiveSection] = useState(null);
-  const [responseModalOpen, setResponseModalOpen] = useState(false);
   const [calculatorModalOpen, setCalculatorModalOpen] = useState(false);
-  const [modalContent, setModalContent] = useState(null);
+  const [debugModalOpen, setDebugModalOpen] = useState(false);
+  const [debugLogs, setDebugLogs] = useState([]);
+  const addDebugLog = useCallback((msg, type = 'info') => {
+    console.log(`[DEBUG:${type.toUpperCase()}] ${msg}`);
+    setDebugLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 50));
+  }, []);
   const [algorithm, setAlgorithm] = useState('');
   const [market, setMarket] = useState('');
   const [nhClient, setNhClient] = useState('VN');
@@ -35,8 +39,10 @@ export default function App() {
     const startedAt = performance.now();
     const method = options.method || 'GET';
     const { query, section, ...fetchOptions } = options;
+    const isBackground = !!options.background;
     let finalPath = path;
     const enrichedQuery = { ...query };
+    addDebugLog(`Starting ${method} call to ${path}`, 'api');
     // NiceHash API v2 requires 'ts'. For MRR, we add it to prevent browser-side caching of GET requests.
     if (path.startsWith('/api/v2/')) {
       if (!enrichedQuery.ts) enrichedQuery.ts = Date.now();
@@ -55,13 +61,13 @@ export default function App() {
       if (qs) finalPath += (finalPath.includes('?') ? '&' : '?') + qs;
     }
 
-    if (!options.silent) {
+    if (!options.silent && !isBackground) {
       setActiveSection(section || null);
       setLoading(true);
       setError('');
     }
 
-    if (!options.silent) {
+    if (!options.silent && !isBackground) {
       setLastCall({ method, path: finalPath, status: 'Pending', durationMs: null });
     }
 
@@ -97,7 +103,7 @@ export default function App() {
         }
       }
 
-      if (!options.silent) {
+      if (!options.silent && !isBackground) {
         setLastCall({
           method,
           path: finalPath,
@@ -107,25 +113,14 @@ export default function App() {
       }
 
       const isAppError = !res.ok || (data && typeof data === 'object' && (data.success === false || data.error));
+      addDebugLog(`Response ${res.status} from ${path}`, isAppError ? 'error' : 'success');
 
       if (!isAppError && (res.status === 304 || res.ok)) {
-        if (!options.silent && options.showModal) {
-          setError('');
-          if (res.status === 304) {
-            setModalContent({
-              status: res.status,
-              message: res.statusText,
-              note: 'Content not modified. Displaying previously fetched data if available.',
-            });
-          } else {
-            if (data && !options.silent) setOutput(data);
-            setModalContent(data || { success: true, message: 'Request completed successfully.' });
-          }
-          setResponseModalOpen(true);
-        } else if (!options.silent && data) {
+        setError('');
+        if (data && (!options.silent || isBackground)) {
           setOutput(data);
         }
-      } else if (!options.silent) {
+      } else if (!options.silent && !isBackground) {
         const errorMsg =
           typeof data === 'string' && data.length > 0
             ? data
@@ -133,8 +128,6 @@ export default function App() {
 
         setError(errorMsg);
         setOutput(null);
-        setModalContent(null);
-        setResponseModalOpen(false);
       }
 
       return data || (res.ok ? { success: true } : null);
@@ -151,16 +144,43 @@ export default function App() {
       if (options.silent) return { success: false, error: err.message };
       throw err;
     } finally {
-      if (!options.silent) setLoading(false);
+      if (!options.silent && !isBackground) setLoading(false);
     }
+  }, [nhClient, addDebugLog]);
 
-  }, [nhClient]);
+  const forceCheckStatus = useCallback(async () => {
+    addDebugLog('Force checking system status...', 'warn');
+    setLoading(true);
+    try {
+      await callApi('/api/v2/mining/address', { silent: true });
+      addDebugLog('System status check complete.', 'success');
+    } finally {
+      setLoading(false);
+    }
+  }, [callApi, addDebugLog]);
 
   // Clear output when switching accounts to prevent showing stale data
   useEffect(() => {
     setOutput(null);
     setError('');
-  }, [nhClient, mrrClient]);
+    addDebugLog(`Account switch detected. nhClient: ${nhClient}, mrrClient: ${mrrClient}`);
+    // Background silent fetch to populate main dashboard data for new account
+    callApi('/api/v2/mining/address', { silent: true, background: true });
+  }, [nhClient, mrrClient, callApi, addDebugLog]);
+
+  useEffect(() => {
+    addDebugLog('App initialized. Current origin: ' + (window.location.origin || 'local'));
+  }, [addDebugLog]);
+
+  // Setup periodic silent background updates for dashboard data (Balance, etc)
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (nhClient) {
+        callApi('/api/v2/mining/address', { silent: true, background: true });
+      }
+    }, 60000); // 60 seconds
+    return () => clearInterval(intervalId);
+  }, [nhClient, callApi]);
 
   const handleMiningCall = useCallback((path, opts = {}) => {
     return callApi(path, { ...opts, section: 'mining' });
@@ -187,6 +207,7 @@ export default function App() {
     const rigId = String(rigObj.rigid || rigObj.rig_id || rigObj.rig?.id || (isRented ? '' : rigObj.id)).trim();
     const rentalId = String(rigObj.rentalid || rigObj.current_rental_id || rigObj.rental_id || (isRented ? rigObj.id : '')).trim();
 
+    addDebugLog(`Opening MRR pools for rig: ${rigId} (Rental: ${rentalId})`, 'info');
     // Logic: Always fetch pool of the physical rig id, not the rig card (rental) id.
     if (!rigId) return;
 
@@ -223,6 +244,10 @@ export default function App() {
                   {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
                 </span>
               </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <button className="text-button" onClick={forceCheckStatus} style={{ fontSize: '10px' }}>Force Check</button>
+                <button className="text-button" onClick={() => setDebugModalOpen(true)} style={{ fontSize: '10px' }}>Debug Logs</button>
+              </div>
             </div>
           </div>
         </header>
@@ -243,14 +268,6 @@ export default function App() {
         </section>
         <main className="dashboard">
           <section className="quick-actions">
-            <article className="panel">
-              <MiningRigSection
-                onCall={handleMiningCall}
-                mrrClient={mrrClient}
-                setMrrClient={setMrrClient}
-                onOpenMrrPools={handleOpenMrrPools}
-              />
-            </article>
             <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <article className="panel">
                 <NiceHash
@@ -263,6 +280,8 @@ export default function App() {
                   setNhClient={setNhClient}
                 />
               </article>
+              
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
@@ -273,6 +292,15 @@ export default function App() {
                 </button>
               </div>
             </div>
+            <article className="panel">
+                <MiningRigSection
+                  onCall={handleMiningCall}
+                  mrrClient={mrrClient}
+                  setMrrClient={setMrrClient}
+                  onOpenMrrPools={handleOpenMrrPools}
+                />
+              </article>
+
             <article className="panel">
               <MrrPoolsManager
                 onCall={handleMiningCall}
@@ -293,19 +321,16 @@ export default function App() {
           <HashrateCalculator />
         </Modal>
         <Modal
-          isOpen={responseModalOpen}
-          onClose={() => setResponseModalOpen(false)}
-          title="API Response Details"
-          maxWidth="1100px"
+          isOpen={debugModalOpen}
+          onClose={() => setDebugModalOpen(false)}
+          title="System Debug Logs"
+          maxWidth="800px"
         >
-          {lastCall && (
-            <div className="response-meta" style={{ marginBottom: '15px', opacity: 0.8, fontSize: '12px' }}>
-              <span>{lastCall.method} {lastCall.path} — {lastCall.status} ({lastCall.durationMs}ms)</span>
-            </div>
-          )}
-          <pre className="response-body modal" style={{ maxHeight: '60vh', overflow: 'auto' }}>
-            {JSON.stringify(modalContent || output, null, 2)}
-          </pre>
+          <div className="code-block-content" style={{ maxHeight: '60vh', overflow: 'auto', fontSize: '11px', fontFamily: 'monospace' }}>
+            {debugLogs.length === 0 && <div style={{ opacity: 0.5 }}>No logs captured yet.</div>}
+            {debugLogs.map((log, i) => <div key={i} style={{ padding: '2px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{log}</div>)}
+          </div>
+          <div className="modal-actions"><button className="btn-pro secondary" onClick={() => setDebugLogs([])}>Clear Logs</button></div>
         </Modal>
       </div>
     </RentedRigProvider>

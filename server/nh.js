@@ -18,7 +18,22 @@ export function initNhConfigs(env) {
     PH: {
       apiKey: normalizeCredential(env.NICEHASH_API_KEY_PH),
       apiSecret: normalizeCredential(env.NICEHASH_API_SECRET_PH),
-      orgId: normalizeCredential(env.NICEHASH_ORG_ID_PH || env.NICEHASH_ORG_ID),
+      orgId: normalizeCredential(env.NICEHASH_ORG_ID_PH),
+      environment: normalizeCredential(env.NICEHASH_ENVIRONMENT || 'production'),
+
+    },
+    KIMLOAN: {
+      apiKey: normalizeCredential(env.NICEHASH_API_KEY_KIMLOAN),
+      apiSecret: normalizeCredential(env.NICEHASH_API_SECRET_KIMLOAN),
+      orgId: normalizeCredential(env.NICEHASH_ORG_ID_KIMLOAN),
+      environment: normalizeCredential(env.NICEHASH_ENVIRONMENT || 'production'),
+
+    },
+    NHATLINH: {
+      apiKey: normalizeCredential(env.NICEHASH_API_KEY_NHATLINH),
+      apiSecret: normalizeCredential(env.NICEHASH_API_SECRET_NHATLINH),
+      orgId: normalizeCredential(env.NICEHASH_ORG_ID_NHATLINH),
+      environment: normalizeCredential(env.NICEHASH_ENVIRONMENT || 'production'),
     },
   };
 

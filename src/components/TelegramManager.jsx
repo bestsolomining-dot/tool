@@ -206,8 +206,7 @@ const TelegramTemplates = {
     `${divider}\n` +
     `⚡ <b>Hashrate (avg / cur)</b>\n` +
     `<code>${info?.niceAverageHashrate || 'N/A'} / ${info?.niceHashrate || 'N/A'}</code>\n` +
-    `\n` +
-    
+    `\n` +      
     `💸 <b>Paid</b>\n` +
     `<code>${info?.price?.paid || fr.price || '0.00'} ${info?.price?.currency || fr.currency || 'BTC'}</code>\n` +
     `${divider}\n`,
@@ -220,7 +219,7 @@ const TelegramTemplates = {
     `(<b>Disabled</b> <code>${String(disabledAll).padStart(4)}</code>)\n` +
     `♻️ <b>Rented</b> <code>${String(rentedAll).padStart(4)}</code> ` +
     `(24h: <code>${String(rented24h || 0).padStart(3)}</code>)\n` +
-    `${barChart ? `${barChart}\n` : ''}` +
+    // `${barChart ? `${barChart}\n` : ''}` +
     `${divider}\n` +
     `<b>Active Rentals:</b>\n` +
     `${divider}\n` +

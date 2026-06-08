@@ -8,7 +8,7 @@ export default function MrrAccount({ onCall }) {
     const [mrrClient, setMrrClient] = useState('VN');
     const [mrrBalance, setMrrBalance] = useState(null);
     const [loading, setLoading] = useState(false);
-    const availableClients = ['BT', 'SL', 'LN', 'VN'];
+    const availableClients = ['BT', 'SL', 'LN', 'LUCKY', 'VN'];
 
     const fetchBalance = useCallback(async (isSilent = true) => {
         if (!mrrClient || mrrClient === 'VN') {

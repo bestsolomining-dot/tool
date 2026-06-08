@@ -184,6 +184,8 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
           <option value="VN">VN (All Clients)</option>
           <option value="BT">BT Account</option>
           <option value="PH">PH Account</option>
+          <option value="NHATLINH">NhatLinh</option>
+          <option value="KIMLOAN">KimLoan</option>
         </select>
         <RentedRigsSummarySection />
       </div>

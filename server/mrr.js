@@ -40,6 +40,11 @@ export function initMrrConfigs(env) {
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_LN),
       nonceOverride: env.MRR_NONCE_OVERRIDE_LN ? BigInt(env.MRR_NONCE_OVERRIDE_LN) : null,
     },
+    LUCKY: {
+      apiKey: normalizeCredential(env.MRR_KEY_RIG_LUCKY),
+      apiSecret: normalizeCredential(env.MRR_SECRET_RIG_LUCKY),
+      nonceOverride: env.MRR_NONCE_OVERRIDE_LUCKY ? BigInt(env.MRR_NONCE_OVERRIDE_LUCKY) : null,
+    },
   };
 
   // Discover and register additional accounts from environment variables
@@ -61,6 +66,7 @@ export function initMrrConfigs(env) {
     if (defaultMrrClientRaw === 'VN') return 'VN';
     if (defaultMrrClientRaw === 'SL') return 'SL';
     if (defaultMrrClientRaw === 'LN') return 'LN';
+    if (defaultMrrClientRaw === 'LUCKY') return 'LUCKY';
     return mrrConfigs[defaultMrrClientRaw] ? defaultMrrClientRaw : 'BT';
   })();
 }
@@ -206,8 +212,8 @@ export function nextMrrNonce(apiKey, clientLabel) {
   }
 
   // Safety: If nonce is massively in the future compared to our best known time, reset it.
-  // Increased limit to 60 mins to ensure manual high nonces aren't immediately reset.
-  const futureLimitNano = (mrrClockSynced ? 60n : 1440n) * 60n * 1000n * 1000000n;
+  // Increased limit to 24 hours to ensure manual high nonces aren't immediately reset.
+  const futureLimitNano = (mrrClockSynced ? 1440n : 2880n) * 60n * 1000n * 1000000n;
   const nowNano = (BigInt(Date.now()) + mrrClockOffset) * 1000000n;
   if (lastNonce > 9999999999999999999n || lastNonce > (nowNano + futureLimitNano)) {
     console.warn(`[mrr:${clientLabel}] Resetting future-drifted nonce baseline (${lastNonce}) to current time. (Safety Limit: ${futureLimitNano/1000000n/60000n}m)`);

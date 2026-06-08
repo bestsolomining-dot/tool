@@ -6,13 +6,14 @@ export const UNIT_TO_POWER = {
 };
 
 /**
- * Shared algorithm mapping between MRR and NiceHash.
+ * Shared algorithm mapping between MRR and NiceHash identifiers.
  */
 export const algoMap = {
   // Common GPU Algorithms
   'ETHASH': 'DAGGERHASHIMOTO',
   'DAGGERHASHIMOTO': 'DAGGERHASHIMOTO',
   'HASHIMOTO': 'DAGGERHASHIMOTO',
+  'HASHIMOTOS': 'DAGGERHASHIMOTO',
   'ETCHASH': 'ETCHASH',
   'ETC': 'ETCHASH',
   'ETHEREUMCLASSIC': 'ETCHASH',
@@ -33,6 +34,8 @@ export const algoMap = {
   'SHA256AB': 'SHA256ASICBOOST',
   'BTC': 'SHA256',
   'SCRYPT': 'SCRYPT',
+  'SCRYPTN': 'SCRYPT',
+  'SCRYPT-N': 'SCRYPT',
   'LTC': 'SCRYPT',
   'LITECOIN': 'SCRYPT',
   'X11': 'X11',
@@ -44,6 +47,7 @@ export const algoMap = {
   'KECCAKSHA3': 'KECCAK',
   'RANDOMX': 'RANDOMX',
   'MONERO': 'RANDOMX',
+  'RANDOMXMONERO': 'RANDOMX',
   'XMR': 'RANDOMX',
 
   // Equihash Variants
@@ -85,74 +89,84 @@ export const algoMap = {
   'LBRY': 'LBRY'
 };
 
-/**
- * Standardizes an algorithm name by removing metadata (like "(ASIC)") 
- * and mapping it to the equivalent NiceHash identifier.
- */
+/** Display names for algorithms (user-friendly formatting) */
+export const ALGO_DISPLAY_NAMES = {
+  'SHA256': 'SHA256',
+  'SCRYPT': 'Scrypt',
+  'DAGGERHASHIMOTO': 'DaggerHashimoto',
+  'KAWPOW': 'KawPow',
+  'RANDOMXMONERO': 'RandomXMonero',
+  'ETCHASH': 'Etchash',
+  'RANDOMX': 'RandomX',
+  'FISHHASH': 'FishHash',
+  'OCTOPUS': 'Octopus',
+  'AUTOLYKOS': 'Autolykos',
+  'KHEAVYHASH': 'KHeavyHash',
+  'EQUIHASH': 'Equihash',
+  'BLAKE2S': 'Blake2s',
+  'LBRY': 'LBRY',
+  'X11': 'X11',
+  'GRIN29': 'Grin29',
+  'GRIN31': 'Grin31',
+  'LYRA2RE': 'Lyra2RE',
+  'LYRA2REV2': 'Lyra2REv2',
+  'LYRA2REV3': 'Lyra2REv3',
+  'NEOSCRYPT': 'NeoScrypt',
+  'PYRIN': 'Pyrin',
+  'KARLSEN': 'Karlsen',
+  'KARLSENHASH': 'KarlsenHash',
+  'IRONFISH': 'IronFish',
+  'EAGLESONG': 'EagleSong',
+  'HANDSHAKE': 'Handshake',
+  'SHA256ASICBOOST': 'SHA256AsicBoost'
+};
+
+/** Standardizes an algorithm name and maps it to the equivalent NiceHash identifier. */
 export function normalizeAlgoForNiceHash(algo) {
   if (!algo) return '';
-  // 1. Remove parentheses and content (e.g. "RandomX (Monero)" -> "RandomX")
   let clean = String(algo).toUpperCase().trim().replace(/\s*\(.*\)/g, '');
-  // 2. Take only the first word to handle aliases like "RandomX Monero" -> "RandomX"
   const firstWord = clean.split(/\s+/)[0];
-  
-  // Check full string match, then first word match, then fallback to original cleaned
-  return algoMap[clean] || algoMap[firstWord] || clean.replace(/[^A-Z0-9]/g, '');
+  return algoMap[clean] || algoMap[firstWord] || clean.replace(/[^A-Z0-9]/g, '').toUpperCase();
 }
 
-/**
- * Reverse mapping: NiceHash identifier to MRR slug.
- */
+/** Reverse mapping: NiceHash identifier to MRR slug. */
 export function mapNiceHashToMRR(algo) {
   if (!algo) return '';
   const entry = Object.entries(algoMap).find(([mrr, nh]) => nh === algo.toUpperCase());
   return entry ? entry[0] : algo.toUpperCase();
 }
 
-/**
- * Standardized formatter for hashrate pricing.
- * Output Example: 0.010000 BTC / TH / Day
- */
+/** Returns a friendly display name for an algorithm code. */
+export function getAlgoDisplayName(code) {
+  if (!code) return 'N/A';
+  const uc = String(code).toUpperCase();
+  return ALGO_DISPLAY_NAMES[uc] || code;
+}
+
+/** Standardized hashrate pricing formatter. */
 export function formatHashratePrice(price, currency = 'BTC', unit = 'TH') {
-  const cleanUnit = String(unit || 'TH').toUpperCase().replace('S', ''); // TH/s -> TH
+  const cleanUnit = String(unit || 'TH').toUpperCase().replace('S', '');
   return `${parseFloat(price || 0).toFixed(6)} ${currency} / ${cleanUnit} / Day`;
 }
 
-/**
- * Reusable logic to calculate the price difference percentage between MRR and NiceHash.
- */
+/** Calculates the price difference ROI percentage (Positive = Market is more expensive). */
 export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
   const nhPriceNum = Number.parseFloat(nhPrice || 0);
   const mrrPriceNum = Number.parseFloat(mrrPrice || 0);
-
   if (nhPriceNum <= 0 || mrrPriceNum <= 0) return null;
-
-  // Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH')
-  const clean = (u) => {
+  const getBaseUnit = (u) => {
     const str = String(u || '').toUpperCase();
     if (str.includes('SHA256')) return 'EH';
     if (str.includes('SCRYPT')) return 'MH';
     if (str.includes('RANDOMX')) return 'KH';
-
     const m = str.match(/(EH|PH|TH|GH|MH|KH|EHS|PHS|THS|GHS|MHS|E|P|T|G|M|K|H)/);
     if (!m) return 'TH';
-    let unit = m[0];
-    // Normalize single letters to standard 2-letter codes for mapping
     const singleMap = { 'E': 'EH', 'P': 'PH', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };
-    return singleMap[unit] || unit;
+    return singleMap[m[0]] || m[0];
   };
-
-  const mrrUnitClean = clean(mrrUnit) || 'TH';
-  const nhUnitClean = clean(nhUnit) || 'TH';
-
-  // Get power factors (10^n), defaulting to TeraHash (-6 relative to EH)
-  const mrrP = UNIT_TO_POWER[mrrUnitClean] ?? -6;
-  const nhP = UNIT_TO_POWER[nhUnitClean] ?? -6;
-
-  // Normalize to base unit (H/s equivalent) for fair comparison
+  const mrrP = UNIT_TO_POWER[getBaseUnit(mrrUnit)] ?? -6;
+  const nhP = UNIT_TO_POWER[getBaseUnit(nhUnit)] ?? -6;
   const mrrPriceNorm = mrrPriceNum / Math.pow(10, mrrP);
   const nhPriceNorm = nhPriceNum / Math.pow(10, nhP);
-
-  // ROI = (Market Benchmark - Your Price) / Market Benchmark
   return ((nhPriceNorm - mrrPriceNorm) / nhPriceNorm * 100).toFixed(1);
 }

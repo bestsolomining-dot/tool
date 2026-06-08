@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import PoolEditorPopup from './PoolEditorPopup' // Use the new wrapper
 import Modal from './Modal' // Import the new Modal component
 import { poolHelpers as ph, poolApi, apiFetch } from '../core/poolUtils'
+import { getAlgoDisplayName } from '../core/mapping'
 
 export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient, setNhClient }) {
   const [pools, setPools] = useState([])
@@ -632,7 +633,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
       return acc
     }, {})
     return Object.entries(counts)
-      .map(([algo, count]) => `${algo}: ${count}`)
+      .map(([algo, count]) => `${getAlgoDisplayName(algo)}: ${count}`)
       .join(', ')
   }
 
@@ -974,7 +975,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                 <div className="algorithm-grid" style={{ maxHeight: '650px', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
                   {poolAlgorithmGroups.map(([algorithm, count]) => (
                     <div className="algorithm-row" key={algorithm}>
-                      <span>{algorithm}</span>
+                      <span>{getAlgoDisplayName(algorithm)}</span>
                       <strong style={{ marginLeft: 3 }}>{count}</strong>
                       <button
                         type="button"
@@ -1025,7 +1026,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
               >
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <strong style={{ color: isActive ? '#3b82f6' : 'inherit' }}>{label}</strong>
-                  <code style={{ fontSize: '11px', opacity: 0.7 }}>{ph.getAlgo(pool)}</code>
+                  <code style={{ fontSize: '11px', opacity: 0.7 }}>{getAlgoDisplayName(ph.getAlgo(pool))}</code>
                 </div>
                 <button
                   type="button"

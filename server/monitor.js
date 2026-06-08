@@ -4,6 +4,37 @@ import { resolveNhClient, getNiceHashApp, isAggregate } from './nh.js';
 import { extractRentalInfo, extractRigInfo } from './utils.js';
 import { TELEGRAM_CONFIG, TelegramTemplates } from '../src/shared/telegram.js';
 
+const ALGO_DISPLAY_NAMES = {
+  'SHA256': 'SHA-256',
+  'SCRYPT': 'Scrypt',
+  'DAGGERHASHIMOTO': 'DaggerHashimoto',
+  'KAWPOW': 'KawPow',
+  'RANDOMXMONERO': 'RandomX Monero',
+  'ETCHASH': 'Etchash',
+  'FISHHASH': 'FishHash',
+  'OCTOPUS': 'Octopus',
+  'AUTOLYKOS': 'Autolykos',
+  'KHEAVYHASH': 'KHeavyHash',
+  'EQUIHASH': 'Equihash',
+  'BLAKE2S': 'Blake2s',
+  'LBRY': 'LBRY',
+  'X11': 'X11',
+  'GRIN29': 'Grin29',
+  'GRIN31': 'Grin31',
+  'NEOSCRYPT': 'NeoScrypt',
+  'PYRIN': 'Pyrin',
+  'KARLSEN': 'Karlsen',
+  'IRONFISH': 'IronFish',
+  'EAGLESONG': 'EagleSong',
+  'HANDSHAKE': 'Handshake'
+};
+
+const getAlgoDisplayName = (code) => {
+  if (!code) return 'N/A';
+  const uc = String(code).toUpperCase();
+  return ALGO_DISPLAY_NAMES[uc] || code;
+};
+
 // ==========================
 //  Global State (Persisted in DB)
 // ==========================
@@ -200,6 +231,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   const accountMetrics = [];
   const allRentedRigs = [];
   const successfulAccts = [];
+  const globalRentalsMap = new Map();
+  const globalOnlineAlgos = new Map();
 
   let totalAll = 0;
   let availableAll = 0;
@@ -228,11 +261,10 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   // ------------------------------------------------------------------
   //  Process each MRR account
   // ------------------------------------------------------------------
-  for (const acct of mrrAccts) {
+  await Promise.all(mrrAccts.map(async (acct) => {
     const harvestedRentalIds = new Set();
     const rigLookupByRentalId = new Map();
 
-    // Initialize metrics for this account to ensure it shows in summary even on failure
     const metric = {
       name: acct,
       total: 0,
@@ -245,9 +277,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     };
 
     try {
-      // 1) Fetch rig list
-      const rigsRes = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: acct });
-      await new Promise(r => setTimeout(r, 1200)); // Strict sequential gap (combined 200ms + 1000ms)
+      // Parallelize base data fetching for the account to maximize throughput
+      const [rigsRes, boughtRes, soldRes] = await Promise.all([
+        mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: acct }),
+        mrrApiCall({ endpoint: '/rental', query: { type: 'bought' }, clientNameRaw: acct }),
+        mrrApiCall({ endpoint: '/rental', query: { type: 'sold' }, clientNameRaw: acct })
+      ]);
 
       if (rigsRes.statusCode === 200 && rigsRes.data?.success) {
         const rigList = extractArray(rigsRes.data);
@@ -307,7 +342,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           if (isOffline) offlineCount++;
           if (isDisabled) disabledCount++;
           if (isWarning) warningCount++;
-          if (onlineFlag) onlineCount++;
+          if (onlineFlag) {
+            onlineCount++;
+            const algoName = (rig.algo || rig.type || 'N/A').toUpperCase();
+            globalOnlineAlgos.set(algoName, (globalOnlineAlgos.get(algoName) || 0) + 1);
+          }
         }
 
         // High warning count alert
@@ -343,13 +382,6 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         metric.error = true;
       }
 
-      // 2) Fetch bought + sold rentals
-      const boughtRes = await mrrApiCall({ endpoint: '/rental', query: { type: 'bought' }, clientNameRaw: acct });
-      await new Promise(r => setTimeout(r, 1200));
-
-      const soldRes = await mrrApiCall({ endpoint: '/rental', query: { type: 'sold' }, clientNameRaw: acct });
-      await new Promise(r => setTimeout(r, 1200));
-
       const allRentalsRaw = [
         ...extractArray(boughtRes.data || {}),
         ...extractArray(soldRes.data || {})
@@ -357,29 +389,26 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
       const rentalsMap = new Map();
       allRentalsRaw.forEach(r => {
-        if (r && r.id) rentalsMap.set(String(r.id), r);
+        if (r && r.id) {
+          rentalsMap.set(String(r.id), r);
+          globalRentalsMap.set(String(r.id), r);
+        }
       });
 
       // Harvest missing rental details
       const missingIds = Array.from(harvestedRentalIds).filter(hid => !rentalsMap.has(hid));
       if (missingIds.length > 0) {
-        for (const hid of missingIds) {
+        await Promise.all(missingIds.map(async (hid) => {
           try {
             const hRes = await mrrApiCall({ endpoint: `/rental/${hid}`, clientNameRaw: acct });
             const hData = hRes.data?.data || hRes.data;
-            const logT = new Date().toLocaleTimeString();
-            if (hRes.statusCode === 200 && hData && !hData.error && (hData.id || String(hData.rentalid) === String(hid))) {
-              console.log(`[${logT}] [mrr:${acct}] Synchronized missing rental details for #${hid}`);
-              if (!hData.id) hData.id = hid; // Ensure ID is initialized for downstream processing
+            if (hRes.statusCode === 200 && hData && !hData.error) {
+              if (!hData.id) hData.id = hid;
               rentalsMap.set(hid, hData);
-            } else {
-              console.warn(`[${logT}] [mrr:${acct}] Harvest failed for #${hid}: ${hData?.message || 'Status ' + hRes.statusCode}`);
+              globalRentalsMap.set(hid, hData);
             }
-            await new Promise(r => setTimeout(r, 1200));
-          } catch (err) {
-            console.error(`[${new Date().toLocaleTimeString()}] Error harvesting rental #${hid}: ${err.message}`);
-          }
-        }
+          } catch (err) {}
+        }));
       }
 
       // Enrich with rig data where rental details are missing
@@ -392,6 +421,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             hashrate: { current: rig.hashrate || 0 },
             rig: { type: rig.algo || rig.type }
           });
+          globalRentalsMap.set(rid, rentalsMap.get(rid));
         }
       }
 
@@ -433,6 +463,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const requiredHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
         const displayTarget = (Number.isFinite(requiredHashrate) && requiredHashrate > 0) ? requiredHashrate : 0;
         const efficiency = parseFloat(info.percent || 0);
+        const orderDiff = (efficiency - 100).toFixed(1);
         const currentHash = info.hashrate.current;
 
         // Get current DB state (promisified)
@@ -538,9 +569,9 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const currentSpeedVal = parseFloat(info.hashrate.current || 0);
         if (!isFinished_s && currentSpeedVal > 0) {
           activeRentalLines.push(
-            `${perfEmoji} 🧬 <code>${escapeHtml(info.algo).toUpperCase()}</code>\n` +
+            `${perfEmoji} 🧬 <code>${escapeHtml(getAlgoDisplayName(info.algo))}</code>\n` +
             `<b>${escapeHtml(r.name || r.id)}</b>\n` +
-            `🎯Effect: <b>${info.percent}%</b>\n` +
+            `🎯Effect: <b>${info.percent}%</b> (<code>${orderDiff >= 0 ? '+' : ''}${orderDiff}%</code>)\n` +
             `📊Avg: <b>${info.niceAverageHashrate}H | Ads: ${info.niceAdvertisedHashrate}H</b>\n` +
             `🛜Speed: <b>${info.niceHashrate}H</b>\n` +
             `🧲Target: <b>${displayTarget.toFixed(2)} ${info.hashrate.suffix.toUpperCase()}</b>\n` +
@@ -551,13 +582,13 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         // Update database
         try {
           await dbRunAsync(
-            `INSERT INTO rentals (id, name, client, start_time, end_time, algo, target_100, last_updated, low_hashrate_start, zero_hashrate_start) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO rentals (id, name, client, start_time, end_time, algo, target_100, order_diff, last_updated, low_hashrate_start, zero_hashrate_start) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET 
-               name=excluded.name, client=excluded.client, algo=excluded.algo, 
+               name=excluded.name, client=excluded.client, algo=excluded.algo, order_diff=excluded.order_diff,
                start_time=excluded.start_time, end_time=excluded.end_time, target_100=excluded.target_100, last_updated=excluded.last_updated,
                low_hashrate_start=excluded.low_hashrate_start, zero_hashrate_start=excluded.zero_hashrate_start`,
-            [String(r.id), r.name || r.id, acct, startT, endT, info.algo, displayTarget, now, lowHashStart, zeroHashStart]
+            [String(r.id), r.name || r.id, acct, startT, endT, info.algo, displayTarget, orderDiff, now, lowHashStart, zeroHashStart]
           );
 
           // Record in history to maintain count even after the rental ends
@@ -576,7 +607,6 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
         if (shouldNotify) {
           const hbType = forceNotify ? 'MONITOR' : 'RENTING';
-          const roi = (efficiency - 100).toFixed(1);
           const timeProgress = totalDurationMs > 0 ? Math.floor((elapsedMs / totalDurationMs) * 100) : 0;
 
           const displayRemN = Math.max(0, remainingMs);
@@ -585,7 +615,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const remM = Math.floor((displayRemN % 3600000) / 60000);
           const remStr = displayRemN <= 0 ? 'Finished' : (remD > 0 ? `${remD}d ${remH}h` : `${remH}h ${remM}m`);
 
-          const msg = TelegramTemplates.rentedNotice(hbType, r, info, acct, roi, remStr);
+          const msg = TelegramTemplates.rentedNotice(hbType, r, info, acct, orderDiff, remStr);
 
           try {
             await sendTelegramInternal(msg);
@@ -602,11 +632,9 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       console.error(`[${new Date().toLocaleTimeString()}] [monitor:error] Client ${acct}: ${err.message}`);
       metric.error = true;
     }
-
-    // Add a significant gap between accounts to prevent IP-based rate limiting
-    await new Promise(r => setTimeout(r, 2000));
     accountMetrics.push(metric);
-  }
+    if (!metric.error) successfulAccts.push(acct);
+  }));
 
   const rented24hRow = await dbGetAsync(
     "SELECT COUNT(*) as count FROM rental_history WHERE start_time >= ?",
@@ -665,7 +693,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     }).join('\n');
 
     const finishTime = new Date().toLocaleTimeString();
-    const allSummaryMsg = TelegramTemplates.heartbeatSummary(barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, finishTime, rented24hCount);
+    const onlineAlgoLines = Array.from(globalOnlineAlgos.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([algo, count]) => `• ${getAlgoDisplayName(algo)}: <b>${count}</b>`);
+
+    const allSummaryMsg = TelegramTemplates.heartbeatSummary(barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, finishTime, rented24hCount, onlineAlgoLines);
 
     try {
       await sendTelegramInternal(allSummaryMsg);
@@ -688,8 +720,18 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         disabled: disabledAll,
         warning: warningAll,
       },
-      perAccount: accountMetrics,   // FIXED: now populated
-      activeRentals: allRentedRigs.map(r => ({ account: r.acct, id: r.id, name: r.name || r.id })),
+      perAccount: accountMetrics,
+      activeRentals: allRentedRigs.map(r => {
+        const rentalDetail = globalRentalsMap.get(String(r.id));
+        const eff = rentalDetail ? parseFloat(extractRentalInfo(rentalDetail).percent || 0) : 0;
+        return { 
+          account: r.acct, 
+          id: r.id, 
+          name: r.name || r.id,
+          efficiency: eff,
+          orderDiff: (eff - 100).toFixed(1)
+        };
+      }),
     },
   };
   } finally {

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { poolApi } from '../core/poolUtils';
-import { normalizeAlgoForNiceHash } from '../core/algoMapping';
+import { normalizeAlgoForNiceHash } from '../core/mapping';
 import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils';
+import { getAlgoDisplayName } from '../core/mapping';
 import { useRentedRigs } from './RentedRigContext';
 import MrrRigCard from './MrrRigCard';
 import {
@@ -79,7 +80,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       for (const algo of uniqueAlgos) {
         if (algo && algo !== 'N/A' && !algoMarketPrices[algo]) {
           try {
-            const nhAlgo = normalizeAlgoForNiceHash(algo).toUpperCase();
+            const nhAlgo = normalizeAlgoForNiceHash(algo);
             if (!nhAlgo) continue;
 
             const fetchPrice = async (path) => {
@@ -248,6 +249,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           const rental = data.data || data;
           const pools = rental.pools || [];
           const firstPool = pools[0];
+          const normalized = rental.normalized;
 
           // Normalize NH data if present in rental info
           const nhPriceData = rental.nicehashPrice?.price || rental.nicehashPrice;
@@ -256,17 +258,17 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             stratumHost: firstPool?.host || firstPool?.stratumHost || firstPool?.stratumHostname || rental.rig?.stratumHost || rental.rig?.host || rental.rig?.stratumHostname || 'N/A',
             stratumPort: firstPool?.port || firstPool?.stratumPort || rental.rig?.stratumPort || rental.rig?.port || '',
             username: firstPool?.user || firstPool?.username || rental.rig?.username || rental.rig?.user || 'N/A',
-            algo: getRentalAlgorithm(rental),
-            percent: getRentalEfficiency(rental),
-            startTime: getRentalStartTime(rental),
-            endTime: getRentalEndTime(rental),
-            advertised: getRentalAdvertisedHashrate(rental), // For display
-            average: getRentalAverageHashrate(rental),       // For display
-            current: getRentalCurrentHashrate(rental),
-            last5m: getRental5mHashrate(rental),
-            last15m: getRental15mHashrate(rental),
-            rawAds: getRawHashrate(rental.hashrate?.advertised || rental.advertised),
-            rawAvg: getRawHashrate(rental.hashrate?.average || rental.average),
+            algo: normalized?.algo || getRentalAlgorithm(rental),
+            percent: normalized?.percent || getRentalEfficiency(rental),
+            startTime: normalized?.startTime || rental.start || rental.start_time || '',
+            endTime: normalized?.endTime || rental.end || rental.end_time || '',
+            advertised: normalized?.niceAdvertisedHashrate || getRentalAdvertisedHashrate(rental), // For display
+            average: normalized?.niceAverageHashrate || getRentalAverageHashrate(rental),       // For display
+            current: normalized?.niceHashrate || '0 N/A',
+            last5m: normalized?.nice5mHashrate || '0 N/A',
+            last15m: normalized?.nice15mHashrate || '0 N/A',
+            rawAds: normalized?.hashrate?.advertised || 0,
+            rawAvg: normalized?.hashrate?.average || 0,
             pools: pools.map(p => ({
               host: p.host || p.stratumHost || p.stratumHostname || rental.rig?.stratumHost || rental.rig?.host || 'N/A',
               port: p.port || p.stratumPort || rental.rig?.stratumPort || rental.rig?.port || 'N/A',
@@ -332,6 +334,12 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       query: { client: rig.mrrClient || mrrClient },
       showModal: true
     });
+    // Clear cached details for this rig to force a fresh sync
+    setEnrichedInfo(prev => {
+      const next = { ...prev };
+      delete next[rig.id];
+      return next;
+    });
     fetchRigs();
   };
 
@@ -348,6 +356,12 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       },
       query: { client: rig.mrrClient || mrrClient },
       showModal: true
+    });
+    // Clear cached details for this rig to force a fresh sync
+    setEnrichedInfo(prev => {
+      const next = { ...prev };
+      delete next[rig.id];
+      return next;
     });
     fetchRigs();
   };
@@ -371,17 +385,12 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     <div className="mrr-rigs-dashboard">
       <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '15px' }}>
         <div>
-          <h2 style={{ margin: 0 }}>{endpoint === '/rig' ? 'MRR Marketplace' : 'RIGS'} ({mrrClient})</h2>
-          <small style={{ opacity: 0.3 }}>
-            Showing {filteredRigs.length} of {totalFetchedCount} rigs {algo && `for ${algo}`}
-          </small>
-        </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <select 
+          <h2 style={{ margin: 3 }}>{endpoint === '/rig' ? 'MRR Marketplace' : 'RIGS'} ({mrrClient})
+            <select 
             className="select-pro" 
             value={statusFilter} 
             onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ fontSize: '11px', padding: '2px 8px', height: '30px', minWidth: '130px' }}
+            style={{ fontSize: '11px', padding: '5px 5px 1px 8px', height: '30px', minWidth: '130px' }}
           >
             <option value="all">All Statuses</option>
             <option value="available">Available</option>
@@ -390,9 +399,13 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             <option value="rented">Rented</option>
             <option value="disabled">Disabled</option>
           </select>
-          {/* <button className="btn-pro secondary" onClick={exportToCsv} disabled={filteredRigs.length === 0} style={{ fontSize: '11px', padding: '2px 12px', height: '30px' }}>
-            Export CSV
-          </button> */}
+          </h2>
+          
+        </div>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <small style={{ opacity: 0.3 }}>
+            Showing {filteredRigs.length} of {totalFetchedCount} rigs {algo && `for ${algo}`}
+          </small>
           <button className="btn-pro secondary" onClick={fetchRigs} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -457,7 +470,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '14px', color: isExpanded ? '#60a5fa' : '#94a3b8', fontWeight: 'bold' }}>{algoName}</span>
+                    <span style={{ fontSize: '14px', color: isExpanded ? '#60a5fa' : '#94a3b8', fontWeight: 'bold' }}>{getAlgoDisplayName(algoName)}</span>
                     <span style={{ fontSize: '10px', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: '10px', opacity: 0.7 }}>{rigsInGroup.length} Rigs</span>
                     {rigsInGroup.some(r => userRigIds.has(String(r.id))) && (
                       <div style={{ display: 'flex', gap: '8px', marginLeft: '10px' }} onClick={e => e.stopPropagation()}>
@@ -491,7 +504,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                         nhOrders={nhOrders}
                         algoMarketPrices={algoMarketPrices}
                         onOpenPool={onOpenPool}
-                        onOpenCompletionCalculator={onOpenCompletionCalculator}
+                        // onOpenCompletionCalculator={onOpenCompletionCalculator}
                         fetchRigDetailInfo={fetchRigDetailInfo}
                         loadingInfoIds={loadingInfoIds}
                         handleRigStatus={handleRigStatus}

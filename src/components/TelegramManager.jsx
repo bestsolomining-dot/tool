@@ -185,8 +185,8 @@ const TelegramTemplates = {
     `CUR : <code>${info.niceHashrate}</code>\n\n` +
     `🎯 <b>Efficiency</b>\n` +
     `<b>${info.percent}%</b>\n\n` +
-    // `${roi >= 0 ? '🟢' : '🔴'} <b>ROI</b>\n` +
-    // `<b>${roi >= 0 ? '+' : ''}${roi}%</b>\n\n` +
+    `${roi >= 0 ? '🟢' : '🔴'} <b>ROI</b>\n` +
+    `<b>${roi >= 0 ? '+' : ''}${roi}%</b>\n\n` +
     `⏳ <b>Remaining</b>\n` +
     `<code>${remStr}</code>\n\n` +
     `💸 <b>Paid</b>\n` +

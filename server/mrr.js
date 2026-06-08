@@ -32,7 +32,8 @@ let mrrGlobalCounter = 0; // Biến đếm phụ để chống trùng lặp tuy�
 // --- Cache and In-flight request tracking to reduce API hammering ---
 const mrrRequestCache = new Map();
 const mrrInflight = new Map();
-const MRR_CACHE_TTL = 10000; // 10 seconds cache
+const MRR_CACHE_TTL_DEFAULT = 10000; // 10 seconds cache
+const MRR_CACHE_TTL_STABLE = 300000; // 5 minutes for stable info/algos
 const MRR_NONCE_RECOVERY_JUMP_SMALL = 60000000000n; // 1 minute
 const MRR_NONCE_RECOVERY_JUMP_LARGE = 3600000000000n; // 1 hour
 
@@ -509,7 +510,11 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
   try {
     const result = await task;
     if (isCacheable && result.statusCode === 200 && result.data?.success) {
-      mrrRequestCache.set(cacheKey, { data: result, expires: Date.now() + MRR_CACHE_TTL });
+      const ttl = (endpoint.includes('/info/') || endpoint.includes('/algos')) 
+        ? MRR_CACHE_TTL_STABLE 
+        : MRR_CACHE_TTL_DEFAULT;
+
+      mrrRequestCache.set(cacheKey, { data: result, expires: Date.now() + ttl });
     }
     return result;
   } finally {

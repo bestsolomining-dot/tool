@@ -73,10 +73,10 @@ export default function App() {
       return inFlightRequests.current.get(cacheKey);
     }
 
-    // 2. Cache: For GET requests, return cached data if fresh (5s TTL)
+    // 2. Cache: For GET requests, return cached data if fresh (10s TTL)
     if (method === 'GET' && !options.noCache) {
       const cached = apiCache.current.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < 5000) {
+      if (cached && Date.now() - cached.timestamp < 10000) {
         addDebugLog(`Serving ${path} from cache`, 'api');
         if (cached.data && (!options.silent || isBackground)) setOutput(cached.data);
         return Promise.resolve(cached.data);

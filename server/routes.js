@@ -294,7 +294,7 @@ export function registerRoutes(app) {
   
   // Sanitize query to remove tool-specific params (client, ts) before sending to NiceHash
   app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
-    const algorithm = String(req.query.algorithm || req.query.algo || '').toUpperCase();
+    const algorithm = normalizeAlgoForNiceHash(req.query.algorithm || req.query.algo);
     const marketStr = String(req.query.market || 'USA').toUpperCase();
     const market = (marketStr === 'USA' || marketStr === '1') ? 'USA' : 'EU';
 
@@ -311,7 +311,7 @@ export function registerRoutes(app) {
   // FIX: Resolved 405 error. Using getOrderPrice for both standard and business 
   // as they share the /order/calculate GET endpoint for price data.
   app.get('/api/v2/hashpower/business/order', asyncHandler(async (req, res) => {
-    const algorithm = String(req.query.algorithm || req.query.algo || '').toUpperCase();
+    const algorithm = normalizeAlgoForNiceHash(req.query.algorithm || req.query.algo);
     const marketStr = String(req.query.market || 'USA').toUpperCase();
     const market = (marketStr === 'USA' || marketStr === '1') ? 'USA' : 'EU';
 
@@ -376,26 +376,21 @@ export function registerRoutes(app) {
       .build();
 
     try {
-      // Sử dụng công cụ public của NiceHash để verify nhanh không cần login
       await driver.get('https://www.nicehash.com/tools/pool-verification');
       
-      const wait = 15000;
-      // Điền thông tin Host:Port
+      const wait = 3000;
       const hostInput = await driver.wait(until.elementLocated(By.css('input[placeholder*="stratum"]')), wait);
       await hostInput.clear();
       await hostInput.sendKeys(`${stratumHost}:${stratumPort}`);
       
-      // Điền Username
       const userInput = await driver.findElement(By.css('input[placeholder*="username"]'));
       await userInput.clear();
       await userInput.sendKeys(username);
 
-      // Click Verify
       const verifyBtn = await driver.findElement(By.xpath("//button[contains(., 'Verify')]"));
       await verifyBtn.click();
 
-      // Đợi kết quả hiển thị trên UI của trình duyệt
-      const resultSection = await driver.wait(until.elementLocated(By.className('verification-results')), 30000);
+      const resultSection = await driver.wait(until.elementLocated(By.className('verification-results')), 5000);
       const resultText = await resultSection.getText();
       
       const isSuccess = resultText.toLowerCase().includes('success') || resultText.toLowerCase().includes('verified');
@@ -508,7 +503,7 @@ export function registerRoutes(app) {
           }
 
           if (statusCode === 200 && data?.success && rigs.length > 0) {
-            return { rigs: rigs.map(rig => ({ ...rig, mrrClient: clientName })) };
+            return { rigs: rigs.map(rig => ({ ...rig, mrrClient: clientName, nicehashAlgo: normalizeAlgoForNiceHash(rig.algo || rig.type || rig.miningAlgorithm) })) };
           }
           return { error: { client: clientName, message: data?.message || `Failed to fetch rigs (status: ${statusCode})` } };
         } catch (err) {
@@ -530,6 +525,7 @@ export function registerRoutes(app) {
         const { data, statusCode, clientName } = await mrrApiCall({ endpoint: '/rig/mine', clientNameRaw: clientParam });
         if (statusCode === 200 && data.success) {
           const rigs = Array.isArray(data.data) ? data.data : (data.data?.rigs || []);
+          rigs.forEach(rig => { rig.nicehashAlgo = normalizeAlgoForNiceHash(rig.algo || rig.type || rig.miningAlgorithm); });
           if (rigs.length > 0) {
             const rigIds = rigs.map(r => r.id).join(';');
             const { data: poolsData } = await mrrApiCall({ endpoint: `/rig/${rigIds}/pool`, clientNameRaw: clientParam });
@@ -569,7 +565,11 @@ export function registerRoutes(app) {
             const rigIds = rigs.map(r => r.id).join(';');
             const { data: poolsData } = await mrrApiCall({ endpoint: `/rig/${rigIds}/pool`, clientNameRaw: clientName });
             if (poolsData?.success) {
-              const items = Array.isArray(poolsData.data) ? poolsData.data : [poolsData.data];
+              const items = (Array.isArray(poolsData.data) ? poolsData.data : [poolsData.data]).map(item => ({
+                ...item,
+                mrrClient: clientName,
+                nicehashAlgo: normalizeAlgoForNiceHash(item.algo || item.algorithm || item.type)
+              }));
               return { pools: items.map(item => ({ ...item, mrrClient: clientName })) };
             }
           }
@@ -606,6 +606,15 @@ export function registerRoutes(app) {
 
   app.get('/api/v2/mrr/balance', asyncHandler(async (req, res) => mrrRequest('/account/balance', req, res)));
   app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => mrrRequest('/info/algos', req, res)));
+  app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => {
+    const { statusCode, data, clientName } = await mrrApiCall({ endpoint: '/info/algos', clientNameRaw: req.query.client });
+    if (statusCode === 200 && data?.success && data.data) {
+      const items = Array.isArray(data.data) ? data.data : (data.data.algos || []);
+      items.forEach(a => { a.nicehashAlgo = normalizeAlgoForNiceHash(a.algo || a.name || a.slug); });
+    }
+    res.set('X-MRR-Client', clientName);
+    res.status(statusCode).json(data);
+  }));
   app.get('/api/v2/mrr/profiles', asyncHandler(async (req, res) => mrrRequest('/profile', req, res)));
 
   app.get('/api/v2/mrr/account/pool', asyncHandler(async (req, res) => {
@@ -689,6 +698,7 @@ export function registerRoutes(app) {
           id: r.id,
           name: r.name,
           algo: r.algo || r.type,
+          nicehashAlgo: normalizeAlgoForNiceHash(r.algo || r.type),
           price: r.price || r.min_price || '0',
           currency: r.price_unit || 'BTC',
           hashrate_unit: r.hashrate_unit || 'TH',
@@ -781,6 +791,7 @@ export function registerRoutes(app) {
 
         const normalized = extractRentalInfo(rental);
         const nhAlgo = normalizeAlgoForNiceHash(normalized.algo);
+        normalized.nicehashAlgo = nhAlgo;
         if (nhAlgo && nhAlgo !== 'UNKNOWN' && nhAlgo !== 'N/A' && nhAlgo !== '') {
           try {
             const { client: nhClient } = resolveNhClient(clientParam);
@@ -796,12 +807,14 @@ export function registerRoutes(app) {
 
     if (isAggregate(clientParam)) {
       const clients = Object.keys(mrrConfigs).filter(c => mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret && !isAggregate(c));
-      for (const clientName of clients) {
-        const { statusCode, data } = await fetchAggressiveRental(clientName);
-        if (statusCode === 200 && data?.success) {
-          res.set('X-MRR-Client', clientName);
-          return res.json(data);
-        }
+      const candidates = await Promise.all(clients.map(async (clientName) => {
+        const res = await fetchAggressiveRental(clientName);
+        return { clientName, ...res };
+      }));
+      const found = candidates.find(c => c.statusCode === 200 && c.data?.success);
+      if (found) {
+        res.set('X-MRR-Client', found.clientName);
+        return res.json(found.data);
       }
       return res.status(404).json({ success: false, message: 'Rental ID not found in any configured account.' });
     }
@@ -827,6 +840,7 @@ export function registerRoutes(app) {
           info = extractRigInfo(rigRes.data);
         }
         const nhAlgo = normalizeAlgoForNiceHash(info.miningAlgorithm);
+        info.nicehashAlgo = nhAlgo;
         if (nhAlgo && nhAlgo !== 'N/A' && nhAlgo !== '' && nhAlgo !== 'UNKNOWN') {
           try {
             const { client: nhClient } = resolveNhClient(req.query.client);
@@ -845,12 +859,8 @@ export function registerRoutes(app) {
       return res.json(result);
     }
 
-    const results = [];
-    for (const id of ids) {
-      results.push(await fetchSingleInfo(id));
-      // Ensure microsecond nonce uniqueness
-      await new Promise(r => setTimeout(r, 200));
-    }
+    const results = await Promise.all(ids.map(id => fetchSingleInfo(id)));
+    
     res.set('X-MRR-Client', String(req.query.client || defaultMrrClient).toUpperCase());
     res.json({ success: true, data: results });
   }));

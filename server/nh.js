@@ -1,10 +1,14 @@
 import { NiceHashClient } from '../NiceHashClient.js';
-import { mapNiceHashToMRR, normalizeAlgoForNiceHash } from '../src/core/algoMapping.js';
+import { mapNiceHashToMRR, normalizeAlgoForNiceHash } from '../src/core/mapping.js';
 import { normalizeCredential } from './utils.js';
 
 export const AGGREGATE_CLIENT = 'VN';
 const poolCache = new Map();
+const publicCache = new Map();
 const POOL_CACHE_TTL = 60000; // 1 minute cache
+const NH_CACHE_TTL_DEFAULT = 30000; // 30 seconds
+const NH_CACHE_TTL_STABLE = 300000; // 5 minutes
+const nhInflight = new Map();
 
 export { mapNiceHashToMRR, normalizeAlgoForNiceHash }; // Keep these exports
 
@@ -86,6 +90,40 @@ export function resolveNhClient(clientNameRaw) {
   return { client: nhInstances.get(targetName) || nhInstances.get('BT'), clientName: targetName };
 }
 
+/**
+ * Internal helper to call NiceHash API with caching for public/static endpoints.
+ */
+async function cachedCall(client, options) {
+  const isGet = options.method === 'GET';
+  const isPublic = options.path.includes('/public/') || options.path.includes('/mining/algorithms') || options.path.includes('/mining/markets');
+  
+  if (isGet && isPublic) {
+    const cacheKey = `${options.path}:${JSON.stringify(options.query || {})}`;
+    const cached = publicCache.get(cacheKey);
+    const ttl = (options.path.includes('algorithms') || options.path.includes('markets')) ? NH_CACHE_TTL_STABLE : NH_CACHE_TTL_DEFAULT;
+    
+    if (cached && (Date.now() - cached.ts < ttl)) {
+      return cached.data;
+    }
+
+    if (nhInflight.has(cacheKey)) return nhInflight.get(cacheKey);
+
+    const promise = client.call(options).then(data => {
+      if (data && !data.error) {
+        publicCache.set(cacheKey, { data, ts: Date.now() });
+      }
+      return data;
+    }).finally(() => {
+      nhInflight.delete(cacheKey);
+    });
+
+    nhInflight.set(cacheKey, promise);
+    return promise;
+  }
+
+  return client.call(options);
+}
+
 /** Fetches and caches NiceHash pools to prevent API hammering */
 export async function getCachedNhPools(clientNameRaw) {
   const { client, clientName } = resolveNhClient(clientNameRaw);
@@ -125,10 +163,10 @@ const nhInstances = new Map();
 export const getNiceHashApp = (client) => ({
   public: {
     getTime: () => client.getServerTime(),
-    getDoc: () => client.call({ method: 'GET', path: '/api/v2/doc' }),
-    getAlgorithms: () => client.call({ method: 'GET', path: '/main/api/v2/mining/algorithms' }),
-    getMarkets: () => client.call({ method: 'GET', path: '/main/api/v2/mining/markets' }),
-    getCurrencies: () => client.call({ method: 'GET', path: '/main/api/v2/public/currencies' }),
+    getDoc: () => cachedCall(client, { method: 'GET', path: '/api/v2/doc' }),
+    getAlgorithms: () => cachedCall(client, { method: 'GET', path: '/main/api/v2/mining/algorithms' }),
+    getMarkets: () => cachedCall(client, { method: 'GET', path: '/main/api/v2/mining/markets' }),
+    getCurrencies: () => cachedCall(client, { method: 'GET', path: '/main/api/v2/public/currencies' }),
     getNetworks: () => client.call({ method: 'GET', path: '/main/api/v2/public/networks' }),
     getFeeInfo: () => client.call({ method: 'GET', path: '/main/api/v2/public/service/fee/info' }),
     getCountries: () => client.call({ method: 'GET', path: '/api/v2/enum/countries' }),

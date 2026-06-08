@@ -31,12 +31,12 @@ export default function NiceHashOrderCard({ order }) {
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>My Order Price</span>
           <span style={{ fontWeight: 'bold' }}>{parseFloat(order.price).toFixed(8)}</span>
-          {order.priceDiff && (
+          {order.orderDiff && (
             <span style={{ 
-              color: parseFloat(order.priceDiff) >= 0 ? '#10b981' : '#f87171',
+              color: parseFloat(order.orderDiff) >= 0 ? '#10b981' : '#f87171',
               fontSize: '0.7rem'
             }}>
-              ({parseFloat(order.priceDiff) > 0 ? '+' : ''}{order.priceDiff}%)
+              ({parseFloat(order.orderDiff) > 0 ? '+' : ''}{order.orderDiff}%)
             </span>
           )}
         </div>

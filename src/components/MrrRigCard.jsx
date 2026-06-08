@@ -78,18 +78,20 @@ const MrrRigCard = ({
   const nhOrder = nhOrders.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
   const myNhPrice = nhOrder ? parseFloat(nhOrder.price) : 0;
   const nhPriceWithFee = myNhPrice > 0 ? (parseFloat(nhOrder.add_fee) || (myNhPrice * 1.04)) : 0;
+  const isRandomX = algoName.toLowerCase().includes('RANDOMX');
   const isSha256 = algoName.toUpperCase().includes('SHA256');
-  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : 'TH');
-  
+  // Corrected default for RandomX to MH (Megahash) as it's the standard unit for RandomX
+  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : 'TH') || (isRandomX ? 'GH' : 'MH');
+  const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
   const myOrderDiffRaw = (myNhPrice > 0 && mrrPriceNum > 0 && isMrrBtc) ? calculatePriceComparison(
     mrrPriceNum,
-    (isSha256 && mrrUnit === 'TH') ? 'PH' : mrrUnit,
+    mrrUnit, // Pass mrrUnit directly; calculatePriceComparison should handle conversion
     nhPriceWithFee,
     myNhUnit
   ) : null;
-  const myOrderDiff = myOrderDiffRaw !== null ? (parseFloat(myOrderDiffRaw) * -1).toFixed(1) : null;
+  const myOrderDiff = (97 - parseFloat(effValue)).toFixed(2);
 
-  const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
+  
   const eff = parseFloat(effValue).toFixed(2);
   const rentalStartTime = info?.startTime || rig.start;
   const startT = new Date(rentalStartTime + (String(rentalStartTime).endsWith('UTC') ? '' : ' UTC')).getTime();
@@ -141,7 +143,6 @@ const MrrRigCard = ({
         </div>
         <strong style={{ fontSize: '13px', lineHeight: '1.3', color: '#f8fafc' }}>{rig.name}</strong>
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '8px', fontSize: '10px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', borderRight: '1px solid rgba(255,255,255,0.05)', paddingRight: '4px' }}>
           <div>
@@ -155,14 +156,14 @@ const MrrRigCard = ({
             {isRented && paidLabel && <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '1px 4px', borderRadius: '3px' }}>Paid: <strong>{paidLabel}</strong></div>}
             {nhOrder && myOrderDiff !== null && (
               <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ color: '#60a5fa' }}>
+                <div style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <span style={{ opacity: 0.7, fontSize: '8px' }}>Order: </span>
                   <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhPrice.toFixed(8)}</span>
-                  {myOrderDiff && (
-                    <span style={{ color: parseFloat(myOrderDiff) >= 0 ? '#10b981' : '#f87171', fontSize: '0.7rem', marginLeft: '4px' }}>
+                  {/* {myOrderDiff !== null && (
+                    <span style={{ color: parseFloat(myOrderDiff) > 0 ? '#f87171' : '#10b981', fontSize: '0.7rem', marginLeft: '4px' }}>
                       ({parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%)
                     </span>
-                  )}
+                  )} */}
                 </div>
                 <div><span style={{ opacity: 0.7, fontSize: '9px' }}>ROI: </span><span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>{parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%</span></div>
               </div>
@@ -229,8 +230,7 @@ const MrrRigCard = ({
           <button
             className="btn-pro secondary"
             style={{ flex: 1, fontSize: '9px', background: isRented ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255,255,255,0.05)', color: isRented ? '#a78bfa' : '#94a3b8' }}
-            onClick={() => { togglePoolInfo(rig.id); onOpenPool?.(rig, info); }}
-          >
+            onClick={() => { togglePoolInfo(rig.id); onOpenPool?.(rig, info); }}>
             {expandedPools.has(rig.id) ? 'Hide Pools' : 'Pools'}
           </button>
         )}
@@ -239,15 +239,13 @@ const MrrRigCard = ({
             <button
               className="btn-pro secondary"
               style={{ flex: 1, fontSize: '10px', color: statusStr === 'disabled' ? '#10b981' : '#f87171' }}
-              onClick={() => handleRigStatus(rig, statusStr === 'disabled' ? 'available' : 'disabled')}
-            >
+              onClick={() => handleRigStatus(rig, statusStr === 'disabled' ? 'available' : 'disabled')}>
               {statusStr === 'disabled' ? 'Enable' : 'Disable'}
             </button>
             <button
               className="btn-pro secondary"
               style={{ flex: 1, fontSize: '10px' }}
-              onClick={() => handlePriceChange(rig)}
-            >
+              onClick={() => handlePriceChange(rig)}>
               Price
             </button>
           </>
@@ -260,8 +258,7 @@ const MrrRigCard = ({
             className="btn-pro"
             style={{ flex: 1, fontSize: '10px' }}
             onClick={() => fetchRigDetailInfo(rig)}
-            disabled={loadingInfoIds.has(rig.id)}
-          >
+            disabled={loadingInfoIds.has(rig.id)}>
             {loadingInfoIds.has(rig.id) ? '...' : 'More'}
           </button>
           <button
@@ -276,8 +273,7 @@ const MrrRigCard = ({
               fetchRigDetailInfo(rig);
             }}
             disabled={loadingInfoIds.has(rig.id)}
-            title="Reload Rig Details"
-          >
+            title="Reload Rig Details">
             {loadingInfoIds.has(rig.id) ? '...' : '♻️'}
           </button>
         </div>

@@ -29,8 +29,11 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   const [inspectData, setInspectData] = useState(null)
   const [filePools, setFilePools] = useState([])
   const [verifyFromFile, setVerifyFromFile] = useState(false)
+  const [extractedPools, setExtractedPools] = useState([]) // New state for extracted pools
+  const [useExtractedPools, setUseExtractedPools] = useState(false) // New toggle for extracted pools
   const [useBrowser, setUseBrowser] = useState(false)
   const [showBrowser, setShowBrowser] = useState(false)
+  const [errorModalOpen, setErrorModalOpen] = useState(false) // State for the error detail modal
   const [lastRunSummary, setLastRunSummary] = useState(null)
 
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
@@ -66,6 +69,49 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
       e.target.value = '';
     }
   };
+
+  const loadExtractedPools = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await apiFetch('/api/v2/extracted-pools');
+      if (result.ok && Array.isArray(result.data)) {
+        const mapped = result.data.map(p => {
+          // Re-map handles to ensure they target correct NiceHash accounts (BT, PH, KIMLOAN, NHATLINH)
+          let nhHandle = p.nhClient || p.client || 'BT';
+          const u = String(p.username || '').toLowerCase();
+          if (u.includes('solomining')) nhHandle = 'PH';
+          else if (u.includes('luckymining')) nhHandle = 'NHATLINH';
+          else if (u.includes('lona')) nhHandle = 'KIMLOAN';
+
+          return {
+            ...p,
+            name: p.name || 'Extracted Pool',
+            miningAlgorithm: p.miningAlgorithm || p.algorithm || 'Unknown',
+            stratumHost: p.stratumHost || p.stratumHostname || '',
+            stratumPort: Number(p.stratumPort || p.port || 0),
+            username: p.username || '',
+            password: p.password || 'x',
+            client: nhHandle,
+            nhClient: nhHandle
+          };
+        });
+
+        const normalized = ph.normalizeList(mapped);
+        setExtractedPools(normalized);
+        setPools(normalized); // Populate the main selection list
+        setUseExtractedPools(true);       // Enable toggle to prioritize these for bulk actions
+      } else if (result.ok) {
+        setError('Invalid data format received from extracted pools API.');
+      } else {
+        setError(result.data?.error || `Failed to load extracted pools: ${result.status}`);
+      }
+    } catch (err) {
+      setError(`Failed to load extracted pools: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const openNewPoolEditor = () => {
     const editor = {
@@ -208,7 +254,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
     setDetailsLoading(true)
     try {
-      const result = await poolApi.get(poolId, nhClient);
+      const targetClient = pool.client || pool.nhClient || nhClient;
+      const result = await poolApi.get(poolId, targetClient);
 
       if (!result.ok) {
         const message = typeof result.data === 'string'
@@ -248,7 +295,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
       const poolId = ph.getId(selected);
       if (poolId) {
         try {
-          const details = (await poolApi.get(poolId, nhClient)).data;
+          const targetClient = selected.client || selected.nhClient || nhClient;
+          const details = (await poolApi.get(poolId, targetClient)).data;
           const fullPayload = ph.buildVerifyBody(details)
           return await performVerification(fullPayload, details)
         } catch (e) {
@@ -266,7 +314,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
   async function performVerification(payload, poolDetails) {
     try {
-      let result = await poolApi.verify(payload, nhClient); // Pass nhClient
+      const targetClient = poolDetails.client || poolDetails.nhClient || nhClient;
+      let result = await poolApi.verify(payload, targetClient); // Pass nhClient
 
       if (result.status === 429) {
         const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
@@ -274,7 +323,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         setRateLimitStatus(`Rate limit hit. Retrying in ${seconds}s...`);
         try {
           await new Promise(r => setTimeout(r, seconds * 1000));
-          result = await poolApi.verify(payload, nhClient); // Pass nhClient
+          result = await poolApi.verify(payload, targetClient); // Pass nhClient
         } finally {
           setRateLimitStatus(null);
         }
@@ -285,6 +334,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
       setVerifyResults([{
         key: selectedId,
         label: selected ? ph.getLabel(selected) : selectedId,
+        algorithm: ph.getAlgo(selected),
         result: enrichedResult,
       }])
       if (!result.ok) {
@@ -297,7 +347,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     }
   }
 
-  async function verifyPoolBody(poolDetails, signal) {
+  async function verifyPoolBody(poolDetails, signal, overrideClient) {
     const payload = ph.buildVerifyBody(poolDetails)
     const missingFields = ph.getMissingVerifyFields(payload)
 
@@ -306,10 +356,11 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     }
 
     try {
+      const targetClient = overrideClient || poolDetails.client || poolDetails.nhClient || nhClient;
       let result;
       if (useBrowser) {
         // Gọi endpoint Chromedriver mới
-        const res = await apiFetch(`/api/v2/pools/verify-browser?client=${nhClient}&headless=${!showBrowser}`, {
+        const res = await apiFetch(`/api/v2/pools/verify-browser?client=${targetClient}&headless=${!showBrowser}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -318,7 +369,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         result = { ok: res.ok, data: res.data, status: res.status };
       } else {
         // Sử dụng API truyền thống
-        result = await poolApi.verify(payload, nhClient, signal);
+        result = await poolApi.verify(payload, targetClient, signal);
       }
       return { ...result, poolDetails, requestBody: payload };
     } catch (err) {
@@ -330,7 +381,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   }
 
   async function verifyAllOnce({ resetStop = true, keepRunning = false, targetPools = null } = {}) {
-    const source = targetPools || (verifyFromFile ? filePools : pools);
+    const source = targetPools || (verifyFromFile ? filePools : (useExtractedPools ? extractedPools : pools));
     if (!Array.isArray(source) || source.length === 0 || playing) return
     setPlaying(true)
     setError('')
@@ -359,6 +410,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         const poolAlgo = ph.getAlgo(pool);
         const nameAlgoKey = `${poolName}|${poolAlgo}`;
         const key = ph.getKey(pool, i)
+        const poolClient = pool.client || pool.nhClient || nhClient;
 
         let skipReason = '';
         if (pool.name?.toLowerCase() === 'active') skipReason = 'Skipped: Active Pool';
@@ -368,7 +420,12 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         if (skipReason) {
           setVerifyResults(prev => [
             ...prev.filter(item => item.key !== key),
-            { key, label: ph.getLabel(pool, i), result: { ok: true, data: { message: skipReason } } },
+            { 
+              key, 
+              label: ph.getLabel(pool, i), 
+              result: { ok: true, data: { message: skipReason } },
+              algorithm: poolAlgo 
+            },
           ])
           setProgress({ current: i + 1, total: source.length })
           // Mark as seen so duplicates are skipped even if the first occurrence was skipped for other reasons
@@ -383,7 +440,12 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         setResponse(prev => ({ ...(prev || {}), [key]: 'verifying' }))
         setVerifyResults(prev => [
           ...prev.filter(item => item.key !== key),
-          { key, label: ph.getLabel(pool, i), result: { pending: true } },
+          { 
+            key, 
+            label: ph.getLabel(pool, i), 
+            result: { pending: true },
+            algorithm: poolAlgo
+          },
         ])
 
         let result
@@ -391,22 +453,31 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
           let details = pool
           if (poolId) {
             // Assuming poolApi.get accepts a signal or you use onCall directly
-            let resDetails = await poolApi.get(poolId, nhClient, controller.signal);
+            let resDetails = await poolApi.get(poolId, poolClient, controller.signal);
             if (resDetails.status === 429) {
               const seconds = parseInt(resDetails.headers?.get('Retry-After') || resDetails.data?.headers?.['retry-after'], 10) || 30;
               setRateLimitStatus(`Rate limit hit on details. Waiting ${seconds}s...`);
               try {
                 await new Promise(r => setTimeout(r, seconds * 1000));
-                resDetails = await poolApi.get(poolId, nhClient);
+                resDetails = await poolApi.get(poolId, poolClient);
               } finally {
                 setRateLimitStatus(null);
               }
             }
-            details = resDetails.data;
+            // Normalize keys after fetching fresh details from API
+            const d = resDetails.data;
+            details = {
+              ...d,
+              miningAlgorithm: d.algorithm || d.miningAlgorithm || '',
+              stratumHost: d.stratumHostname || d.stratumHost || '',
+              stratumPort: Number(d.port || d.stratumPort || 0),
+              username: d.username || '',
+              password: d.password || 'x'
+            };
           }
 
           const bodyToSend = typeof details === 'string' ? JSON.parse(details) : details
-          result = await verifyPoolBody(bodyToSend, controller.signal)
+          result = await verifyPoolBody(bodyToSend, controller.signal, poolClient)
 
           if (result.status === 429) {
             const retryAfter = result.headers?.get('Retry-After') || result.data?.headers?.['retry-after'];
@@ -431,7 +502,12 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         setResponse(prev => ({ ...(prev || {}), [key]: result }))
         setVerifyResults(prev => [
           ...prev.filter(item => item.key !== key),
-          { key, label: ph.getLabel(pool, i), result },
+          { 
+            key, 
+            label: ph.getLabel(pool, i), 
+            result,
+            algorithm: poolAlgo
+          },
         ])
         setProgress({ current: i + 1, total: source.length })
 
@@ -568,9 +644,10 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
   const handleEditorVerifySuccess = (verificationResult) => {
     // Update the verification results in the main Pools component
+    const poolDetails = verificationResult.result?.poolDetails || verificationResult.result?.requestBody;
     setVerifyResults(prev => [
       ...prev.filter(item => item.key !== verificationResult.key),
-      verificationResult,
+      { ...verificationResult, algorithm: ph.getAlgo(poolDetails) },
     ]);
   }
 
@@ -581,9 +658,13 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     const poolData = resultsToExport.map(item => {
       const p = item.result?.poolDetails || item.result?.requestBody || {};
       const success = ph.isVerifySuccess(item.result);
+
+      const vAlgo = ph.getVerifyAlgo(item.result);
+      const algo = (vAlgo && vAlgo !== 'N/A' && vAlgo !== 'Unknown') ? vAlgo : (p.miningAlgorithm || p.algorithm || 'N/A');
+
       return {
         'Pool Name': item.label,
-        'Algorithm': ph.getVerifyAlgo(item.result),
+        'Algorithm': algo,
         'Status': success ? 'VERIFIED' : 'ERROR',
         'Stratum Host': p.stratumHost || p.stratumHostname || p.host || '',
         'Port': p.stratumPort || p.port || '',
@@ -628,7 +709,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
   const getAlgoCountsSummary = (results) => {
     const counts = results.reduce((acc, item) => {
-      const algorithm = ph.getVerifyAlgo(item.result)
+      const algorithm = item.algorithm || ph.getVerifyAlgo(item.result)
       acc[algorithm] = (acc[algorithm] || 0) + 1
       return acc
     }, {})
@@ -655,7 +736,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   const lastRunFailed = lastRunSummary ? ` (Last: ${lastRunSummary.failed})` : ''
   const lastRunSkipped = lastRunSummary ? ` (Last: ${lastRunSummary.skipped})` : ''
 
-  const activePoolSource = verifyFromFile ? filePools : pools
+  const activePoolSource = verifyFromFile ? filePools : (useExtractedPools ? extractedPools : pools)
   const poolAlgorithmGroups = Object.entries(
     activePoolSource.reduce((groups, pool) => {
       const algorithm = ph.getAlgo(pool)
@@ -685,7 +766,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
               </div>
             )}
           </div>
-
           {/* Controls Section */}
           {progress.total > 0 && (
             <div className="verify-progress-wrapper" style={{ marginBottom: '15px' }}>
@@ -699,7 +779,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '15px', background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="field">
@@ -711,7 +790,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                   <input type="number" className="input-pro" value={automationInterval} onChange={e => setAutomationInterval(Number(e.target.value))} />
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', fontSize: '12px', fontWeight: 'bold', alignItems: 'center', minHeight: '40px' }}>
                 <button className="btn-pro primary" style={{ flex: 2 }} onClick={startRun} disabled={playing || running}>
                   {running ? 'Running...' : 'Start Auto Run'}
                 </button>
@@ -720,22 +799,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                 )}
               </div>
             </div>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '32px' }}>
-                <input type="checkbox" id="useBrowserToggle" checked={useBrowser} onChange={(e) => setUseBrowser(e.target.checked)} />
-                <label htmlFor="useBrowserToggle" style={{ fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', color: '#60a5fa' }}>
-                  🚀 USE CHROMEDRIVER (ALL CLIENT MODE)
-                </label>
-              </div>
-              {useBrowser && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '24px', marginLeft: '20px' }}>
-                  <input type="checkbox" id="showBrowserToggle" checked={showBrowser} onChange={(e) => setShowBrowser(e.target.checked)} />
-                  <label htmlFor="showBrowserToggle" style={{ fontSize: '10px', cursor: 'pointer', opacity: 0.8 }}>
-                    Show Browser Window (Headed)
-                  </label>
-                </div>
-              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '32px' }}>
                 <input type="checkbox" id="mainVerifySourceToggle" checked={verifyFromFile} onChange={(e) => setVerifyFromFile(e.target.checked)} />
                 <label htmlFor="mainVerifySourceToggle" style={{ fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
@@ -743,14 +807,24 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                 </label>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()}>Import XLSX</button>
-                <button className="btn-pro secondary" onClick={() => verifyAllOnce()} disabled={playing || running}>Verify All</button>
+                <button className="btn-pro secondary" onClick={loadExtractedPools} disabled={loading || playing || running}>
+                  Load Extracted
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input type="checkbox" id="useExtractedPoolsToggle" checked={useExtractedPools} onChange={(e) => setUseExtractedPools(e.target.checked)} />
+                  <label htmlFor="useExtractedPoolsToggle" style={{ fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                    USE EXTRACTED ({extractedPools.length})
+                  </label>
+                </div>
               </div>
-              <button className="btn-pro secondary" onClick={handleExportResults} disabled={completedResults.length === 0}>
-                Export Results ({completedResults.length})
-              </button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()}>Import XLSX</button>
+                <button className="btn-pro secondary" onClick={handleExportResults} disabled={completedResults.length === 0}>
+                  Export Results ({completedResults.length})
+                </button>
+              </div>
+              <button className="btn-pro secondary" onClick={() => verifyAllOnce()} disabled={playing || running}>Verify All</button>
             </div>
-
             <div style={{ fontSize: '12px', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(59, 130, 246, 0.3)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ color: running ? '#3b82f6' : '#94a3b8', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
                 <span>Cycle Status:</span>
@@ -772,7 +846,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
               )}
             </div>
           </div>
-
           {/* Results Section */}
           {verifyResults.length > 0 ? (
             <div
@@ -813,7 +886,13 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                 </div>
                 <div>
                   <span style={{ fontSize: '10px', color: '#f87171' }}>Error:</span>{' '}
-                  <strong>{failCount}</strong>
+                  <strong
+                    style={{
+                      cursor: failCount > 0 ? 'pointer' : 'default',
+                      textDecoration: failCount > 0 ? 'underline' : 'none'
+                    }}
+                    onClick={() => failCount > 0 && setErrorModalOpen(true)}
+                  >{failCount}</strong>
                   <span style={{ fontSize: '10px', opacity: 0.6 }}> ({failSummary}){lastRunFailed}</span>
                 </div>
                 <div>
@@ -827,7 +906,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                 className="verify-list"
                 style={{
                   flex: 1,
-                  minHeight: '280px',
+                  minHeight: '240px',
+                  maxHeight: '240px',
                   overflowY: 'auto',
                   overflowX: 'hidden',
                   border: '1px solid rgba(255,255,255,0.05)',
@@ -840,8 +920,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                 {verifyResults.map(item => {
                   const pending = item.result?.pending;
                   const success = !pending && ph.isVerifySuccess(item.result);
-                  const algorithm = ph.getVerifyAlgo(item.result);
-
+                    const algorithm = item.algorithm || ph.getVerifyAlgo(item.result);
                   return (
                     <div
                       key={item.key}
@@ -883,7 +962,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                       >
                         {pending ? 'PENDING' : success ? 'SUCCESS' : 'ERROR'}
                       </div>
-
                       <div
                         style={{
                           flex: 1,
@@ -893,10 +971,9 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                       >
                         {item.label}
                       </div>
-
                       <div
                         style={{
-                          width: '120px',
+                          width: '60px',
                           flexShrink: 0,
                           opacity: 0.6,
                           fontFamily: 'monospace'
@@ -904,7 +981,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                       >
                         {algorithm}
                       </div>
-
                       <div
                         style={{
                           flex: 2,
@@ -920,11 +996,10 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                           ? 'Waiting...'
                           : ph.getVerifyMessage(item.result)}
                       </div>
-
                       <div
                         style={{
                           display: 'flex',
-                          gap: '6px',
+                          gap: '8px',
                           flexShrink: 0
                         }}
                       >
@@ -935,7 +1010,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                         >
                           Inspect
                         </button>
-
                         <button
                           className="text-button"
                           style={{ fontSize: '11px' }}
@@ -994,11 +1068,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
             </div>
           </div>
         )}
-
       </div>
-
       {error && <pre className="error-message">{error}</pre>}
-
       {activeEditors.map(editor => (
         <PoolEditorPopup
           key={editor.key}
@@ -1009,7 +1080,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
           nhClient={nhClient}
         />
       ))}
-
       {/* Pool Selector Modal */}
       <Modal isOpen={selectorOpen} onClose={() => setSelectorOpen(false)} title="Select a Stratum Pool" maxWidth="600px">
         <div className="select-dropdown-pro" style={{ position: 'static', boxShadow: 'none', border: 'none', padding: 0 }}>
@@ -1027,6 +1097,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <strong style={{ color: isActive ? '#3b82f6' : 'inherit' }}>{label}</strong>
                   <code style={{ fontSize: '11px', opacity: 0.7 }}>{getAlgoDisplayName(ph.getAlgo(pool))}</code>
+                  {(pool.client || pool.nhClient) && <span style={{ fontSize: '9px', color: '#10b981', marginTop: '2px' }}>Account: {pool.client || pool.nhClient}</span>}
                 </div>
                 <button
                   type="button"
@@ -1041,7 +1112,48 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
           })}
         </div>
       </Modal>
-
+      {/* Error Details Modal */}
+      <Modal
+        isOpen={errorModalOpen}
+        onClose={() => setErrorModalOpen(false)}
+        title="Failed Pool Verifications"
+        maxWidth="900px"
+      >
+        <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: '5px' }}>
+          {failResults.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', opacity: 0.5 }}>No errors to show.</div>
+          ) : (
+            <table className="pro-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ opacity: 0.6, fontSize: '11px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                  <th style={{ padding: '12px 10px' }}>Pool Name</th>
+                  <th style={{ padding: '12px 10px' }}>Algorithm</th>
+                  <th style={{ padding: '12px 10px' }}>Error Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {failResults.map((item, idx) => {
+                  const algo = item.algorithm || ph.getVerifyAlgo(item.result);
+                  return (
+                    <tr key={item.key || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '11px' }}>
+                      <td style={{ padding: '10px', fontWeight: 'bold', color: '#f8fafc' }}>{item.label}</td>
+                      <td style={{ padding: '10px', color: '#60a5fa', fontFamily: 'monospace' }}>
+                        {getAlgoDisplayName(algo)}
+                      </td>
+                      <td style={{ padding: '10px', color: '#f87171' }}>
+                        {ph.getVerifyMessage(item.result)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="modal-actions" style={{ marginTop: '20px', justifyContent: 'flex-end' }}>
+          <button className="btn-pro secondary" onClick={() => setErrorModalOpen(false)}>Close Summary</button>
+        </div>
+      </Modal>
       {/* Inspection Modal */}
       <Modal
         isOpen={!!inspectData}

@@ -91,18 +91,6 @@ export class NiceHashClient {
     const queryParams = new URLSearchParams(pathQueryString || '');
     const additionalParams = new URLSearchParams(query || {});
     additionalParams.forEach((value, key) => queryParams.set(key, value));
-    
-    // Remove 'client' from query before sending to NiceHash upstream, 
-    // as it is only intended for our backend's internal routing.
-    queryParams.delete('client');
-
-    // NiceHash API v2 requires numeric IDs for markets in private endpoints: 0=EU, 1=USA.
-    // Convert string names to IDs to prevent "Malformed request" errors.
-    const marketValue = queryParams.get('market');
-    if (marketValue) {
-      if (marketValue.toUpperCase() === 'USA') queryParams.set('market', '1');
-      else if (marketValue.toUpperCase() === 'EU') queryParams.set('market', '0');
-    }
 
     // Fix for "Type conversion error" with bad_property_name "id" and bad_property_value "calculate".
     // This suggests 'id=calculate' is an internal flag that should not be sent to the external API.

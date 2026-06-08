@@ -1,6 +1,7 @@
 import { NiceHashClient } from '../NiceHashClient.js';
 import { mapNiceHashToMRR, normalizeAlgoForNiceHash } from '../src/core/mapping.js';
 import { normalizeCredential } from './utils.js';
+import { db } from './db.js';
 
 export const AGGREGATE_CLIENT = 'VN';
 const poolCache = new Map();
@@ -151,6 +152,32 @@ export async function getCachedNhPools(clientNameRaw) {
       page++;
     }
     poolCache.set(clientName, { pools: allPools, ts: Date.now() });
+
+    // Persistence: Sync fetched NiceHash pools to database
+    if (allPools.length > 0) {
+      db.serialize(() => {
+        db.run(`CREATE TABLE IF NOT EXISTS nh_pools (
+          id TEXT,
+          name TEXT,
+          algorithm TEXT,
+          stratumHostname TEXT,
+          port TEXT,
+          username TEXT,
+          password TEXT,
+          nhClient TEXT,
+          last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id, nhClient)
+        )`);
+        const stmt = db.prepare(`INSERT OR REPLACE INTO nh_pools 
+          (id, name, algorithm, stratumHostname, port, username, password, nhClient, last_updated) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`);
+        allPools.forEach(p => {
+          stmt.run(p.id, p.name, p.algorithm, p.stratumHostname, p.port, p.username, p.password, clientName);
+        });
+        stmt.finalize();
+      });
+    }
+
     return allPools;
   } catch (e) {
     console.warn(`[nh:pools] Cache fetch failed for ${clientName}:`, e.message);
@@ -237,9 +264,9 @@ export const getNiceHashApp = (client) => ({
     getOrderPrice: (query) => {
       const { algorithm, market, client: _c, ts: _t, ...rest } = query || {};
       return client.call({
-        method: 'GET',
+        method: 'POST', // Changed from GET to POST
         path: '/main/api/v2/hashpower/order/calculate',
-        query: {
+        body: { // Moved parameters to body
           algorithm: normalizeAlgoForNiceHash(algorithm),
           market,
           type: query.type || 'STANDARD',
@@ -247,15 +274,16 @@ export const getNiceHashApp = (client) => ({
           limit: query.limit || '0.01',
           amount: query.amount || '0.005',
           ...rest
-        }
+        },
+        query: {} // Ensure no query parameters are left for POST
       });
     },
     getBusinessOrder: (query) => {
       const { algorithm, market, client: _c, ts: _t, ...rest } = query || {};
       return client.call({
-        method: 'GET',
+        method: 'POST', // Changed from GET to POST
         path: '/main/api/v2/hashpower/order/calculate',
-        query: {
+        body: { // Moved parameters to body
           algorithm: normalizeAlgoForNiceHash(algorithm),
           market,
           type: query.type || 'STANDARD',
@@ -263,7 +291,8 @@ export const getNiceHashApp = (client) => ({
           limit: query.limit || '0.01',
           amount: query.amount || '0.005',
           ...rest
-        }
+        },
+        query: {} // Ensure no query parameters are left for POST
       });
     },
     getOrderBook: (query) => {

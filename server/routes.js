@@ -206,6 +206,7 @@ export function registerRoutes(app) {
         acceptedCurrentSpeed: o.acceptedCurrentSpeed || 0, // Used by frontend list
         algorithmSpeed: o.acceptedCurrentSpeed || 0,       // Kept for backward compatibility/CSV
         niceAdvertisedHashrate: o.limit || 0,        // Field requested for hashrate tracking
+        poolName: o.pool?.name || '',                // Pool Name for identification
         poolHost: o.pool?.stratumHostname || '',     // Split Pool Host
         poolPort: o.pool?.port || '',                // Split Pool Port
         algorithm: typeof o.algorithm === 'object' ? o.algorithm.algorithm : o.algorithm,
@@ -225,7 +226,7 @@ export function registerRoutes(app) {
         ts: new Date().toISOString(),
       }));
 
-    await exportDatabaseCsv('orders.csv', processedList.filter(o => o.status === 'ACTIVE'));
+    await exportDatabaseCsv('nh_order.csv', processedList.filter(o => o.status === 'ACTIVE'));
 
     res.json(typeof data === 'object' && !Array.isArray(data) ? { ...data, list: processedList } : processedList);
   }));
@@ -296,7 +297,7 @@ export function registerRoutes(app) {
   app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
     const algorithm = normalizeAlgoForNiceHash(req.query.algorithm || req.query.algo);
     const marketStr = String(req.query.market || 'USA').toUpperCase();
-    const market = (marketStr === 'USA' || marketStr === '1') ? 'USA' : 'EU';
+    const market = (marketStr === 'USA' || marketStr === '1') ? 1 : 0; // Convert to numeric ID
 
     let app = req.nhApp;
     if (!app || isAggregate(req.query.client)) {
@@ -313,7 +314,7 @@ export function registerRoutes(app) {
   app.get('/api/v2/hashpower/business/order', asyncHandler(async (req, res) => {
     const algorithm = normalizeAlgoForNiceHash(req.query.algorithm || req.query.algo);
     const marketStr = String(req.query.market || 'USA').toUpperCase();
-    const market = (marketStr === 'USA' || marketStr === '1') ? 'USA' : 'EU';
+    const market = (marketStr === 'USA' || marketStr === '1') ? 1 : 0; // Convert to numeric ID
 
     let app = req.nhApp;
     if (!app || isAggregate(req.query.client)) {
@@ -345,20 +346,59 @@ export function registerRoutes(app) {
       const results = await Promise.all(Array.from(clientMap.entries()).map(async ([clientName, client]) => {
         try {
           const data = await getNiceHashApp(client).pools.getPools();
-          return (data?.list || []).map(p => ({ ...p, nhClient: clientName }));
+          const pools = (data?.list || []).map(p => ({ ...p, nhClient: clientName }));
+          // Persistence: Update database with pools from aggregate fetch
+          if (pools.length > 0) {
+            db.serialize(() => {
+              db.run(`CREATE TABLE IF NOT EXISTS nh_pools (id TEXT, name TEXT, algorithm TEXT, stratumHostname TEXT, port TEXT, username TEXT, password TEXT, nhClient TEXT, last_updated DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id, nhClient))`);
+              const stmt = db.prepare(`INSERT OR REPLACE INTO nh_pools (id, name, algorithm, stratumHostname, port, username, password, nhClient, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`);
+              pools.forEach(p => stmt.run(p.id, p.name, p.algorithm, p.stratumHostname, p.port, p.username, p.password, clientName));
+              stmt.finalize();
+            });
+          }
+          return pools;
         } catch (e) { return []; }
       }));
 
       return res.json({ list: results.flat(), totalCount: results.flat().length });
     }
-    res.json(await req.nhApp.pools.getPools());
+    const data = await req.nhApp.pools.getPools();
+    const pools = (data?.list || []);
+    const clientName = res.get('X-NH-Client') || 'BT';
+    if (pools.length > 0) {
+      db.serialize(() => {
+        db.run(`CREATE TABLE IF NOT EXISTS nh_pools (id TEXT, name TEXT, algorithm TEXT, stratumHostname TEXT, port TEXT, username TEXT, password TEXT, nhClient TEXT, last_updated DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id, nhClient))`);
+        const stmt = db.prepare(`INSERT OR REPLACE INTO nh_pools (id, name, algorithm, stratumHostname, port, username, password, nhClient, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`);
+        pools.forEach(p => stmt.run(p.id, p.name, p.algorithm, p.stratumHostname, p.port, p.username, p.password, clientName));
+        stmt.finalize();
+      });
+    }
+    res.json(data);
   }));
 
-  app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.getPoolDetails(req.params.poolId))));
+  app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => {
+    const clientParam = String(req.query.client || 'BT').toUpperCase();
+    if (isAggregate(clientParam)) {
+      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+      const processedClients = new Set();
+      for (const acct of nhAccounts) {
+        const { client, clientName } = resolveNhClient(acct);
+        if (!client || (acct !== 'BT' && clientName === 'BT') || processedClients.has(clientName)) continue;
+        processedClients.add(clientName);
+        try {
+          const data = await getNiceHashApp(client).pools.getPoolDetails(req.params.poolId);
+          if (data && !data.error) {
+            res.set('X-NH-Client', clientName);
+            return res.json(data);
+          }
+        } catch (e) { }
+      }
+    }
+    res.json(await req.nhApp.pools.getPoolDetails(req.params.poolId));
+  }));
   app.post('/api/v2/pool', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.createPool(req.body))));
   app.post('/api/v2/pools/verify', asyncHandler(async (req, res) => res.json(await req.nhApp.pools.verifyPool(req.body))));
 
-  // Route verify bằng Chromedriver tự động load thông tin từ account
   app.post('/api/v2/pools/verify-browser', asyncHandler(async (req, res) => {
     const { stratumHost, stratumPort, username } = req.body;
     const clientParam = String(req.query.client || 'BT').toUpperCase();
@@ -480,6 +520,20 @@ export function registerRoutes(app) {
               const poolItems = Array.isArray(poolsData.data) ? poolsData.data : (poolsData.data?.result || []);
               const poolMap = new Map(poolItems.map(item => {
                 const id = String(item.rigId || item.rigid || item.id || item.rentalid || '');
+
+                // Persistence: Save individual rig pools to database
+                if (Array.isArray(item.pools) && item.pools.length > 0) {
+                  db.serialize(() => {
+                    db.run(`CREATE TABLE IF NOT EXISTS mrr_pools (id TEXT, name TEXT, algo TEXT, host TEXT, port TEXT, user TEXT, mrrClient TEXT, last_updated DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id, mrrClient))`);
+                    const stmt = db.prepare(`INSERT OR REPLACE INTO mrr_pools (id, name, algo, host, port, user, mrrClient, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`);
+                    item.pools.forEach(p => {
+                      const algo = p.algo || p.algorithm || p.type || item.algo || item.algorithm || '';
+                      stmt.run(id, p.name || `RigPool-${id}`, algo, p.host || p.stratumHost, p.port || p.stratumPort, p.user || p.username, clientName);
+                    });
+                    stmt.finalize();
+                  });
+                }
+
                 if (Array.isArray(item.pools)) {
                   item.pools.forEach(p => {
                     const mrrUser = String(p.user || p.username || '').trim().toLowerCase();
@@ -628,6 +682,20 @@ export function registerRoutes(app) {
     });
     if (statusCode === 200 && data?.success) {
       await exportDatabaseCsv('mrr_account_pools.csv', data.data || []);
+
+      const pools = data.data || [];
+      if (pools.length > 0) {
+        db.serialize(() => {
+          db.run(`CREATE TABLE IF NOT EXISTS mrr_pools (
+            id TEXT, name TEXT, algo TEXT, host TEXT, port TEXT, user TEXT, mrrClient TEXT,
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id, mrrClient)
+          )`);
+          const stmt = db.prepare(`INSERT OR REPLACE INTO mrr_pools (id, name, algo, host, port, user, mrrClient, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`);
+          pools.forEach(p => stmt.run(p.id, p.name, p.algo, p.host, p.port, p.user, clientName));
+          stmt.finalize();
+        });
+      }
     }
     res.set('X-MRR-Client', clientName);
     res.status(statusCode).json(data);
@@ -915,5 +983,16 @@ export function registerRoutes(app) {
       tokenPresent: hasToken,
       chatIdPresent: hasChatId,
     });
+  }));
+
+  // New endpoint to serve extracted_pools.json
+  app.get('/api/v2/extracted-pools', asyncHandler(async (req, res) => {
+    const filePath = path.resolve(process.cwd(), 'extracted_pools.json');
+    try {
+      const data = await fs.readFile(filePath, 'utf-8');
+      res.json(JSON.parse(data));
+    } catch (err) {
+      res.status(404).json({ success: false, error: `File not found: ${filePath}` });
+    }
   }));
 }

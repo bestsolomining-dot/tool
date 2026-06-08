@@ -5,11 +5,11 @@ import { extractRentalInfo, extractRigInfo } from './utils.js';
 import { TELEGRAM_CONFIG, TelegramTemplates } from '../src/shared/telegram.js';
 
 const ALGO_DISPLAY_NAMES = {
-  'SHA256': 'SHA-256',
+  'SHA256': 'SHA256',
   'SCRYPT': 'Scrypt',
   'DAGGERHASHIMOTO': 'DaggerHashimoto',
   'KAWPOW': 'KawPow',
-  'RANDOMXMONERO': 'RandomX Monero',
+  'RANDOMXMONERO': 'RandomXMonero',
   'ETCHASH': 'Etchash',
   'FISHHASH': 'FishHash',
   'OCTOPUS': 'Octopus',

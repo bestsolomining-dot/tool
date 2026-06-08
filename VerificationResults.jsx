@@ -74,7 +74,7 @@ export default function VerificationResults({
         </div>
       </div>
 
-      <div className="verify-list" style={{ flex: 1, minHeight: '300px', overflowY: 'auto', overflowX: 'hidden', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', background: 'rgba(255,255,255,0.015)', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.15) transparent' }}>
+      <div className="verify-list" style={{ flex: 1, minHeight: '240px', overflowY: 'auto', overflowX: 'hidden', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', background: 'rgba(255,255,255,0.015)', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.15) transparent' }}>
         {verifyResults.map(item => {
           const pending = item.result?.pending;
           const success = !pending && ph.isVerifySuccess(item.result);

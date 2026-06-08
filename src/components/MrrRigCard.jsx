@@ -78,12 +78,14 @@ const MrrRigCard = ({
   const nhOrder = nhOrders.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
   const myNhPrice = nhOrder ? parseFloat(nhOrder.price) : 0;
   const nhPriceWithFee = myNhPrice > 0 ? (parseFloat(nhOrder.add_fee) || (myNhPrice * 1.04)) : 0;
+  const isRandomX = algoName.toLowerCase().includes('RANDOMX');
   const isSha256 = algoName.toUpperCase().includes('SHA256');
-  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : 'TH');
+  // Corrected default for RandomX to MH (Megahash) as it's the standard unit for RandomX
+  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : 'TH') || (isRandomX ? 'MH' : 'GH');
   
   const myOrderDiffRaw = (myNhPrice > 0 && mrrPriceNum > 0 && isMrrBtc) ? calculatePriceComparison(
     mrrPriceNum,
-    (isSha256 && mrrUnit === 'TH') ? 'PH' : mrrUnit,
+    mrrUnit, // Pass mrrUnit directly; calculatePriceComparison should handle conversion
     nhPriceWithFee,
     myNhUnit
   ) : null;
@@ -155,7 +157,8 @@ const MrrRigCard = ({
             {isRented && paidLabel && <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '1px 4px', borderRadius: '3px' }}>Paid: <strong>{paidLabel}</strong></div>}
             {nhOrder && myOrderDiff !== null && (
               <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ color: '#60a5fa' }}>
+                <div style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  {/* <input type="checkbox" style={{ margin: 0, width: '10px', height: '10px', cursor: 'pointer' }} /> */}
                   <span style={{ opacity: 0.7, fontSize: '8px' }}>Order: </span>
                   <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhPrice.toFixed(8)}</span>
                   {myOrderDiff && (

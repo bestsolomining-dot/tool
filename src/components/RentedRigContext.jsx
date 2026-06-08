@@ -76,7 +76,7 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
         const processed = tempProcessed.map(p => {
           const isSha2 = p.algo.includes('SHA256');
           const isRx = p.algo.includes('RANDOMX');
-          const mktData = marketPrices[`${p.algo}:${p.market}`] || { value: 0, unit: isSha2 ? 'EH' : isRx ? 'MH' : 'TH' };
+          const mktData = marketPrices[`${p.algo}:${p.market}`] || { value: 0, unit: isSha2 ? 'EH' : isRx ? 'MH' : 'GH' };
           const mkt = mktData.value;
           const cur = parseFloat(p.price);
           // ROI = (Market Benchmark - My Price) / Market Benchmark

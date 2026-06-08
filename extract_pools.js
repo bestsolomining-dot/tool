@@ -6,8 +6,8 @@ import path from 'path';
  * Run with: node extract_pools.js
  */
 async function extractPools() {
-  const inputFilename = 'nh_order.csv';
-  const outputFilename = 'extracted_pools.json';
+  const inputFilename = 'nh_orders.csv';
+  const outputFilename = 'pools_extracted.json';
   const filePath = path.resolve(process.cwd(), inputFilename);
 
   try {

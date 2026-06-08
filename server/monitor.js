@@ -3,31 +3,7 @@ import { mrrApiCall, mrrConfigs } from './mrr.js';
 import { resolveNhClient, getNiceHashApp, isAggregate } from './nh.js';
 import { extractRentalInfo, extractRigInfo } from './utils.js';
 import { TELEGRAM_CONFIG, TelegramTemplates } from '../src/shared/telegram.js';
-
-const ALGO_DISPLAY_NAMES = {
-  'SHA256': 'SHA256',
-  'SCRYPT': 'Scrypt',
-  'DAGGERHASHIMOTO': 'DaggerHashimoto',
-  'KAWPOW': 'KawPow',
-  'RANDOMXMONERO': 'RandomXMonero',
-  'ETCHASH': 'Etchash',
-  'FISHHASH': 'FishHash',
-  'OCTOPUS': 'Octopus',
-  'AUTOLYKOS': 'Autolykos',
-  'KHEAVYHASH': 'KHeavyHash',
-  'EQUIHASH': 'Equihash',
-  'BLAKE2S': 'Blake2s',
-  'LBRY': 'LBRY',
-  'X11': 'X11',
-  'GRIN29': 'Grin29',
-  'GRIN31': 'Grin31',
-  'NEOSCRYPT': 'NeoScrypt',
-  'PYRIN': 'Pyrin',
-  'KARLSEN': 'Karlsen',
-  'IRONFISH': 'IronFish',
-  'EAGLESONG': 'EagleSong',
-  'HANDSHAKE': 'Handshake'
-};
+import { ALGO_DISPLAY_NAMES } from '../src/core/mapping.js';
 
 const getAlgoDisplayName = (code) => {
   if (!code) return 'N/A';

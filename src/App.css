@@ -121,6 +121,7 @@
 /* Pro Buttons */
 .btn-pro {
   appearance: none;
+  max-height: 23px;
   border: 1px solid var(--border-color);
   background: var(--control);
   color: var(--text-main);

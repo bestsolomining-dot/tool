@@ -298,14 +298,14 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
             <div>
               <span style={{ opacity: 0.8, display: 'block', fontSize: '9px' }}>PRICE</span>
               <strong style={{ color: '#f59e0b' }}>{orderDetail.price}</strong>
-              {matchingOrderInfo?.priceDiff && (
+              {matchingOrderInfo?.orderDiff && (
                 <span style={{
                   marginLeft: '6px',
                   fontSize: '9px',
                   fontWeight: 'bold',
-                  color: parseFloat(matchingOrderInfo.priceDiff) >= 0 ? '#10b981' : '#f87171'
+                  color: parseFloat(matchingOrderInfo.orderDiff) >= 0 ? '#10b981' : '#f87171'
                 }}>
-                  ({parseFloat(matchingOrderInfo.priceDiff) > 0 ? '+' : ''}{matchingOrderInfo.priceDiff}%)
+                  ({parseFloat(matchingOrderInfo.orderDiff) > 0 ? '+' : ''}{matchingOrderInfo.orderDiff}%)
                 </span>
               )}
             </div>

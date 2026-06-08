@@ -2,7 +2,6 @@ import React from 'react';
 import { CountdownTimer } from './MiningRigRental';
 import { 
   clean, 
-  calculatePriceComparison, 
   getClientBadgeStyle, 
   getRawHashrate, 
   getPriceDataLocal, 
@@ -17,7 +16,7 @@ import {
   getRoiColor
 } from '../core/mrrUtils';
 import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils';
-import { normalizeAlgoForNiceHash } from '../core/algoMapping';
+import { getAlgoDisplayName, normalizeAlgoForNiceHash, calculatePriceComparison } from '../core/mapping.js';
 
 const MrrRigCard = ({ 
   rig, 
@@ -82,12 +81,13 @@ const MrrRigCard = ({
   const isSha256 = algoName.toUpperCase().includes('SHA256');
   const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : 'TH');
   
-  const myOrderDiff = (myNhPrice > 0 && mrrPriceNum > 0 && isMrrBtc) ? calculatePriceComparison(
+  const myOrderDiffRaw = (myNhPrice > 0 && mrrPriceNum > 0 && isMrrBtc) ? calculatePriceComparison(
     mrrPriceNum,
     (isSha256 && mrrUnit === 'TH') ? 'PH' : mrrUnit,
     nhPriceWithFee,
     myNhUnit
   ) : null;
+  const myOrderDiff = myOrderDiffRaw !== null ? (parseFloat(myOrderDiffRaw) * -1).toFixed(1) : null;
 
   const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
   const eff = parseFloat(effValue).toFixed(2);
@@ -146,7 +146,7 @@ const MrrRigCard = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', borderRight: '1px solid rgba(255,255,255,0.05)', paddingRight: '4px' }}>
           <div>
             <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Algorithm</div>
-            <div style={{ color: '#fc7324', fontWeight: 'bold' }}>{info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A'}</div>
+            <div style={{ color: '#fc7324', fontWeight: 'bold' }}>{getAlgoDisplayName(info?.algo || rig.algo || rig.algorithm || rig.type)}</div>
           </div>
           <div>
             <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price:</div>
@@ -155,13 +155,20 @@ const MrrRigCard = ({
             {isRented && paidLabel && <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '1px 4px', borderRadius: '3px' }}>Paid: <strong>{paidLabel}</strong></div>}
             {nhOrder && myOrderDiff !== null && (
               <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ color: '#60a5fa' }}><span style={{ opacity: 0.7, fontSize: '8px' }}>Order: </span><span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhPrice.toFixed(8)}</span></div>
+                <div style={{ color: '#60a5fa' }}>
+                  <span style={{ opacity: 0.7, fontSize: '8px' }}>Order: </span>
+                  <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhPrice.toFixed(8)}</span>
+                  {myOrderDiff && (
+                    <span style={{ color: parseFloat(myOrderDiff) >= 0 ? '#10b981' : '#f87171', fontSize: '0.7rem', marginLeft: '4px' }}>
+                      ({parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%)
+                    </span>
+                  )}
+                </div>
                 <div><span style={{ opacity: 0.7, fontSize: '9px' }}>ROI: </span><span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>{parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%</span></div>
               </div>
             )}
           </div>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div style={{ opacity: 0.5, fontSize: '8px' }}>Efficiency</div><div style={{ fontSize: '11px', color: effectTextColor, fontWeight: 'bold' }}>{eff}%</div></div>
@@ -248,14 +255,32 @@ const MrrRigCard = ({
         {isRented && info && onOpenCompletionCalculator && (
           <button className="btn-pro secondary" style={{ flex: 1, fontSize: '10px' }} onClick={() => onOpenCompletionCalculator(rig, info)}>Calc</button>
         )}
-        <button
-          className="btn-pro"
-          style={{ flex: 1, fontSize: '10px' }}
-          onClick={() => fetchRigDetailInfo(rig)}
-          disabled={loadingInfoIds.has(rig.id)}
-        >
-          {loadingInfoIds.has(rig.id) ? '...' : 'More Info'}
-        </button>
+        <div style={{ display: 'flex', flex: 1, gap: '4px' }}>
+          <button
+            className="btn-pro"
+            style={{ flex: 1, fontSize: '10px' }}
+            onClick={() => fetchRigDetailInfo(rig)}
+            disabled={loadingInfoIds.has(rig.id)}
+          >
+            {loadingInfoIds.has(rig.id) ? '...' : 'More'}
+          </button>
+          <button
+            className="btn-pro secondary"
+            style={{ width: '32px', fontSize: '10px', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={() => {
+              setEnrichedInfo(prev => {
+                const next = { ...prev };
+                delete next[rig.id];
+                return next;
+              });
+              fetchRigDetailInfo(rig);
+            }}
+            disabled={loadingInfoIds.has(rig.id)}
+            title="Reload Rig Details"
+          >
+            {loadingInfoIds.has(rig.id) ? '...' : '♻️'}
+          </button>
+        </div>
       </div>
     </div>
   );

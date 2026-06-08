@@ -301,8 +301,8 @@ export default function App() {
           border: '1px solid rgba(255, 255, 255, 0.05)',
           borderRadius: '16px',
           padding: '24px',
-          height: '700px',
-          minHeight: '200px'
+          height: '1280px',
+          minHeight: '700px'
         }}
       >
         <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhClient} setNhClient={setNhClient} />

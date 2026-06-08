@@ -417,7 +417,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       {/* Status Dashboard */}
       <div className="rigs-summary-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20px, 1fr))', gap: '10px', marginBottom: '10px' }}>
         <div className="stat-card-mini" style={{ maxWidth: '120px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-          <div style={{ fontSize: '10px', opacity: 0.5, textTransform: 'uppercase' }}>Total Rigs</div>
+          <div style={{ fontSize: '10px', opacity: 0.5, textTransform: 'uppercase' }}>Total</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold' }}>{stats.total}</div>
         </div>
         <div className="stat-card-mini" style={{ maxWidth: '120px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>

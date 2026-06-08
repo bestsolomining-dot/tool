@@ -73,8 +73,15 @@ export class NiceHashClient {
   async call({ method, path, query = {}, body = null }) {
     await this._delayFirstTime(path);
     
-    // Ensure path and query string are separated (in case query was included in the path string)
-    const [cleanPath, pathQueryString] = path.split('?');
+    // Ensure path and query string are separated
+    let [cleanPath, pathQueryString] = path.split('?');
+
+    // Fix: "Type conversion error" (code 50) when "calculate" is mistakenly passed 
+    // as a positional ID segment in the path (e.g., /hashpower/order/calculate).
+    // This occurs when Express routes like /order/:id capture /order/calculate.
+    if (method.toUpperCase() === 'GET' && cleanPath.endsWith('/calculate')) {
+      cleanPath = cleanPath.replace(/\/calculate$/, '');
+    }
 
     const serverTime = await this.getServerTime();
     const time = serverTime.toString();

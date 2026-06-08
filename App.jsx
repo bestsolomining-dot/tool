@@ -324,7 +324,7 @@ export default function App() {
             border: '1px solid rgba(255, 255, 255, 0.05)',
             borderRadius: '16px',
             padding: '24px',
-            height: '700px',
+            height: '850px',
             minHeight: '200px'
           }}
         >

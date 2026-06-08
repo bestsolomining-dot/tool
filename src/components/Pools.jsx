@@ -827,7 +827,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                 className="verify-list"
                 style={{
                   flex: 1,
-                  minHeight: 0,
+                  minHeight: '280px',
                   overflowY: 'auto',
                   overflowX: 'hidden',
                   border: '1px solid rgba(255,255,255,0.05)',

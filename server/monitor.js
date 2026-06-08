@@ -264,6 +264,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   await Promise.all(mrrAccts.map(async (acct) => {
     const harvestedRentalIds = new Set();
     const rigLookupByRentalId = new Map();
+    let accountRentedActive = 0;
 
     const metric = {
       name: acct,
@@ -362,14 +363,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
         metric.total = rigList.length;
         metric.online = onlineCount;
-        metric.rented = rentedRigs.length;
         metric.offline = offlineCount;
         metric.disabled = disabledCount;
         metric.warning = warningCount;
 
         totalAll += rigList.length;
         availableAll += availableCount;
-        rentedAll += rentedRigs.length;
         offlineAll += offlineCount;
         disabledAll += disabledCount;
         warningAll += warningCount;
@@ -565,18 +564,25 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const perfEmoji = efficiency >= 100 ? '💯' : (efficiency >= 90 ? '🟢' : (efficiency >= 70 ? '🔵' : (efficiency >= 50 ? '🟡' : '🔴')));
         const divider = '━━━━━━━━━━━━━━━━━';  
 
-        // Filter for active rentals with Algorithm Speed > 0
-        const currentSpeedVal = parseFloat(info.hashrate.current || 0);
-        if (!isFinished_s && currentSpeedVal > 0) {
-          activeRentalLines.push(
-            `${perfEmoji} 🧬 <code>${escapeHtml(getAlgoDisplayName(info.algo))}</code>\n` +
-            `<b>${escapeHtml(r.name || r.id)}</b>\n` +
-            `🎯Effect: <b>${info.percent}%</b> (<code>${orderDiff >= 0 ? '+' : ''}${orderDiff}%</code>)\n` +
-            `📊Avg: <b>${info.niceAverageHashrate}H | Ads: ${info.niceAdvertisedHashrate}H</b>\n` +
-            `🛜Speed: <b>${info.niceHashrate}H</b>\n` +
-            `🧲Target: <b>${displayTarget.toFixed(2)} ${info.hashrate.suffix.toUpperCase()}</b>\n` +
-            `⏳Remaining: <b>${remStr_s}</b> \n`
-          );
+        // Include all active rentals in the summary list regardless of speed to match the "Rented" count
+        if (!isFinished_s) {
+          accountRentedActive++;
+          const currentSpeedVal = parseFloat(info.hashrate.current || 0);
+          const speedStatus = currentSpeedVal > 0 ? `<b>${info.niceHashrate}H</b>` : '⚠️ <b>0 H/s</b>';
+
+          activeRentalLines.push(TelegramTemplates.activeRentalLine(
+            perfEmoji,
+            getAlgoDisplayName(info.algo),
+            r.name || r.id,
+            info.percent,
+            orderDiff,
+            info.niceAverageHashrate,
+            info.niceAdvertisedHashrate,
+            speedStatus,
+            displayTarget,
+            info.hashrate.suffix,
+            remStr_s
+          ));
         }
 
         // Update database
@@ -632,6 +638,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       console.error(`[${new Date().toLocaleTimeString()}] [monitor:error] Client ${acct}: ${err.message}`);
       metric.error = true;
     }
+    metric.rented = accountRentedActive;
     accountMetrics.push(metric);
     if (!metric.error) successfulAccts.push(acct);
   }));
@@ -682,6 +689,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   //  Send combined summary heartbeat
   // ------------------------------------------------------------------
   const shouldSendCombinedSummary = forceNotify || (now - (lastAlertTimes.get('global_summary') || 0) >= RENTED_HEARTBEAT_MS);
+  // Ensure rentedAll matches the actual list count
+  rentedAll = activeRentalLines.length;
   if (shouldSendCombinedSummary && (accountMetrics.length > 0 || activeRentalLines.length > 0)) {
     const maxBarLen = 14;
     const barChart = accountMetrics.map(am => {

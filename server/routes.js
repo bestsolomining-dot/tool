@@ -27,7 +27,7 @@ async function exportDatabaseCsv(filename, items) {
 
 export function registerRoutes(app) {
   app.use('/api/v2', (req, res, next) => {
-    if (req.path.startsWith('/mrr/') || req.path === '/algos/mapping') return next();
+    if (req.path.startsWith('/mrr/') || req.path === '/algos/mapping' || req.path === '/extracted-pools') return next();
     try {
       const { client, clientName } = resolveNhClient(req.query.client);
       if (client) {
@@ -989,10 +989,16 @@ export function registerRoutes(app) {
   app.get('/api/v2/extracted-pools', asyncHandler(async (req, res) => {
     const filePath = path.resolve(process.cwd(), 'extracted_pools.json');
     try {
-      const data = await fs.readFile(filePath, 'utf-8');
-      res.json(JSON.parse(data));
+      await fs.access(filePath);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const data = JSON.parse(content || '[]');
+      res.json(Array.isArray(data) ? data : []);
     } catch (err) {
-      res.status(404).json({ success: false, error: `File not found: ${filePath}` });
+      if (err.code === 'ENOENT') {
+        // Return empty list if file doesn't exist yet, instead of erroring
+        return res.json([]);
+      }
+      res.status(500).json({ success: false, error: `Error reading extracted pools: ${err.message}` });
     }
   }));
 }

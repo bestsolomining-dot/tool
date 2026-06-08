@@ -210,8 +210,17 @@ const TelegramTemplates = {
     `💸 <b>Paid</b>\n` +
     `<code>${info?.price?.paid || fr.price || '0.00'} ${info?.price?.currency || fr.currency || 'BTC'}</code>\n` +
     `${divider}\n`,
-  
-  heartbeatSummary: (barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime, rented24h) =>
+
+  activeRentalLine: (perfEmoji, algo, name, efficiency, orderDiff, avg, ads, speedStatus, target, suffix, remaining) =>
+    `${perfEmoji} 🧬 <code>${escapeHtml(algo)}</code>\n` +
+    `<b>${escapeHtml(name)}</b>\n` +
+    `🎯Effect: <b>${efficiency}%</b> (<code>${orderDiff >= 0 ? '+' : ''}${orderDiff}%</code>)\n` +
+    `📊Avg: <b>${avg}H | Ads: ${ads}H</b>\n` +
+    `🛜Speed: ${speedStatus}\n` +
+    `🧲Target: <b>${target.toFixed(2)} ${suffix.toUpperCase()}</b>\n` +
+    `⏳Remaining: <b>${remaining}</b> \n`,
+
+  heartbeatSummary: (barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime, rented24h, onlineAlgoLines) =>
     `📊 <b>[Summary]</b>\n` +
     `<b>Online</b> <code>${String(onlineAll).padStart(4)}</code> ` +
     `(<b>Offline</b> <code>${String(offlineAll).padStart(4)}</code>)\n` +
@@ -221,6 +230,7 @@ const TelegramTemplates = {
     `(24h: <code>${String(rented24h || 0).padStart(3)}</code>)\n` +
     // `${barChart ? `${barChart}\n` : ''}` +
     `${divider}\n` +
+    `${onlineAlgoLines && onlineAlgoLines.length > 0 ? `<b>Algos:</b>\n${onlineAlgoLines.join('\n')}\n${divider}\n` : ''}` +
     `<b>Active Rentals:</b>\n` +
     `${divider}\n` +
     `${activeRentalLines.length > 0 ? activeRentalLines.join('\n') : '<i>No active rentals</i>'}\n` +

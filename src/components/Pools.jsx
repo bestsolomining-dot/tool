@@ -72,9 +72,10 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
   const loadExtractedPools = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const result = await apiFetch('/api/v2/extracted-pools');
-      if (result.ok) {
+      if (result.ok && Array.isArray(result.data)) {
         const mapped = result.data.map(p => {
           // Re-map handles to ensure they target correct NiceHash accounts (BT, PH, KIMLOAN, NHATLINH)
           let nhHandle = p.nhClient || p.client || 'BT';
@@ -86,7 +87,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
           return {
             ...p,
             name: p.name || 'Extracted Pool',
-            miningAlgorithm: p.miningAlgorithm || p.algorithm || '',
+            miningAlgorithm: p.miningAlgorithm || p.algorithm || 'Unknown',
             stratumHost: p.stratumHost || p.stratumHostname || '',
             stratumPort: Number(p.stratumPort || p.port || 0),
             username: p.username || '',
@@ -100,6 +101,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         setExtractedPools(normalized);
         setPools(normalized); // Populate the main selection list
         setUseExtractedPools(true);       // Enable toggle to prioritize these for bulk actions
+      } else if (result.ok) {
+        setError('Invalid data format received from extracted pools API.');
       } else {
         setError(result.data?.error || `Failed to load extracted pools: ${result.status}`);
       }
@@ -331,6 +334,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
       setVerifyResults([{
         key: selectedId,
         label: selected ? ph.getLabel(selected) : selectedId,
+        algorithm: ph.getAlgo(selected),
         result: enrichedResult,
       }])
       if (!result.ok) {
@@ -416,7 +420,12 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         if (skipReason) {
           setVerifyResults(prev => [
             ...prev.filter(item => item.key !== key),
-            { key, label: ph.getLabel(pool, i), result: { ok: true, data: { message: skipReason } } },
+            { 
+              key, 
+              label: ph.getLabel(pool, i), 
+              result: { ok: true, data: { message: skipReason } },
+              algorithm: poolAlgo 
+            },
           ])
           setProgress({ current: i + 1, total: source.length })
           // Mark as seen so duplicates are skipped even if the first occurrence was skipped for other reasons
@@ -431,7 +440,12 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         setResponse(prev => ({ ...(prev || {}), [key]: 'verifying' }))
         setVerifyResults(prev => [
           ...prev.filter(item => item.key !== key),
-          { key, label: ph.getLabel(pool, i), result: { pending: true } },
+          { 
+            key, 
+            label: ph.getLabel(pool, i), 
+            result: { pending: true },
+            algorithm: poolAlgo
+          },
         ])
 
         let result
@@ -488,7 +502,12 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         setResponse(prev => ({ ...(prev || {}), [key]: result }))
         setVerifyResults(prev => [
           ...prev.filter(item => item.key !== key),
-          { key, label: ph.getLabel(pool, i), result },
+          { 
+            key, 
+            label: ph.getLabel(pool, i), 
+            result,
+            algorithm: poolAlgo
+          },
         ])
         setProgress({ current: i + 1, total: source.length })
 
@@ -625,9 +644,10 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
   const handleEditorVerifySuccess = (verificationResult) => {
     // Update the verification results in the main Pools component
+    const poolDetails = verificationResult.result?.poolDetails || verificationResult.result?.requestBody;
     setVerifyResults(prev => [
       ...prev.filter(item => item.key !== verificationResult.key),
-      verificationResult,
+      { ...verificationResult, algorithm: ph.getAlgo(poolDetails) },
     ]);
   }
 
@@ -689,7 +709,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
 
   const getAlgoCountsSummary = (results) => {
     const counts = results.reduce((acc, item) => {
-      const algorithm = ph.getVerifyAlgo(item.result)
+      const algorithm = item.algorithm || ph.getVerifyAlgo(item.result)
       acc[algorithm] = (acc[algorithm] || 0) + 1
       return acc
     }, {})
@@ -900,7 +920,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                 {verifyResults.map(item => {
                   const pending = item.result?.pending;
                   const success = !pending && ph.isVerifySuccess(item.result);
-                  const algorithm = ph.getVerifyAlgo(item.result);
+                    const algorithm = item.algorithm || ph.getVerifyAlgo(item.result);
                   return (
                     <div
                       key={item.key}
@@ -953,7 +973,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                       </div>
                       <div
                         style={{
-                          width: '120px',
+                          width: '60px',
                           flexShrink: 0,
                           opacity: 0.6,
                           fontFamily: 'monospace'
@@ -979,7 +999,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                       <div
                         style={{
                           display: 'flex',
-                          gap: '6px',
+                          gap: '8px',
                           flexShrink: 0
                         }}
                       >
@@ -1113,9 +1133,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
               </thead>
               <tbody>
                 {failResults.map((item, idx) => {
-                  const p = item.result?.poolDetails || item.result?.requestBody || {};
-                  const vAlgo = ph.getVerifyAlgo(item.result);
-                  const algo = (vAlgo && vAlgo !== 'N/A' && vAlgo !== 'Unknown') ? vAlgo : (p.miningAlgorithm || p.algorithm || 'N/A');
+                  const algo = item.algorithm || ph.getVerifyAlgo(item.result);
                   return (
                     <tr key={item.key || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '11px' }}>
                       <td style={{ padding: '10px', fontWeight: 'bold', color: '#f8fafc' }}>{item.label}</td>

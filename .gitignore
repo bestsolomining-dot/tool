@@ -11,3 +11,4 @@ package-lock.json
 *.xlsx
 /dist
 /node_modules
+env

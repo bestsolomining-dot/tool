@@ -330,7 +330,9 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
             if (timers.lowStart === 0) timers.lowStart = now;
             if (now - timers.lowStart >= 900000) { // 15 mins
               if (!notifiedAlerts.current.has(lowPerfKey)) {
-                notifiedAlerts.current.add(lowPerfKey);
+                tg.notifyLowEfficiency(r, remainingMs, efficiency).then(() => {
+                  notifiedAlerts.current.add(lowPerfKey);
+                }).catch(() => { });
               }
             }
           } else {
@@ -344,7 +346,9 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
             if (timers.zeroStart === 0) timers.zeroStart = now;
             if (now - timers.zeroStart >= 300000) { // 5 mins
               if (!notifiedAlerts.current.has(zeroHashKey)) {
-                notifiedAlerts.current.add(zeroHashKey);
+                tg.notifyZeroHashrate(r, now - timers.zeroStart).then(() => {
+                  notifiedAlerts.current.add(zeroHashKey);
+                }).catch(() => { });
               }
             }
           } else {
@@ -407,7 +411,8 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
   // Periodic Summary Heartbeat (15 mins)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (mrrSummaryData && rentals) {
+      // Guard: Ensure we have data and aren't in a transient loading/empty state
+      if (mrrSummaryData && rentals && (mrrSummaryData.totalAll > 0 || rentals.length === 0)) {
         const rented24h = rentals.filter(r => (Date.now() - toUtcTimestamp(r.start)) <= 86400000).length;
         // Use rentals.length for rentedAll to ensure it matches the actual "database" state
         tg.notifyHeartbeatSummary({ ...mrrSummaryData, rentedAll: rentals.length, rented24h });

@@ -56,8 +56,8 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
             const nhAlgo = normalizeAlgoForNiceHash(algoName);
             const priceData = await callApi('/api/v2/hashpower/order/price', {
               query: { 
-                algorithm: nhAlgo, 
-                market: ['USA', 'EU'].includes(marketName) ? marketName : 'USA',
+                algorithm: String(nhAlgo), 
+                market: ['USA', 'EU'].includes(marketName) ? String(marketName) : 'USA',
                 client: priceLookupClient 
               },
               silent: true
@@ -76,15 +76,14 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
         const processed = tempProcessed.map(p => {
           const isSha2 = p.algo.includes('SHA256');
           const isRx = p.algo.includes('RANDOMX');
-          const mktData = marketPrices[`${p.algo}:${p.market}`] || { value: 0, unit: isSha2 ? 'EH' : isRx ? 'MH' : 'GH' };
+          const mktData = marketPrices[`${p.algo}:${p.market}`] || { value: 0, unit: isSha2 ? 'EH' : (isRx ? 'MH' : 'GH') };
           const mkt = mktData.value;
           const cur = parseFloat(p.price);
-          // ROI = (Market Benchmark - My Price) / Market Benchmark
           const diffRaw = (mkt > 0 && cur > 0) ? calculatePriceComparison(
             cur,
-            (isSha2 && mktData.unit === 'TH') ? 'PH' : mktData.unit,
-            mkt,
-            mktData.unit
+            'TH', // Your rental price unit (BTC/TH/Day)
+            mkt,  // Market benchmark price
+            mktData.unit // Market benchmark unit (e.g., EH for SHA256)
           ) : null;
           const diff = diffRaw !== null ? (parseFloat(diffRaw) * -1).toFixed(1) : null;
           return { ...p, marketPrice: mkt, marketUnit: mktData.unit, orderDiff: diff };

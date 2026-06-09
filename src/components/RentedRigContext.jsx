@@ -45,24 +45,20 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
         // We group by algo + market to get accurate regional pricing
         const priceKeys = [...new Set(tempProcessed.map(p => `${p.algo}:${p.market}`))];
         const marketPrices = {};
+        
+        // Use a real client for price lookups if the current context is aggregate (VN)
+        const priceLookupClient = (nhClient === 'VN' || !nhClient) ? 'BT' : nhClient;
 
         for (const key of priceKeys) {
           const [algoName, marketName] = key.split(':');
           if (!algoName) continue;
           try {
             const nhAlgo = normalizeAlgoForNiceHash(algoName);
-            // Try business order first for "Fast" price benchmarking
-            let priceData = await callApi('/api/v2/hashpower/business/order', {
-              query: { algorithm: nhAlgo, market: marketName, client: nhClient },
+            const priceData = await callApi('/api/v2/hashpower/order/price', {
+              query: { algorithm: nhAlgo, market: marketName, client: priceLookupClient },
               silent: true
             });
-
-            if (!priceData || priceData.error || !priceData.price) {
-              priceData = await callApi('/api/v2/hashpower/order/price', {
-                query: { algorithm: nhAlgo, market: marketName, client: nhClient },
-                silent: true
-              });
-            }
+            
             const rawPrice = priceData?.price || priceData;
             const priceValue = parseFloat(rawPrice?.fixedPrice || rawPrice?.standardPrice?.fast || rawPrice?.standardPrice || rawPrice?.price || 0);
             const priceUnit = rawPrice?.speedUnit || rawPrice?.unit || (algoName.toUpperCase().includes('SHA256') ? 'EH' : 'TH');

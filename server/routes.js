@@ -295,14 +295,16 @@ export function registerRoutes(app) {
   
   // Sanitize query to remove tool-specific params (client, ts) before sending to NiceHash
   app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
-    const algorithm = normalizeAlgoForNiceHash(req.query.algorithm || req.query.algo);
+    let algorithm = normalizeAlgoForNiceHash(req.query.algorithm || req.query.algo);
+    if (algorithm.toUpperCase().includes('SHA256ASICBOOST')) algorithm = 'SHA256';
     const marketStr = String(req.query.market || 'USA').toUpperCase();
     const market = (marketStr === 'USA' || marketStr === '1') ? 1 : 0; // Convert to numeric ID
 
     let app = req.nhApp;
-    if (!app || isAggregate(req.query.client)) {
+    if (isAggregate(req.query.client) || !app) {
       const firstReal = Object.keys(nhConfigs).find(k => nhConfigs[k].apiKey && !isAggregate(k));
-      if (firstReal) app = getNiceHashApp(resolveNhClient(firstReal).client);
+      const resolved = resolveNhClient(firstReal || 'BT');
+      app = getNiceHashApp(resolved.client);
     }
     if (!app) return res.status(400).json({ error: 'No NiceHash client configured' });
 
@@ -312,14 +314,16 @@ export function registerRoutes(app) {
   // FIX: Resolved 405 error. Using getOrderPrice for both standard and business 
   // as they share the /order/calculate GET endpoint for price data.
   app.get('/api/v2/hashpower/business/order', asyncHandler(async (req, res) => {
-    const algorithm = normalizeAlgoForNiceHash(req.query.algorithm || req.query.algo);
+    let algorithm = normalizeAlgoForNiceHash(req.query.algorithm || req.query.algo);
+    if (algorithm.toUpperCase().includes('SHA256ASICBOOST')) algorithm = 'SHA256';
     const marketStr = String(req.query.market || 'USA').toUpperCase();
     const market = (marketStr === 'USA' || marketStr === '1') ? 1 : 0; // Convert to numeric ID
 
     let app = req.nhApp;
-    if (!app || isAggregate(req.query.client)) {
+    if (isAggregate(req.query.client) || !app) {
       const firstReal = Object.keys(nhConfigs).find(k => nhConfigs[k].apiKey && !isAggregate(k));
-      if (firstReal) app = getNiceHashApp(resolveNhClient(firstReal).client);
+      const resolved = resolveNhClient(firstReal || 'BT');
+      app = getNiceHashApp(resolved.client);
     }
     if (!app) return res.status(400).json({ error: 'No NiceHash client configured' });
 
@@ -659,7 +663,6 @@ export function registerRoutes(app) {
   }));
 
   app.get('/api/v2/mrr/balance', asyncHandler(async (req, res) => mrrRequest('/account/balance', req, res)));
-  app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => mrrRequest('/info/algos', req, res)));
   app.get('/api/v2/mrr/algos', asyncHandler(async (req, res) => {
     const { statusCode, data, clientName } = await mrrApiCall({ endpoint: '/info/algos', clientNameRaw: req.query.client });
     if (statusCode === 200 && data?.success && data.data) {
@@ -1000,5 +1003,25 @@ export function registerRoutes(app) {
       }
       res.status(500).json({ success: false, error: `Error reading extracted pools: ${err.message}` });
     }
+  }));
+
+  /**
+   * Fetches current market prices for popular mining-related coins from CoinGecko.
+   * This allows the tool to compare rental costs against potential coin rewards.
+   */
+  app.get('/api/v2/prices/coingecko', asyncHandler(async (req, res) => {
+    // Default list of mineable coins to track
+    const defaultIds = 'bitcoin,ethereum-classic,litecoin,ravencoin,monero,kaspa,iron-fish,zephyr-protocol,clore-ai,dynex,conflux,ergo';
+    const ids = req.query.ids || defaultIds;
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd,btc&include_24hr_change=true`;
+    
+    const response = await fetch(url);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return res.status(response.status).json({ success: false, error: errorData.status?.error_message || 'CoinGecko API failure' });
+    }
+
+    const data = await response.json();
+    res.json({ success: true, data });
   }));
 }

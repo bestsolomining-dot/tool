@@ -7,6 +7,8 @@ import MiningRigRental from './src/components/MiningRigRental';
 import MiningRigSection from './src/components/MiningRigSection';
 import HashrateCalculator from './src/components/HashrateCalculator';
 import MrrPoolsManager from './src/components/MrrManager';
+import MinecoinPrices from './src/minecoin/MinecoinPrices';
+import { useTelegram } from './src/components/TelegramManager';
 import { RentedRigProvider } from './src/components/RentedRigContext';
 import './src/App.css';
 
@@ -297,9 +299,32 @@ export default function App() {
     }
   }, [handleMiningCall, mrrClient]);
 
+  // Simple state-based routing to handle /minecoin navigation
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const onPathChange = () => setCurrentPath(window.location.pathname);
+    window.addEventListener('popstate', onPathChange);
+    return () => window.removeEventListener('popstate', onPathChange);
+  }, []);
+
+  const navigateTo = (path) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(path);
+  };
+
   return (
     <RentedRigProvider nhClient={nhOrderClient} callApi={callApi}>
       <div className="app-shell" style={{ padding: '0 20px 40px', maxWidth: '1600px', margin: '0 auto' }}>
+        {currentPath === '/minecoin' ? (
+          <div style={{ paddingTop: '40px' }}>
+            <MinecoinPrices onCall={callApi} />
+            <button className="btn-pro secondary" style={{ marginTop: '20px' }} onClick={() => navigateTo('/')}>
+              ← Back to Dashboard
+            </button>
+          </div>
+        ) : (
+          <>
         <header className="app-header" style={{
           padding: '40px 0',
           borderBottom: '1px solid rgba(255,255,255,0.05)',
@@ -320,6 +345,7 @@ export default function App() {
               <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                 <button className="text-button" onClick={forceCheckStatus} style={{ fontSize: '10px' }}>Force Check</button>
                 <button className="text-button" onClick={() => setDebugModalOpen(true)} style={{ fontSize: '10px' }}>Debug Logs</button>
+                <button className="text-button" onClick={() => navigateTo('/minecoin')} style={{ fontSize: '10px', color: '#a78bfa', fontWeight: 'bold' }}>Coin Prices</button>
               </div>
             </div>
           </div>
@@ -382,6 +408,8 @@ export default function App() {
             </article>
           </section>
         </main>
+          </>
+        )}
 
         <Modal
           isOpen={responseModalOpen}

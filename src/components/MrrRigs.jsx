@@ -278,7 +278,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     document.body.removeChild(link);
   };
 
-  const fetchRigs = async () => {
+  const fetchRigs = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -328,7 +328,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     } finally {
       setLoading(false);
     }
-  };
+  }, [mrrClient, endpoint, algo, statusFilter]);
 
   const fetchRigDetailInfo = async (rig) => {
     const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
@@ -415,8 +415,12 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     if (mrrClient && endpoint) {
       setEnrichedInfo({}); // Only clear cache when context (client/endpoint) actually changes
       fetchRigs();
+
+      // Refresh rigs list every 60 seconds to keep UI summary and target data fresh
+      const interval = setInterval(fetchRigs, 60000);
+      return () => clearInterval(interval);
     }
-  }, [mrrClient, endpoint]);
+  }, [mrrClient, endpoint, fetchRigs]);
 
   // Auto-fetch details for rented rigs so "Started X ago" and "Eff" show up automatically
   useEffect(() => {

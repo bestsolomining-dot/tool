@@ -410,17 +410,13 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
 
   // Periodic Summary Heartbeat (15 mins)
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Guard: Ensure we have data and aren't in a transient loading/empty state
-      if (mrrSummaryData && rentals && (mrrSummaryData.totalAll > 0 || rentals.length === 0)) {
-        const rented24h = rentals.filter(r => (Date.now() - toUtcTimestamp(r.start)) <= 86400000).length;
-        // Use rentals.length for rentedAll to ensure it matches the actual "database" state
-        tg.notifyHeartbeatSummary({ ...mrrSummaryData, rentedAll: rentals.length, rented24h });
-        lastSummarySentTime.current = Date.now();
-      }
+    const interval = setInterval(async () => {
+      // Trigger the server-side monitor which fetches fresh data and posts a summary automatically
+      await onCall('/api/v2/mrr/monitor/run', { method: 'POST', query: { client: mrrClient }, silent: true });
+      lastSummarySentTime.current = Date.now();
     }, 900000); // 15 minutes
     return () => clearInterval(interval);
-  }, [mrrSummaryData, rentals, tg]);
+  }, [mrrClient, onCall]);
 
   useEffect(() => {
     if (Notification.permission === 'default') {

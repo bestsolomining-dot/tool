@@ -598,7 +598,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         // Send "rented" notification if new rental (first sighting)
         const isNewToMonitor = lastNotified === 0;
         const withinReasonableStart = startT > 0 && elapsedMs < (10 * 60 * 1000);
-        const shouldNotify = forceNotify || (isNewToMonitor && withinReasonableStart);
+        const shouldNotify = (isNewToMonitor && withinReasonableStart);
 
         if (shouldNotify) {
           const hbType = forceNotify ? 'MONITOR' : 'RENTING';

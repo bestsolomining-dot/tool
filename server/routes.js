@@ -247,7 +247,7 @@ export function registerRoutes(app) {
 
     const results = await Promise.all(nhAccounts.map(async (acct) => {
       const { client, clientName } = resolveNhClient(acct);
-      if (!client || (acct !== 'BT' && clientName === 'BT' && acct !== 'LN')) return null;
+      if (!client || (acct !== 'BT' && clientName === 'BT' && acct !== 'PH')) return null;
       try {
         const data = await getNiceHashApp(client).hashpower.getMyOrders({ limit: 1000 });
         return { clientName, list: data?.list || [] };

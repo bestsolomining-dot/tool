@@ -338,17 +338,6 @@ export default function App() {
                 </button>
               </div>
             </div>
-            {/* <article className="panel">
-              <div style={{ marginTop: '5px' }}>
-                <HashpowerBot
-                  algorithm={algorithm}
-                  market={market}
-                  onCall={handleHashpowerCall}
-                  nhClient={nhClient}
-                  setNhClient={setNhClient}
-                />
-              </div>
-            </article> */}
           </div>
           <article className="panel">
             <MiningRigSection

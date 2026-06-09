@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { poolApi } from '../core/poolUtils';
-import { normalizeAlgoForNiceHash } from '../core/mapping';
+import { normalizeAlgoForNiceHash, getAlgoDisplayName } from '../core/mapping';
 import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils';
-import { getAlgoDisplayName } from '../core/mapping';
 import { useRentedRigs } from './RentedRigContext';
 import MrrRigCard from './MrrRigCard';
-import { TelegramTemplates } from './TelegramManager';
+import { TelegramTemplates } from '../shared/telegram.js';
 import { calculateRemainingTime } from '../core/time';
 import {
   findRigArray,

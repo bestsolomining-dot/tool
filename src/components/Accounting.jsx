@@ -39,7 +39,8 @@ export default function Accounting({ onCall }) {
     const options = { method: endpoint.method }
 
     if (onCall) {
-      onCall(path, { ...options, showModal: true });
+      const res = await onCall(path, { ...options, showModal: true });
+      if (res) setOutput(res);
       return;
     }
 

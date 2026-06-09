@@ -3,6 +3,7 @@ import MrrRigs from './MrrRigs';
 import Modal from './Modal';
 import TelegramManager, { useTelegram } from './TelegramManager';
 import { calculateRemainingTime, toUtcTimestamp } from '../core/time';
+import ErrorBoundary from './ErrorBoundary';
 
 /** Safely extracts an array from various MRR API response shapes */
 function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'items', 'data']) {
@@ -269,6 +270,8 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
   const [rentals, setRentals] = useState([]);
   const [loadingRentals, setLoadingRentals] = useState(false);
 
+  const [mrrSummaryData, setMrrSummaryData] = useState(null);
+  const lastSummarySentTime = useRef(0);
   // Notification State
   const [newRentalFound, setNewRentalFound] = useState(null);
   const knownRentalIds = useRef(new Set());
@@ -401,14 +404,27 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
     }
   }, [mrrClient, onCall, tg]);
 
+  // Periodic Summary Heartbeat (15 mins)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (mrrSummaryData && rentals) {
+        const rented24h = rentals.filter(r => (Date.now() - toUtcTimestamp(r.start)) <= 86400000).length;
+        // Use rentals.length for rentedAll to ensure it matches the actual "database" state
+        tg.notifyHeartbeatSummary({ ...mrrSummaryData, rentedAll: rentals.length, rented24h });
+        lastSummarySentTime.current = Date.now();
+      }
+    }, 900000); // 15 minutes
+    return () => clearInterval(interval);
+  }, [mrrSummaryData, rentals, tg]);
+
   useEffect(() => {
     if (Notification.permission === 'default') {
       Notification.requestPermission();
     }
     fetchActiveRentals();
 
-    // Refresh every 30 seconds to support the 30s notification requirement
-    const interval = setInterval(fetchActiveRentals, 30000);
+    // Refresh every 60 seconds to reduce API load and notification frequency
+    const interval = setInterval(fetchActiveRentals, 60000);
     return () => clearInterval(interval);
   }, [fetchActiveRentals]);
 
@@ -522,14 +538,17 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
 
       {/* Inline Quick View */}
       <div style={{ marginTop: '24px' }}>
-        <MrrRigs
-          onCall={onCall}
-          mrrClient={mrrClient}
-          algo={algorithm}
-          onOpenPool={onOpenMrrPools}
-          onOpenCompletionCalculator={onOpenCompletionCalculator}
-          onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
-        />
+        <ErrorBoundary name="MrrRigs (QuickView)">
+          <MrrRigs
+            onCall={onCall}
+            mrrClient={mrrClient}
+            algo={algorithm}
+            onOpenPool={onOpenMrrPools}
+            onOpenCompletionCalculator={onOpenCompletionCalculator}
+            onSummaryUpdate={setMrrSummaryData}
+            onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Dedicated Management Modals */}
@@ -547,14 +566,16 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
       >
         <div style={{ padding: '2px' }}> {/* Removed maxHeight and overflowY: 'auto' from here */}
           {activeModal === 'list' && (
-            <MrrRigs
-              onCall={onCall}
-              mrrClient={mrrClient}
-              algo={algorithm}
-              onOpenPool={onOpenMrrPools}
-              onOpenCompletionCalculator={onOpenCompletionCalculator}
-              onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
-            />
+            <ErrorBoundary name="MrrRigs (Modal)">
+              <MrrRigs
+                onCall={onCall}
+                mrrClient={mrrClient}
+                algo={algorithm}
+                onOpenPool={onOpenMrrPools}
+                onOpenCompletionCalculator={onOpenCompletionCalculator}
+                onInfo={(id) => onCall(`/api/v2/mrr/rig/${encodeURIComponent(id)}/info`, { query: { client: mrrClient } })}
+              />
+            </ErrorBoundary>
           )}
 
           {activeModal === 'list_all_rigs' && (

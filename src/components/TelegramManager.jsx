@@ -26,7 +26,7 @@ function getPaidAmount(r) {
 }
 
 const divider = '━━━━━━━━━━━━━━━━━━━━━━';
-const TelegramTemplates = {
+export const TelegramTemplates = {
   newRental: (account, r, paid, startStr, endStr) => `🚀 <b>[New Rental]</b>\n` +
     `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
     `${divider}\n` +
@@ -37,14 +37,6 @@ const TelegramTemplates = {
     `<b>Paid:</b> ${paid}\n` +
     `<i>Rental has been successfully initialized.</i>`,
 
-  zeroHashrate: (account, r, elapsedMs, paid) => `🚨 <b>[Critical] Zero Hashrate!</b>\n` +
-    `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-    `${divider}\n` +
-    `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
-    `<b>Duration:</b> ${Math.round(elapsedMs / 1000)}s\n` +
-    `<b>Efficiency:</b> <b>0%</b>\n` +
-    `${divider}\n` +
-    `<b>Paid:</b> ${paid}`,
 
   lowEfficiency: (account, r, avg, suffix, efficiency, remainingMs, paid) => `⚠️ <b>[Alert] Low Efficiency</b>\n` +
     `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
@@ -65,13 +57,13 @@ const TelegramTemplates = {
     `<b>Paid:</b> ${paid}\n` +
     `<i>Running at full capacity!</i>`,
 
-  startup: (account, r, avg, suffix, efficiency, paid) => `🚀 <b>[Startup Alert]</b>\n` +
-    `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
-    `${divider}\n` +
-    `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
-    `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
-    `${divider}\n` +
-    `<b>Paid:</b> ${paid}`,
+  // startup: (account, r, avg, suffix, efficiency, paid) => `🚀 <b>[Startup Alert]</b>\n` +
+  //   `<b>Account:</b> <code>${escapeHtml(account)}</code>\n` +
+  //   `${divider}\n` +
+  //   `<b>Rig:</b> ${escapeHtml(r.name || r.id)} (<code>${r.id}</code>)\n` +
+  //   `<b>Avg:</b> ${avg} ${suffix} (<b>${efficiency.toFixed(1)}%</b>)\n` +
+  //   `${divider}\n` +
+  //   `<b>Paid:</b> ${paid}`,
 
   completion: (account, r, avg, suffix, efficiency, paid) => `🏁 <b>[Completion Alert]</b>\n` +
     `<b>Account:</b><code>${escapeHtml(account)}</code>\n` +
@@ -185,8 +177,8 @@ const TelegramTemplates = {
     `CUR : <code>${info.niceHashrate}</code>\n\n` +
     `🎯 <b>Efficiency</b>\n` +
     `<b>${info.percent}%</b>\n\n` +
-    `${roi >= 0 ? '🟢' : '🔴'} <b>ROI</b>\n` +
-    `<b>${roi >= 0 ? '+' : ''}${roi}%</b>\n\n` +
+    // `${roi >= 0 ? '🟢' : '🔴'} <b>ROI</b>\n` +
+    // `<b>${roi >= 0 ? '+' : ''}${roi}%</b>\n\n` +
     `⏳ <b>Remaining</b>\n` +
     `<code>${remStr}</code>\n\n` +
     `💸 <b>Paid</b>\n` +
@@ -211,30 +203,28 @@ const TelegramTemplates = {
     `<code>${info?.price?.paid || fr.price || '0.00'} ${info?.price?.currency || fr.currency || 'BTC'}</code>\n` +
     `${divider}\n`,
 
-  activeRentalLine: (perfEmoji, algo, name, efficiency, orderDiff, avg, ads, speedStatus, target, suffix, remaining) =>
-    `${perfEmoji} 🧬 <code>${escapeHtml(algo)}</code>\n` +
+  activeRentalLine: (perfEmoji, algo, name, remStr, efficiency, roi, avg, ads, cur, target, remaining) =>
+    `${perfEmoji} 🧬 ${escapeHtml(algo)}\n` +
     `<b>${escapeHtml(name)}</b>\n` +
-    `🎯Effect: <b>${efficiency}%</b> (<code>${orderDiff >= 0 ? '+' : ''}${orderDiff}%</code>)\n` +
-    `📊Avg: <b>${avg}H | Ads: ${ads}H</b>\n` +
-    `🛜Speed: ${speedStatus}\n` +
-    `🧲Target: <b>${target.toFixed(2)} ${suffix.toUpperCase()}</b>\n` +
-    `⏳Remaining: <b>${remaining}</b> \n`,
+    `🎯Efficiency: ${efficiency}% \n` +
+    `📊Avg: ${avg} | Ads: ${ads}\n` +
+    `🛜Speed: ${cur}\n` + 
+    `🧲Target: ${(target).toFixed(2)}\n` +
+    `⏳Remaining: <code>${remStr}</code>\n`,
 
   heartbeatSummary: (barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, monitorTime, rented24h, onlineAlgoLines) =>
     `📊 <b>[Summary]</b>\n` +
-    `<b>Online</b> <code>${String(onlineAll).padStart(4)}</code> ` +
-    `(<b>Offline</b> <code>${String(offlineAll).padStart(4)}</code>)\n` +
-    `<b>Total</b>   <code>${String(totalAll).padStart(4)}</code> ` +
-    `(<b>Disabled</b> <code>${String(disabledAll).padStart(4)}</code>)\n` +
-    `♻️ <b>Rented</b> <code>${String(rentedAll).padStart(4)}</code> ` +
-    `(24h: <code>${String(rented24h || 0).padStart(3)}</code>)\n` +
-    // `${barChart ? `${barChart}\n` : ''}` +
+    `Online  ${onlineAll} (Offline  ${offlineAll})\n` +
+    `Total    ${totalAll} (Disabled   ${disabledAll})\n` +
+    `♻️ Rented    ${rentedAll} (24h:   ${rented24h || 0})\n` +
     `${divider}\n` +
-    `${onlineAlgoLines && onlineAlgoLines.length > 0 ? `<b>Algos:</b>\n${onlineAlgoLines.join('\n')}\n${divider}\n` : ''}` +
-    `<b>Active Rentals:</b>\n` +
+    `Algos:\n` +
+    `${onlineAlgoLines && onlineAlgoLines.length > 0 ? `${onlineAlgoLines.join('\n')}\n` : ''}` +
     `${divider}\n` +
-    `${activeRentalLines.length > 0 ? activeRentalLines.join('\n') : '<i>No active rentals</i>'}\n` +
-    `<i>Update at ${monitorTime}</i>`,
+    `Active Rentals:\n` +
+    `${divider}\n` +
+    `${activeRentalLines.length > 0 ? activeRentalLines.join('\n') : '<i>No active rentals</i>'}\n\n` +
+    `Update at ${monitorTime}`,
 
   manualNotice: (r, account, avg, suffix, roi, remStr, progress, paid) => `✅ <b>[NEW RENTAL] ✅ #${r.id}</b>\n` +
     `${divider}\n` +
@@ -242,7 +232,7 @@ const TelegramTemplates = {
     `<b>Acct:</b> <code>${escapeHtml(account).toUpperCase()}</code>\n` +
     `${divider}\n` +
     `<b>Hash:</b> <code>${avg.toFixed(2)} ${suffix}</code>\n` +
-    `${roi >= 0 ? '🟢' : '🔴'} <b>ROI:</b> <code>${roi >= 0 ? '+' : ''}${roi}%</code>\n` +
+    // `${roi >= 0 ? '🟢' : '🔴'} <b>ROI:</b> <code>${roi >= 0 ? '+' : ''}${roi}%</code>\n` +
     `<b>Time:</b> <code>${remStr} left (${progress}%)</code>\n` +
     `<b>Paid:</b> <code>${paid}</code>\n` +
     `${divider}\n` +

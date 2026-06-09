@@ -242,8 +242,17 @@ export default function App() {
   }, [callApi]);
 
   const handleHashpowerCall = useCallback((path, opts = {}) => {
-    return callApi(path, { ...opts, section: 'hashpower' });
-  }, [callApi]);
+    // If the path involves ordering or pricing and client is "VN", 
+    // fallback to "BT" because NiceHash pricing/ordering requires a specific account context.
+    const isOrderPath = path.includes('/hashpower/order') || path.includes('/hashpower/business');
+    let query = { ...opts.query };
+    
+    if (isOrderPath && (nhOrderClient === 'VN' || !query.client)) {
+      query.client = 'BT';
+    }
+
+    return callApi(path, { ...opts, query, section: 'hashpower' });
+  }, [callApi, nhOrderClient]);
 
   const handleOpenMrrPools = useCallback(async (rig) => {
     if (!rig || !mrrClient) return;

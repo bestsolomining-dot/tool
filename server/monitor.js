@@ -452,6 +452,36 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
         let lowHashStart = row?.low_hashrate_start || 0;
         let zeroHashStart = row?.zero_hashrate_start || 0;
+        let lastNotified = row?.last_notified || 0;
+
+        // Update database immediately to ensure row exists and status is tracked before notification checks
+        try {
+          await dbRunAsync(
+            `INSERT INTO rentals (
+               id, name, client, start_time, end_time, algo, 
+               target_100, order_diff, last_updated, low_hashrate_start, zero_hashrate_start,
+               current_hashrate, average_hashrate, advertised_hashrate, price_paid
+             ) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET 
+               name=excluded.name, client=excluded.client, algo=excluded.algo, order_diff=excluded.order_diff,
+               start_time=excluded.start_time, end_time=excluded.end_time, target_100=excluded.target_100, last_updated=excluded.last_updated,
+               low_hashrate_start=excluded.low_hashrate_start, zero_hashrate_start=excluded.zero_hashrate_start,
+               current_hashrate=excluded.current_hashrate, average_hashrate=excluded.average_hashrate,
+               advertised_hashrate=excluded.advertised_hashrate, price_paid=excluded.price_paid`,
+            [
+              String(r.id), r.name || r.id, acct, startT, endT, info.algo, displayTarget, orderDiff, now, lowHashStart, zeroHashStart,
+              currentHash, average, advertised, info.price.paid
+            ]
+          );
+
+          // Record in history to maintain count even after the rental ends
+          if (startT > 0) {
+            await dbRunAsync("INSERT OR IGNORE INTO rental_history (id, start_time) VALUES (?, ?)", [String(r.id), startT]);
+          }
+        } catch (err) {
+          console.error(`[${new Date().toLocaleTimeString()}] [monitor:db] Upsert error for ${r.id}: ${err.message}`);
+        }
 
         // Efficiency < 50% for 15 minutes
         if (efficiency < 50) {
@@ -550,41 +580,20 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             perfEmoji,
             getAlgoDisplayName(info.algo),
             r.name || r.id,
+            remStr_s,
             info.percent,
             orderDiff,
             info.niceAverageHashrate,
             info.niceAdvertisedHashrate,
             speedStatus,
             displayTarget,
-            info.hashrate.suffix,
-            remStr_s
+            ''
           ));
         }
 
-        // Update database
-        try {
-          await dbRunAsync(
-            `INSERT INTO rentals (id, name, client, start_time, end_time, algo, target_100, order_diff, last_updated, low_hashrate_start, zero_hashrate_start) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET 
-               name=excluded.name, client=excluded.client, algo=excluded.algo, order_diff=excluded.order_diff,
-               start_time=excluded.start_time, end_time=excluded.end_time, target_100=excluded.target_100, last_updated=excluded.last_updated,
-               low_hashrate_start=excluded.low_hashrate_start, zero_hashrate_start=excluded.zero_hashrate_start`,
-            [String(r.id), r.name || r.id, acct, startT, endT, info.algo, displayTarget, orderDiff, now, lowHashStart, zeroHashStart]
-          );
-
-          // Record in history to maintain count even after the rental ends
-          if (startT > 0) {
-            await dbRunAsync("INSERT OR IGNORE INTO rental_history (id, start_time) VALUES (?, ?)", [String(r.id), startT]);
-          }
-        } catch (err) {
-          console.error(`[${new Date().toLocaleTimeString()}] [monitor:db] Upsert error for ${r.id}: ${err.message}`);
-        }
-
         // Send "rented" notification if new rental (first sighting)
-        const lastNotified = row?.last_notified || 0;
         const isNewToMonitor = lastNotified === 0;
-        const withinReasonableStart = elapsedMs < (12 * 60 * 60 * 1000);
+        const withinReasonableStart = startT > 0 && elapsedMs < (10 * 60 * 1000);
         const shouldNotify = forceNotify || (isNewToMonitor && withinReasonableStart);
 
         if (shouldNotify) {

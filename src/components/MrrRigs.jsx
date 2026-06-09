@@ -5,6 +5,8 @@ import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils';
 import { getAlgoDisplayName } from '../core/mapping';
 import { useRentedRigs } from './RentedRigContext';
 import MrrRigCard from './MrrRigCard';
+import { TelegramTemplates } from './TelegramManager';
+import { calculateRemainingTime } from '../core/time';
 import {
   findRigArray,
   getNiceHashPriceValue,
@@ -17,7 +19,7 @@ import {
   parsePriceValueLocal
 } from '../core/mrrUtils';
 
-export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletionCalculator, onInfo, endpoint = '/rig/mine', algo, initialStatus = 'available' }) {
+export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletionCalculator, onInfo, endpoint = '/rig/mine', algo, initialStatus = 'available', onSummaryUpdate }) {
   const { rentedRigs: nhOrders } = useRentedRigs();
   const [rigs, setRigs] = useState([]);
   const [userRigIds, setUserRigIds] = useState(new Set());
@@ -26,6 +28,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   const [enrichedInfo, setEnrichedInfo] = useState({}); // rigId -> details object
   const [loadingInfoIds, setLoadingInfoIds] = useState(new Set());
   const [algoMarketPrices, setAlgoMarketPrices] = useState({}); // algoName -> priceData
+  const [coinPrices, setCoinPrices] = useState({}); // coinId -> CoinGecko price data
 
   const [expandedPools, setExpandedPools] = useState(new Set());
   const togglePoolInfo = (rigId) => {
@@ -40,19 +43,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   const [expandedAlgos, setExpandedAlgos] = useState({}); // algoKey -> boolean
   // More granular status filtering: 'available', 'rented', or 'all'
   const [statusFilter, setStatusFilter] = useState(endpoint === '/rig' ? initialStatus : 'rented');
-
-  const stats = useMemo(() => {
-    return {
-      total: rigs.length,
-      available: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('available')).length,
-      rented: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('rented')).length,
-      offline: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('offline')).length,
-      disabled: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('disabled')).length,
-    };
-  }, [rigs]);
-
-  // Debug count to see if items are being filtered out
-  const totalFetchedCount = rigs.length;
 
   const filteredRigs = useMemo(() => {
     return rigs.filter(rig => {
@@ -73,10 +63,104 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [filteredRigs, enrichedInfo]);
 
+  const stats = useMemo(() => {
+    return {
+      total: rigs.length,
+      available: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('available')).length,
+      rented: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('rented')).length,
+      offline: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('offline')).length,
+      disabled: rigs.filter(r => String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase().includes('disabled')).length,
+      online: rigs.filter(r => {
+        const s = String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase();
+        return !s.includes('offline') && !s.includes('disabled');
+      }).length,
+    };
+  }, [rigs]);
+
+  const fullSummaryData = useMemo(() => {
+    const onlineAlgoLines = groupedRigs.map(([algoName, rigsInGroup]) => {
+      const onlineCount = rigsInGroup.filter(r => {
+        const s = String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase();
+        return !s.includes('offline') && !s.includes('disabled');
+      }).length;
+      return `• ${getAlgoDisplayName(algoName)}: ${onlineCount}`;
+    }).filter(line => !line.endsWith(': 0'));
+
+    const activeRentalLines = filteredRigs
+      .filter(rig => {
+        const s = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
+        return s.includes('rented') || s.includes('active');
+      })
+      .map(rig => {
+        const info = enrichedInfo[rig.id];
+        if (!info) return null;
+        const algo = info.algo || rig.algo || rig.algorithm || rig.type || 'N/A';
+        const effNum = parseFloat(info.percent || 0);
+        const efficiency = effNum; // Pass as number to avoid .toFixed errors in template
+        const roi = effNum - 100;   // Pass as number
+        const avg = parseFloat(info.rawAvg || 0);
+        const ads = parseFloat(info.rawAds || 0);
+        const cur = parseFloat(info.rawCur || 0);
+        const target = parseFloat(info.targetHashrate || 0);
+        const remaining = info.remainingTimeStr || (info.endTime ? calculateRemainingTime(info.endTime) : '');
+
+        let perfEmoji = '🟡';
+        if (parseFloat(efficiency) >= 95) perfEmoji = '🟢';
+        else if (parseFloat(efficiency) < 50) perfEmoji = '🔴';
+
+        return TelegramTemplates.activeRentalLine(
+          perfEmoji, 
+          algo, 
+          rig.name || rig.id, 
+          remaining, 
+          efficiency, 
+          roi, 
+          avg, 
+          ads, 
+          cur, 
+          target, 
+          ''
+        );
+      })
+      .filter(Boolean);
+
+    return {
+      onlineAll: stats.online,
+      offlineAll: stats.offline,
+      totalAll: stats.total,
+      disabledAll: stats.disabled,
+      onlineAlgoLines,
+      activeRentalLines,
+      monitorTime: new Date().toLocaleTimeString(),
+    };
+  }, [stats, groupedRigs, filteredRigs, enrichedInfo]);
+
+  useEffect(() => {
+    if (onSummaryUpdate) onSummaryUpdate(fullSummaryData);
+  }, [fullSummaryData, onSummaryUpdate]);
+
+  // Debug count to see if items are being filtered out
+  const totalFetchedCount = rigs.length;
+
+  // Fetch CoinGecko prices for mining coins periodically
+  useEffect(() => {
+    const fetchCoinPrices = async () => {
+      try {
+        const res = await onCall('/api/v2/prices/coingecko', { silent: true });
+        if (res?.success) setCoinPrices(res.data);
+      } catch (err) {
+        console.warn('[CoinGecko] Price fetch failed:', err.message);
+      }
+    };
+    fetchCoinPrices();
+  }, [onCall]);
+
   // Automatically fetch NiceHash market prices for displayed algorithms
   useEffect(() => {
     const fetchAllPrices = async () => {
-      const uniqueAlgos = [...new Set(filteredRigs.map(r => (r.algo || r.algorithm || r.type || 'N/A').toUpperCase()))];
+      const uniqueAlgos = [...new Set(filteredRigs.map(r => (r.algo || r.algorithm || r.type || 'N/A').toUpperCase()))]
+        .filter(a => a && a !== 'N/A');
+
       for (const algo of uniqueAlgos) {
         if (algo && algo !== 'N/A' && !algoMarketPrices[algo]) {
           try {
@@ -84,25 +168,23 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             if (!nhAlgo) continue;
 
             const fetchPrice = async (path) => {
-              const query = { 
-                algorithm: nhAlgo, 
+              const query = {
+                algorithm: nhAlgo,
                 market: 'USA',
-                client: (mrrClient === 'VN' || mrrClient === 'ALL' || !mrrClient) ? 'BT' : mrrClient
+                client: (mrrClient === 'VN' || mrrClient === 'ALL' || !mrrClient || mrrClient === 'ALL') ? 'BT' : mrrClient
               };
               const data = await onCall(path, { query, silent: true });
               if (!data || data.error || data.errors || data.success === false) return null;
               return data?.price || data;
             };
 
-            let nhPriceData = await fetchPrice('/api/v2/hashpower/business/order');
-            if (!nhPriceData) {
-              nhPriceData = await fetchPrice('/api/v2/hashpower/order/price');
-            }
+            // Use price endpoint directly as business/order returns 405 Method Not Allowed for GET
+            let nhPriceData = await fetchPrice('/api/v2/hashpower/order/price');
 
             if (nhPriceData && getNiceHashPriceValue(nhPriceData) > 0) {
               setAlgoMarketPrices(prev => ({ ...prev, [algo]: nhPriceData }));
             }
-            
+
             // Small delay to prevent nonce conflicts when using aggregate (VN) view
             await new Promise(r => setTimeout(r, 200));
           } catch (e) {
@@ -136,15 +218,14 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       const priceData = getPriceDataLocal(rig.price || info?.price || rig.min_price);
 
       const btcPriceData = getBtcPriceDataUtils(rig.price || info?.price || rig.min_price);
-      
+
       const BASE_UNIT_FACTOR = 1000;
       const isEquihash = algo.toLowerCase() === 'equihash';
       const priceBtcRate = isEquihash ? btcPriceData.value : btcPriceData.value * BASE_UNIT_FACTOR;
-      
+
       const startTime = info?.startTime || rig.start;
       const endTime = info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null);
 
-      
       return [
         rig.id,
         `"${(rig.name || '').replace(/"/g, '""')}"`,
@@ -160,7 +241,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         endTime || 'N/A'
       ];
     });
-
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -176,7 +256,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   const fetchRigs = async () => {
     setLoading(true);
     setError('');
-    setEnrichedInfo({}); // Optional: clear cached details on full refresh to avoid UI state mismatch
     try {
       // 1. Prepare parameters for Marketplace
       const params = { endpoint };
@@ -269,6 +348,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             last15m: normalized?.nice15mHashrate || '0 N/A',
             rawAds: normalized?.hashrate?.advertised || 0,
             rawAvg: normalized?.hashrate?.average || 0,
+            rawCur: normalized?.hashrate?.current || 0,
+            targetHashrate: normalized?.hashrate?.target || 0,
+            hashrate: { suffix: normalized?.hashrate?.suffix || '' },
             pools: pools.map(p => ({
               host: p.host || p.stratumHost || p.stratumHostname || rental.rig?.stratumHost || rental.rig?.host || 'N/A',
               port: p.port || p.stratumPort || rental.rig?.stratumPort || rental.rig?.port || 'N/A',
@@ -298,7 +380,10 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   };
 
   useEffect(() => {
-    if (mrrClient && endpoint) fetchRigs(); // Re-fetch if endpoint changes
+    if (mrrClient && endpoint) {
+      setEnrichedInfo({}); // Only clear cache when context (client/endpoint) actually changes
+      fetchRigs();
+    }
   }, [mrrClient, endpoint]);
 
   // Auto-fetch details for rented rigs so "Started X ago" and "Eff" show up automatically
@@ -347,12 +432,12 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     const currentPrice = rig.price || rig.min_price || '0';
     const newPrice = window.prompt(`Enter new price for rig "${rig.name}" (BTC/Unit/Day):`, currentPrice);
     if (newPrice === null || newPrice === '' || newPrice === currentPrice) return;
-    
+
     await onCall(`/api/v2/mrr/rig/${rig.id}`, {
       method: 'PUT',
-      body: { 
+      body: {
         price: newPrice,
-        name: rig.name 
+        name: rig.name
       },
       query: { client: rig.mrrClient || mrrClient },
       showModal: true
@@ -370,7 +455,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     const ownedRigs = rigsToUpdate.filter(r => userRigIds.has(String(r.id)));
     if (ownedRigs.length === 0) return;
 
-    
+
     const rigIds = ownedRigs.map(r => r.id).join(';');
     await onCall(`/api/v2/mrr/rig/${rigIds}`, {
       method: 'PUT',
@@ -386,21 +471,21 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '15px' }}>
         <div>
           <h2 style={{ margin: 3 }}>{endpoint === '/rig' ? 'MRR Marketplace' : 'RIGS'} ({mrrClient})
-            <select 
-            className="select-pro" 
-            value={statusFilter} 
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ fontSize: '11px', padding: '5px 5px 1px 8px', height: '30px', minWidth: '130px' }}
-          >
-            <option value="all">All Statuses</option>
-            <option value="available">Available</option>
-            {/* <option value="online">Online</option> */}
-            <option value="offline">Offline</option>
-            <option value="rented">Rented</option>
-            <option value="disabled">Disabled</option>
-          </select>
+            <select
+              className="select-pro"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{ fontSize: '11px', padding: '5px 5px 1px 8px', height: '30px', minWidth: '130px' }}
+            >
+              <option value="all">All Statuses</option>
+              <option value="available">Available</option>
+              {/* <option value="online">Online</option> */}
+              <option value="offline">Offline</option>
+              <option value="rented">Rented</option>
+              <option value="disabled">Disabled</option>
+            </select>
           </h2>
-          
+
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <small style={{ opacity: 0.3 }}>
@@ -477,9 +562,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                         <button className="text-button" style={{ fontSize: '10px', color: '#10b981', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'available')}>
                           Enable All
                         </button>
-                        <button className="text-button" style={{ fontSize: '10px', color: '#f87171', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'disabled')}>
+                        {/* <button className="text-button" style={{ fontSize: '10px', color: '#f87171', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'disabled')}>
                           Disable All
-                        </button>
+                        </button> */}
                       </div>
                     )}
                   </div>
@@ -494,7 +579,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                     padding: '10px 5px'
                   }}>
                     {rigsInGroup.map((rig) => (
-                      <MrrRigCard 
+                      <MrrRigCard
                         key={rig.id}
                         rig={rig}
                         algoName={algoName}

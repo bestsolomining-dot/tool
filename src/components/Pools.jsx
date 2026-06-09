@@ -817,7 +817,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                   </label>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div style={{ fontSize: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()}>Import XLSX</button>
                 <button className="btn-pro secondary" onClick={handleExportResults} disabled={completedResults.length === 0}>
                   Export Results ({completedResults.length})

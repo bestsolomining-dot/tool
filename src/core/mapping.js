@@ -143,6 +143,17 @@ export function getAlgoDisplayName(code) {
   return ALGO_DISPLAY_NAMES[uc] || code;
 }
 
+/** Maps market identifiers (numeric IDs, strings, or objects) to NiceHash string names (EU/USA). */
+export function getMarketName(market) {
+  // Handle case where market might be the full object from API
+  const id = (market && typeof market === 'object') ? market.id : market;
+  const m = String(id || '').trim().toUpperCase();
+
+  if (m === '0' || m === 'EU' || m === 'EUROPE') return 'EU';
+  if (m === '1' || m === 'USA' || m === 'US' || m === 'USA_EAST') return 'USA';
+  return 'USA'; // Default
+}
+
 /** Standardized hashrate pricing formatter. */
 export function formatHashratePrice(price, currency = 'BTC', unit = 'TH') {
   const cleanUnit = String(unit || 'TH').toUpperCase().replace('S', '');

@@ -247,7 +247,7 @@ export function registerRoutes(app) {
 
     const results = await Promise.all(nhAccounts.map(async (acct) => {
       const { client, clientName } = resolveNhClient(acct);
-      if (!client || (acct !== 'BT' && clientName === 'BT' && acct !== 'LN')) return null;
+      if (!client || (acct !== 'BT' && clientName === 'BT' && acct !== 'PH')) return null;
       try {
         const data = await getNiceHashApp(client).hashpower.getMyOrders({ limit: 1000 });
         return { clientName, list: data?.list || [] };
@@ -292,43 +292,6 @@ export function registerRoutes(app) {
 
   app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.createOrder(req.body))));
   app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderBook(req.query))));
-  
-  // Sanitize query to remove tool-specific params (client, ts) before sending to NiceHash
-  app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
-    let algorithm = normalizeAlgoForNiceHash(req.query.algorithm || req.query.algo);
-    if (algorithm.toUpperCase().includes('SHA256ASICBOOST')) algorithm = 'SHA256';
-    const marketStr = String(req.query.market || 'USA').toUpperCase();
-    const market = (marketStr === 'USA' || marketStr === '1') ? 1 : 0; // Convert to numeric ID
-
-    let app = req.nhApp;
-    if (isAggregate(req.query.client) || !app) {
-      const firstReal = Object.keys(nhConfigs).find(k => nhConfigs[k].apiKey && !isAggregate(k));
-      const resolved = resolveNhClient(firstReal || 'BT');
-      app = getNiceHashApp(resolved.client);
-    }
-    if (!app) return res.status(400).json({ error: 'No NiceHash client configured' });
-
-    res.json(await app.hashpower.getOrderPrice({ algorithm, market }));
-  }));
-
-  // FIX: Resolved 405 error. Using getOrderPrice for both standard and business 
-  // as they share the /order/calculate GET endpoint for price data.
-  app.get('/api/v2/hashpower/business/order', asyncHandler(async (req, res) => {
-    let algorithm = normalizeAlgoForNiceHash(req.query.algorithm || req.query.algo);
-    if (algorithm.toUpperCase().includes('SHA256ASICBOOST')) algorithm = 'SHA256';
-    const marketStr = String(req.query.market || 'USA').toUpperCase();
-    const market = (marketStr === 'USA' || marketStr === '1') ? 1 : 0; // Convert to numeric ID
-
-    let app = req.nhApp;
-    if (isAggregate(req.query.client) || !app) {
-      const firstReal = Object.keys(nhConfigs).find(k => nhConfigs[k].apiKey && !isAggregate(k));
-      const resolved = resolveNhClient(firstReal || 'BT');
-      app = getNiceHashApp(resolved.client);
-    }
-    if (!app) return res.status(400).json({ error: 'No NiceHash client configured' });
-
-    res.json(await app.hashpower.getOrderPrice({ algorithm, market }));
-  }));
 
   app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.cancelOrder(req.params.orderId))));
   app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.refillOrder(req.params.orderId, req.body))));
@@ -758,7 +721,7 @@ export function registerRoutes(app) {
     const priceMap = new Map();
     for (const a of uniqueAlgos) {
       try {
-        priceMap.set(a, await nhApp.hashpower.getOrderPrice({ algorithm: a, market: 1 }));
+        priceMap.set(a, await nhApp.hashpower.getOrderPrice({ algorithm: a, market: 'USA' }));
       } catch (e) { }
     }
 

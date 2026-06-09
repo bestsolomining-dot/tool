@@ -75,14 +75,6 @@ export class NiceHashClient {
     
     // Ensure path and query string are separated
     let [cleanPath, pathQueryString] = path.split('?');
-
-    // Fix: "Type conversion error" (code 50) when "calculate" is mistakenly passed 
-    // as a positional ID segment in the path (e.g., /hashpower/order/calculate).
-    // This occurs when Express routes like /order/:id capture /order/calculate.
-    if (method.toUpperCase() === 'GET' && cleanPath.endsWith('/calculate')) {
-      cleanPath = cleanPath.replace(/\/calculate$/, '');
-    }
-
     const serverTime = await this.getServerTime();
     const time = serverTime.toString();
     const nonce = randomUUID();
@@ -91,13 +83,6 @@ export class NiceHashClient {
     const queryParams = new URLSearchParams(pathQueryString || '');
     const additionalParams = new URLSearchParams(query || {});
     additionalParams.forEach((value, key) => queryParams.set(key, value));
-
-    // Fix for "Type conversion error" with bad_property_name "id" and bad_property_value "calculate".
-    // This suggests 'id=calculate' is an internal flag that should not be sent to the external API.
-    const idValue = queryParams.get('id');
-    if (idValue && idValue.toLowerCase() === 'calculate') {
-      queryParams.delete('id');
-    }
 
     // For Hashpower Private API, ts and nonce MUST be in the query string.
     // We skip this for public endpoints to avoid malformed request errors.

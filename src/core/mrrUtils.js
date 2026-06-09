@@ -62,7 +62,7 @@ export const getClientBadgeStyle = (client) => {
   const styles = {
     'BT': { background: '#2563eb', color: '#fff' },
     'SL': { background: '#d97706', color: '#fff' },
-    'LN': { background: '#0891b2', color: '#fff' },
+    'LN': { background: '#eff308', color: '#fff' },
     'VN': { background: '#10b981', color: '#fff' },
     'LUCKY': { background: '#ec4899', color: '#fff' },
   };

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { poolApi } from '../core/poolUtils';
-import { normalizeAlgoForNiceHash } from '../core/mapping';
+import { normalizeAlgoForNiceHash, getAlgoDisplayName } from '../core/mapping';
 import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils';
-import { getAlgoDisplayName } from '../core/mapping';
 import { useRentedRigs } from './RentedRigContext';
 import MrrRigCard from './MrrRigCard';
-import { TelegramTemplates } from './TelegramManager';
+import { TelegramTemplates } from '../core/telegram.js';
 import { calculateRemainingTime } from '../core/time';
 import {
   findRigArray,
@@ -46,6 +45,10 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
   const filteredRigs = useMemo(() => {
     return rigs.filter(rig => {
+      // Hide rigs that do not have a designated client handle to prevent signature errors,
+      // unless we are specifically browsing the public Marketplace.
+      if (endpoint !== '/rig' && !rig.mrrClient && !rig.client) return false;
+
       if (statusFilter === 'all') return true;
       const statusValue = typeof rig.status === 'object' ? rig.status.status : rig.status;
       return String(statusValue || '').toLowerCase().includes(statusFilter);
@@ -170,8 +173,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             const fetchPrice = async (path) => {
               const query = {
                 algorithm: nhAlgo,
-                market: 'USA',
-                client: (mrrClient === 'VN' || mrrClient === 'ALL' || !mrrClient || mrrClient === 'ALL') ? 'BT' : mrrClient
+                market: 'USA', // Price endpoint requires 'USA' or 'EU' strings
+                client: (mrrClient === 'VN' || mrrClient === 'ALL' || !mrrClient) ? 'BT' : mrrClient
               };
               const data = await onCall(path, { query, silent: true });
               if (!data || data.error || data.errors || data.success === false) return null;
@@ -273,6 +276,13 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
       if (result.ok) {
         const rigList = findRigArray(result.data);
+
+        // Ensure rigs are tagged with the current client handle in non-aggregate views
+        if (mrrClient && mrrClient !== 'VN' && mrrClient !== 'ALL') {
+          rigList.forEach(r => {
+            if (!r.mrrClient) r.mrrClient = mrrClient;
+          });
+        }
 
         // 2. Identify "My Rigs" if in Marketplace view
         if (endpoint === '/rig') {

@@ -342,8 +342,8 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     .replace(/\/(rig|rental)\/[0-9;]+\/info$/, '/$1/:id/info');
 
   if (!mrrInitTracker.has(trackingEndpoint)) {
-    console.log(`[MRR] First-time endpoint delay (1s): ${trackingEndpoint}`);
-    await new Promise(r => setTimeout(r, 1000));
+    console.log(`[MRR] First-time endpoint delay (3s): ${trackingEndpoint}`);
+    await new Promise(r => setTimeout(r, 3000));
     mrrInitTracker.add(trackingEndpoint);
   }
 

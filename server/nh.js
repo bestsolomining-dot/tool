@@ -264,9 +264,9 @@ export const getNiceHashApp = (client) => ({
     getOrderPrice: (query) => {
       const { algorithm, market, client: _c, ts: _t, ...rest } = query || {};
       return client.call({
-        method: 'POST', // Changed from GET to POST
+        method: 'GET',
         path: '/main/api/v2/hashpower/order/calculate',
-        body: { // Moved parameters to body
+        query: {
           algorithm: normalizeAlgoForNiceHash(algorithm),
           market,
           type: query.type || 'STANDARD',
@@ -274,16 +274,15 @@ export const getNiceHashApp = (client) => ({
           limit: query.limit || '0.01',
           amount: query.amount || '0.005',
           ...rest
-        },
-        query: {} // Ensure no query parameters are left for POST
+        }
       });
     },
     getBusinessOrder: (query) => {
       const { algorithm, market, client: _c, ts: _t, ...rest } = query || {};
       return client.call({
-        method: 'POST', // Changed from GET to POST
+        method: 'GET',
         path: '/main/api/v2/hashpower/order/calculate',
-        body: { // Moved parameters to body
+        query: {
           algorithm: normalizeAlgoForNiceHash(algorithm),
           market,
           type: query.type || 'STANDARD',
@@ -291,8 +290,7 @@ export const getNiceHashApp = (client) => ({
           limit: query.limit || '0.01',
           amount: query.amount || '0.005',
           ...rest
-        },
-        query: {} // Ensure no query parameters are left for POST
+        }
       });
     },
     getOrderBook: (query) => {

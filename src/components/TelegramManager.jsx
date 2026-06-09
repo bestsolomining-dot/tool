@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, useEffect } from 'react';
 import { calculateRemainingTime as sharedCalculateRemainingTime } from '../core/time';
 import MonitorDbEditor from './MonitorDbEditor';
-import { escapeHtml, TelegramTemplates } from '../shared/telegram.js'; // Import from shared
+import { escapeHtml, TelegramTemplates } from '../core/telegram.js'; // Import from shared
 
 function getTelegramAccount(r, mrrClient) {
   const account = r?.mrrClient || r?.client || r?.account || mrrClient;

@@ -55,7 +55,11 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
           try {
             const nhAlgo = normalizeAlgoForNiceHash(algoName);
             const priceData = await callApi('/api/v2/hashpower/order/price', {
-              query: { algorithm: nhAlgo, market: marketName, client: priceLookupClient },
+              query: { 
+                algorithm: nhAlgo, 
+                market: ['USA', 'EU'].includes(marketName) ? marketName : 'USA',
+                client: priceLookupClient 
+              },
               silent: true
             });
             

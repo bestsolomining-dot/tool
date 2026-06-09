@@ -2,7 +2,7 @@ import { db } from './db.js';
 import { mrrApiCall, mrrConfigs } from './mrr.js';
 import { resolveNhClient, getNiceHashApp, isAggregate } from './nh.js';
 import { extractRentalInfo, extractRigInfo } from './utils.js';
-import { TELEGRAM_CONFIG, TelegramTemplates } from '../src/shared/telegram.js';
+import { TELEGRAM_CONFIG, TelegramTemplates } from '../src/core/telegram.js';
 import { ALGO_DISPLAY_NAMES } from '../src/core/mapping.js';
 
 const getAlgoDisplayName = (code) => {
@@ -419,9 +419,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const rawStart = info.startTime;
         const rawEnd = info.endTime;
 
-        // MRR API provides timestamps in UTC without a suffix. 
-        // Forcing 'Z' or ' UTC' ensures cross-platform consistency.
-        const parseUtc = (d) => d ? new Date(String(d).endsWith('UTC') || String(d).endsWith('Z') ? d : d + ' UTC').getTime() : 0;
+        const parseUtc = (d) => {
+          if (!d) return 0;
+          const s = String(d);
+          const hasSuffix = s.endsWith('UTC') || s.endsWith('Z') || s.includes('+');
+          return new Date(hasSuffix ? s : s + ' UTC').getTime();
+        };
 
         const startT = parseUtc(rawStart);
         const endT = parseUtc(rawEnd);
@@ -587,7 +590,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             info.niceAdvertisedHashrate,
             speedStatus,
             displayTarget,
-            ''
+            '', // extra
+            acct // client
           ));
         }
 

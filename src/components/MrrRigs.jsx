@@ -9,6 +9,7 @@ import { calculateRemainingTime } from '../core/time';
 import {
   findRigArray,
   getNiceHashPriceValue,
+  getRawHashrate,
   getRentalAlgorithm,
   getRentalAdvertisedHashrate,
   getRentalAverageHashrate,
@@ -81,35 +82,45 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   }, [rigs]);
 
   const fullSummaryData = useMemo(() => {
-    const onlineAlgoLines = groupedRigs.map(([algoName, rigsInGroup]) => {
-      const onlineCount = rigsInGroup.filter(r => {
-        const s = String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase();
-        return !s.includes('offline') && !s.includes('disabled');
-      }).length;
-      return `• ${getAlgoDisplayName(algoName)}: ${onlineCount}`;
-    }).filter(line => !line.endsWith(': 0'));
+    // Generate summary from full rig list, ignoring current UI status filters
+    const onlineRigs = rigs.filter(r => {
+      const s = String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase();
+      return !s.includes('offline') && !s.includes('disabled');
+    });
 
-    const activeRentalLines = filteredRigs
+    const activeRentalLines = rigs
       .filter(rig => {
         const s = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
         return s.includes('rented') || s.includes('active');
       })
       .map(rig => {
         const info = enrichedInfo[rig.id];
-        if (!info) return null;
-        const algo = info.algo || rig.algo || rig.algorithm || rig.type || 'N/A';
-        const effNum = parseFloat(info.percent || 0);
+        // Provide fallbacks if enriched info is still loading
+        const algo = info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A';
+        const effNum = parseFloat(info?.percent || rig.hashrate?.average?.percent || rig.percent || 0);
         const efficiency = effNum; // Pass as number to avoid .toFixed errors in template
-        const roi = effNum - 100;   // Pass as number
-        const avg = parseFloat(info.rawAvg || 0);
-        const ads = parseFloat(info.rawAds || 0);
-        const cur = parseFloat(info.rawCur || 0);
-        const target = parseFloat(info.targetHashrate || 0);
-        const remaining = info.remainingTimeStr || (info.endTime ? calculateRemainingTime(info.endTime) : '');
+        const roi = 100 - effNum;   // Calculate as work deficit/surplus to match summary example
+        const avg = parseFloat(info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash) || 0);
+        const ads = parseFloat(info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0);
+        const cur = parseFloat(info?.rawCur || rig.hashrate?.current || 0);
+
+        // Improved target hashrate calculation with manual fallback for summary accuracy
+        const startT = rig.start ? new Date(rig.start + (String(rig.start).endsWith('UTC') ? '' : ' UTC')).getTime() : 0;
+        const endT = rig.end ? new Date(rig.end + (String(rig.end).endsWith('UTC') ? '' : ' UTC')).getTime() : 0;
+        const totalMs = endT - startT;
+        const remainingMs = Math.max(0, endT - Date.now());
+        const elapsedMs = Math.max(0, Math.min(Date.now() - startT, totalMs));
+        const calcTarget = (remainingMs > 0 && totalMs > 0) ? ((ads * (totalMs / 1000) - avg * (elapsedMs / 1000)) / (remainingMs / 1000)) : 0;
+        const target = parseFloat(info?.targetHashrate || calcTarget || 0);
+
+        const remaining = info?.remainingTimeStr || (info?.endTime ? calculateRemainingTime(info.endTime) : (rig.end ? calculateRemainingTime(rig.end) : ''));
+        const account = rig.mrrClient || rig.client || mrrClient || 'ALL';
 
         let perfEmoji = '🟡';
-        if (parseFloat(efficiency) >= 95) perfEmoji = '🟢';
-        else if (parseFloat(efficiency) < 50) perfEmoji = '🔴';
+        if (effNum >= 100) perfEmoji = '💯';
+        else if (effNum >= 95) perfEmoji = '🟢';
+        else if (effNum >= 70) perfEmoji = '🔵';
+        else if (effNum < 50) perfEmoji = '🔴';
 
         return TelegramTemplates.activeRentalLine(
           perfEmoji, 
@@ -122,21 +133,32 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           ads, 
           cur, 
           target, 
-          ''
+          account
         );
       })
       .filter(Boolean);
+
+    const algoGroups = {};
+    onlineRigs.forEach(rig => {
+      const algo = (rig.algo || rig.algorithm || rig.type || 'N/A').toUpperCase();
+      algoGroups[algo] = (algoGroups[algo] || 0) + 1;
+    });
+
+    const onlineAlgoLines = Object.entries(algoGroups)
+      .sort(([, countA], [, countB]) => countB - countA)
+      .map(([name, count]) => `• ${getAlgoDisplayName(name)}: ${count}`);
 
     return {
       onlineAll: stats.online,
       offlineAll: stats.offline,
       totalAll: stats.total,
       disabledAll: stats.disabled,
+      rentedAll: stats.rented,
       onlineAlgoLines,
       activeRentalLines,
       monitorTime: new Date().toLocaleTimeString(),
     };
-  }, [stats, groupedRigs, filteredRigs, enrichedInfo]);
+  }, [stats, rigs, enrichedInfo, mrrClient]);
 
   useEffect(() => {
     if (onSummaryUpdate) onSummaryUpdate(fullSummaryData);
@@ -172,8 +194,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
             const fetchPrice = async (path) => {
               const query = {
-                algorithm: nhAlgo,
-                market: 'USA', // Price endpoint requires 'USA' or 'EU' strings
+                algorithm: String(nhAlgo),
+                market: 'USA', // NiceHash v2 expects string 'USA' or 'EU'
                 client: (mrrClient === 'VN' || mrrClient === 'ALL' || !mrrClient) ? 'BT' : mrrClient
               };
               const data = await onCall(path, { query, silent: true });

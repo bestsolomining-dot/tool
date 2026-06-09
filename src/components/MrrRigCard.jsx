@@ -80,8 +80,8 @@ const MrrRigCard = ({
   const nhPriceWithFee = myNhPrice > 0 ? (parseFloat(nhOrder.add_fee) || (myNhPrice * 1.04)) : 0;
   const isRandomX = algoName.toLowerCase().includes('RANDOMX');
   const isSha256 = algoName.toUpperCase().includes('SHA256');
-  // Corrected default for RandomX to MH (Megahash) as it's the standard unit for RandomX
-  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : 'TH') || (isRandomX ? 'GH' : 'MH');
+  // Corrected unit fallbacks to prevent SHA256/RandomX overlaps in NiceHash price comparison
+  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : (isRandomX ? 'MH' : 'GH'));
   const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
   const myOrderDiffRaw = (myNhPrice > 0 && mrrPriceNum > 0 && isMrrBtc) ? calculatePriceComparison(
     mrrPriceNum,
@@ -89,7 +89,8 @@ const MrrRigCard = ({
     nhPriceWithFee,
     myNhUnit
   ) : null;
-  const myOrderDiff = (97 - parseFloat(effValue)).toFixed(2);
+  // ROI matches summary logic: 100% - Actual Efficiency
+  const myOrderDiff = (100 - parseFloat(effValue)).toFixed(1);
 
   
   const eff = parseFloat(effValue).toFixed(2);

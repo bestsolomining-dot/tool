@@ -88,6 +88,11 @@ export function useTelegram(onCall, mrrClient) {
     return sendTelegram(msg, { silent: true });
   }, [sendTelegram, mrrClient]);
 
+  const notifyHeartbeatSummary = useCallback((summaryData) => {
+    const msg = TelegramTemplates.heartbeatSummary(summaryData);
+    return sendTelegram(msg, { silent: true });
+  }, [sendTelegram]);
+
   const sendManualNotice = useCallback((r, target) => {
     const startT = new Date(r.start + (String(r.start).endsWith('UTC') ? '' : ' UTC')).getTime();
     const endT = new Date(r.end + (String(r.end).endsWith('UTC') ? '' : ' UTC')).getTime();
@@ -122,8 +127,9 @@ export function useTelegram(onCall, mrrClient) {
     notifyCompletionEfficiencyAlert,
     notifyCompletionSuccess,
     notifyPerfectEfficiency,
+    notifyHeartbeatSummary,
     sendManualNotice
-  }), [sendTelegram, notifyNewRental, notifyZeroHashrate, notifyLowEfficiency, notifyStartupEfficiencyAlert, notifyCompletionEfficiencyAlert, notifyCompletionSuccess, notifyPerfectEfficiency, sendManualNotice]);
+  }), [sendTelegram, notifyNewRental, notifyZeroHashrate, notifyLowEfficiency, notifyStartupEfficiencyAlert, notifyCompletionEfficiencyAlert, notifyCompletionSuccess, notifyPerfectEfficiency, notifyHeartbeatSummary, sendManualNotice]);
 }
 
 export default function TelegramManager({ onCall, mrrClient }) {

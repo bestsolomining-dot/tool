@@ -36,7 +36,11 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
       if (data && (data.bitcoin || data.BTC || data.btc)) {
         setPrices(data);
       } else {
-        const detail = (typeof res === 'string')
+        const isSystemConfig = data && data.environments && data.default_client;
+
+        const detail = isSystemConfig
+          ? "Backend Routing Error: Received System Config"
+          : (typeof res === 'string')
           ? (res.includes('<!DOCTYPE html>') ? "Cloudflare Block" : `API Error: ${res.slice(0, 50)}`)
           : (res?.error || res?.message || "Invalid Data Shape");
         

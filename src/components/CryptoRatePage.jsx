@@ -69,7 +69,12 @@ export default function CryptoRatePage({ onCall }) {
       if (data && (data.bitcoin || data.BTC || data.btc)) {
         setPrices(data);
       } else {
-        const detail = (typeof res === 'string') 
+        // Detect if the server leaked a system config object instead of price data
+        const isSystemConfig = data && data.environments && data.default_client;
+        
+        const detail = isSystemConfig 
+          ? "Server returned System Config instead of Market Data. Check Worker routing."
+          : (typeof res === 'string') 
           ? (res.includes('<!DOCTYPE html>') ? "Cloudflare Intercept" : `API Error: ${res.slice(0, 100)}`)
           : (res?.error || res?.message || `Format Mismatch (Keys: ${res ? Object.keys(res).join(',') : 'null'})`);
         

@@ -12,6 +12,7 @@ export default function CryptoRatePage({ onCall }) {
   const [prices, setPrices] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [wsStatus, setWsStatus] = useState('disconnected');
   const [amounts, setAmounts] = useState({ usd: '1000' });
   const [baseCoin, setBaseCoin] = useState('usd');
 
@@ -43,9 +44,47 @@ export default function CryptoRatePage({ onCall }) {
   }, [onCall]);
 
   useEffect(() => {
+    // Initial fetch to populate data immediately
     fetchPrices();
-    const interval = setInterval(fetchPrices, 60000); // Update every minute
-    return () => clearInterval(interval);
+
+    // Initialize WebSocket for real-time updates
+    let socket = null;
+    let reconnectTimeout = null;
+
+    const connectWs = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/v2/prices/ws`;
+      
+      socket = new WebSocket(wsUrl);
+      setWsStatus('connecting');
+
+      socket.onopen = () => setWsStatus('connected');
+      
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'price_update' && message.data) {
+            setPrices(prev => ({ ...prev, ...message.data }));
+          }
+        } catch (err) {
+          console.warn('[WS] Failed to parse price update', err);
+        }
+      };
+
+      socket.onclose = () => {
+        setWsStatus('disconnected');
+        reconnectTimeout = setTimeout(connectWs, 5000); // Retry in 5s
+      };
+
+      socket.onerror = () => setWsStatus('error');
+    };
+
+    connectWs();
+
+    return () => {
+      if (socket) socket.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
   }, [fetchPrices]);
 
   const getCoinData = (id) => {
@@ -80,7 +119,10 @@ export default function CryptoRatePage({ onCall }) {
           <h1 style={{ margin: 0, fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-0.025em' }}>
             LIVE <span style={{ color: '#60a5fa' }}>CONVERTER</span>
           </h1>
-          <p style={{ margin: '5px 0 0', opacity: 0.5, fontSize: '0.9rem' }}>Real-time market valuation for mining assets</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '5px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: wsStatus === 'connected' ? '#10b981' : '#f59e0b', boxShadow: wsStatus === 'connected' ? '0 0 8px #10b981' : 'none' }}></div>
+            <p style={{ margin: 0, opacity: 0.5, fontSize: '0.8rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{wsStatus === 'connected' ? 'Stream Active' : 'Polling fallback'}</p>
+          </div>
         </div>
         <button onClick={() => window.location.href = '/'} style={{ padding: '8px 16px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
           ← DASHBOARD

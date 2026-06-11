@@ -44,8 +44,40 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
   };
 
   useEffect(() => {
-    if (isOpen && !prices) fetchPrices();
-  }, [isOpen, prices]);
+    if (!isOpen) return;
+    
+    fetchPrices();
+
+    let socket = null;
+    let reconnectTimeout = null;
+
+    const connectWs = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/v2/prices/ws`;
+      
+      socket = new WebSocket(wsUrl);
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'price_update' && message.data) {
+            setPrices(prev => ({ ...prev, ...message.data }));
+          }
+        } catch (err) { }
+      };
+
+      socket.onclose = () => {
+        reconnectTimeout = setTimeout(connectWs, 5000);
+      };
+    };
+
+    connectWs();
+
+    return () => {
+      if (socket) socket.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
+  }, [isOpen, fetchPrices]);
 
   const results = useMemo(() => {
     // Return empty results but keep symbols if prices aren't loaded yet

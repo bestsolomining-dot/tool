@@ -193,9 +193,9 @@ export default function CryptoRatePage({ onCall }) {
             <p style={{ margin: 0, opacity: 0.5, fontSize: '0.8rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{wsStatus === 'connected' ? 'Stream Active' : 'Polling fallback'}</p>
           </div>
         </div>
-        <button onClick={() => window.location.href = '/'} style={{ padding: '8px 16px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
+        {/* <button onClick={() => window.location.href = '/'} style={{ padding: '8px 16px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
           ← DASHBOARD
-        </button>
+        </button> */}
       </header>
 
       <div style={{ maxWidth: '1200px', margin: '0 auto 40px', background: 'rgba(30, 41, 59, 0.6)', padding: '30px', borderRadius: '32px', border: '1px solid rgba(96, 165, 250, 0.2)', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }}>

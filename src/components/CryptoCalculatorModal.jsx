@@ -36,15 +36,15 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
       if (data && (data.bitcoin || data.BTC || data.btc)) {
         setPrices(data);
       } else {
-        const isSystemConfig = data && data.environments && data.default_client;
+        const isSystemConfig = !!(data && data.environments && data.default_client);
 
         const detail = isSystemConfig
-          ? "Backend Routing Error: Received System Config"
+          ? "Configuration Error: Backend is misconfigured (Routing Leak)"
           : (typeof res === 'string')
           ? (res.includes('<!DOCTYPE html>') ? "Cloudflare Block" : `API Error: ${res.slice(0, 50)}`)
           : (res?.error || res?.message || "Invalid Data Shape");
         
-        console.warn(`[CryptoCalculator] Data invalid: ${detail}`);
+        setError(detail);
       }
     } catch (err) {
       console.error(`[CryptoCalculator] REST fetch failed: ${err.message}`);

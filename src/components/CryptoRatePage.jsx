@@ -131,7 +131,7 @@ export default function CryptoRatePage({ onCall }) {
       };
 
       socket.onclose = () => {
-        if (!isComponentMounted || retryCount >= 5) return;
+        if (!isComponentMounted || retryCount >= 3) return; // Reduce retries for obvious routing errors
         setWsStatus('disconnected');
         
         if (retryCount < 5) {

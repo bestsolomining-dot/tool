@@ -33,10 +33,10 @@ export default function CryptoRatePage({ onCall }) {
       if (res?.success && res.data) {
         setPrices(res.data);
       } else {
-        throw new Error(res?.message || "Invalid data received from price API");
+        throw new Error(res?.error || res?.message || "Invalid data received from price API");
       }
     } catch (err) {
-      setError("Unable to fetch live rates. Please check your connection.");
+      setError(`Rate Fetch Failed: ${err.message}`);
     } finally {
       setLoading(false);
     }

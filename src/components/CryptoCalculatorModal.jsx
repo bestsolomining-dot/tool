@@ -33,11 +33,11 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
       if (res?.success && res.data) {
         setPrices(res.data);
       } else {
-        throw new Error(res?.message || "Invalid data received from price API");
+        throw new Error(res?.error || res?.message || "Invalid data received from price API");
       }
     } catch (err) {
       console.error('[CryptoCalculator] Fetch failed:', err);
-      setError("API Error: Unable to fetch live rates. Please check your connection or API key.");
+      setError(`API Error: ${err.message}`);
     } finally {
       setLoading(false);
     }

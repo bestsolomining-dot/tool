@@ -7,6 +7,8 @@ import MiningRigRental from './src/components/MiningRigRental';
 import MiningRigSection from './src/components/MiningRigSection';
 import HashrateCalculator from './src/components/HashrateCalculator';
 import MrrPoolsManager from './src/components/MrrManager';
+import { CryptoCalculatorModal } from './src/components/CryptoCalculatorModal'; // Import the new modal
+import CryptoRatePage from './src/components/CryptoRatePage'; // Import the new page
 import { RentedRigProvider } from './src/components/RentedRigContext';
 import './src/App.css';
 
@@ -19,6 +21,7 @@ export default function App() {
   const [modalContent, setModalContent] = useState(null);
   const [activeSection, setActiveSection] = useState(null);
   const [calculatorModalOpen, setCalculatorModalOpen] = useState(false);
+  const [cryptoCalculatorModalOpen, setCryptoCalculatorModalOpen] = useState(false); // New state for crypto calculator
   const [debugModalOpen, setDebugModalOpen] = useState(false);
   const [debugLogs, setDebugLogs] = useState([]);
   const addDebugLog = useCallback((msg, type = 'info') => {
@@ -33,6 +36,15 @@ export default function App() {
   const [mrrPoolData, setMrrPoolData] = useState(null);
   const [mrrPoolRigId, setMrrPoolRigId] = useState('');
   const [mrrPoolRentalId, setMrrPoolRentalId] = useState('');
+
+  // Simple path-based routing
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const handleLocationChange = () => setCurrentPath(window.location.pathname);
+    window.addEventListener('popstate', handleLocationChange);
+    return () => window.removeEventListener('popstate', handleLocationChange);
+  }, []);
 
   const apiCache = useRef(new Map());
   const inFlightRequests = useRef(new Map());
@@ -297,6 +309,11 @@ export default function App() {
     }
   }, [handleMiningCall, mrrClient]);
 
+  // Route to the Crypto Rate Page
+  if (currentPath === '/cryptorate') {
+    return <CryptoRatePage onCall={callApi} />;
+  }
+
   return (
     <RentedRigProvider nhClient={nhOrderClient} callApi={callApi}>
       <div className="app-shell" style={{ padding: '0 20px 40px', maxWidth: '1600px', margin: '0 auto' }}>
@@ -358,9 +375,13 @@ export default function App() {
                   <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
                   <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>Open the hashrate calculator in a popup modal.</p>
                 </div>
-                <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
-                  Open Calculator
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
+                    Hashrate Calc
+                  </button>
+                  <button className="btn-pro secondary" onClick={() => window.history.pushState({}, '', '/cryptorate') || setCurrentPath('/cryptorate')}>Live Rates</button>
+                  <button className="btn-pro secondary" onClick={() => setCryptoCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>Crypto Calc</button>
+                </div>
               </div>
             </div>
             <article className="panel">
@@ -407,6 +428,11 @@ export default function App() {
         >
           <HashrateCalculator />
         </Modal>
+        <CryptoCalculatorModal 
+          isOpen={cryptoCalculatorModalOpen} 
+          onClose={() => setCryptoCalculatorModalOpen(false)} 
+          onCall={callApi}
+        />
         <Modal
           isOpen={debugModalOpen}
           onClose={() => setDebugModalOpen(false)}

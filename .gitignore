@@ -12,3 +12,4 @@ package-lock.json
 /dist
 /node_modules
 mrr_monitor.db
+*.db

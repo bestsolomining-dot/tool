@@ -68,11 +68,15 @@ export default function CryptoRatePage({ onCall }) {
         setPrices(res.data);
       } else {
         // Handle Cloudflare HTML error pages gracefully
-        const detail = (typeof res === 'string' && res.includes('<!DOCTYPE html>')) ? "Cloudflare Intercept" : (res?.error || res?.message || "Format Mismatch");
+        const detail = (typeof res === 'string') 
+          ? (res.includes('<!DOCTYPE html>') ? "Cloudflare Intercept" : `API Error: ${res.slice(0, 100)}`)
+          : (res?.error || res?.message || "Format Mismatch");
+        
+        if (!prices) setError(`Market data unavailable. ${detail}`);
         throw new Error(detail);
       }
     } catch (err) {
-      console.warn(`[CryptoRate] REST fetch failed (likely Cloudflare), relying on WebSocket: ${err.message}`);
+      console.warn(`[CryptoRate] REST fetch failed, relying on WebSocket: ${err.message}`);
       // We don't set a hard error here because the WebSocket might still connect and provide data
     } finally {
       setLoading(false);
@@ -86,17 +90,29 @@ export default function CryptoRatePage({ onCall }) {
     // Initialize WebSocket for real-time updates
     let socket = null;
     let reconnectTimeout = null;
+    let isComponentMounted = true;
 
     const connectWs = () => {
+      if (!isComponentMounted) return;
+      
+      // Close existing socket if any
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/api/v2/prices/ws`;
       
       socket = new WebSocket(wsUrl);
-      setWsStatus('connecting');
+      if (isComponentMounted) setWsStatus('connecting');
 
-      socket.onopen = () => setWsStatus('connected');
+      socket.onopen = () => {
+        if (isComponentMounted) setWsStatus('connected');
+      };
       
       socket.onmessage = (event) => {
+        if (!isComponentMounted) return;
         try {
           const message = JSON.parse(event.data);
           if (message.type === 'price_update' && message.data) {
@@ -108,16 +124,21 @@ export default function CryptoRatePage({ onCall }) {
       };
 
       socket.onclose = () => {
-        setWsStatus('disconnected');
-        reconnectTimeout = setTimeout(connectWs, 5000); // Retry in 5s
+        if (isComponentMounted) {
+          setWsStatus('disconnected');
+          reconnectTimeout = setTimeout(connectWs, 5000); // Retry in 5s
+        }
       };
 
-      socket.onerror = () => setWsStatus('error');
+      socket.onerror = () => {
+        if (isComponentMounted) setWsStatus('error');
+      };
     };
 
     connectWs();
 
     return () => {
+      isComponentMounted = false;
       if (socket) socket.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };

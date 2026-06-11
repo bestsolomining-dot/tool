@@ -33,11 +33,15 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
       if (res?.success && res.data) {
         setPrices(res.data);
       } else {
-        const detail = (typeof res === 'string' && res.includes('<!DOCTYPE html>')) ? "Cloudflare Block" : (res?.error || res?.message || "API Data Error");
+        const detail = (typeof res === 'string')
+          ? (res.includes('<!DOCTYPE html>') ? "Cloudflare Block" : `API Error: ${res.slice(0, 50)}`)
+          : (res?.error || res?.message || "API Data Error");
+        
+        if (!prices) setError(detail);
         throw new Error(detail);
       }
     } catch (err) {
-      console.warn(`[CryptoCalculator] REST fallback: ${err.message}`);
+      console.warn(`[CryptoCalculator] REST fallback failure: ${err.message}`);
       // Don't block the modal; the WebSocket will fill in prices if it connects.
     } finally {
       setLoading(false);

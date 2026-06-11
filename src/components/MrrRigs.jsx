@@ -351,7 +351,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
       const data = await onCall(path, {
         query: { client: mrrClient },
-        silent: true
+        silent: true,
+        background: true // Use background mode to avoid interrupting the user
       });
 
       if (data && !data.error) {
@@ -423,6 +424,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     if (loading || typeof onCall !== 'function') return;
 
     let isSubscribed = true;
+    let syncTimer = null;
+
     const syncRentedDetails = async () => {
       const rentedWithoutInfo = filteredRigs.filter(r => {
         const s = String(typeof r.status === 'object' ? r.status.status : r.status || '').toLowerCase();
@@ -430,18 +433,21 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       });
 
       if (isSubscribed && rentedWithoutInfo.length > 0) {
-        for (const rig of rentedWithoutInfo) {
-          if (!isSubscribed) break;
-          // Sequential await prevents nonce overlap for the same account
-          await fetchRigDetailInfo(rig);
-          // Add a small safety gap
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
+        // Process only one at a time per effect cycle. 
+        // This staggers requests and prevents nonce collision in the backend.
+        await fetchRigDetailInfo(rentedWithoutInfo[0]);
       }
     };
 
-    syncRentedDetails();
-    return () => { isSubscribed = false; };
+    // Delay the start of background syncing to avoid clashing with the primary rig list fetch
+    syncTimer = setTimeout(() => {
+      if (isSubscribed) syncRentedDetails();
+    }, 1500);
+
+    return () => { 
+      isSubscribed = false; 
+      if (syncTimer) clearTimeout(syncTimer);
+    };
   }, [filteredRigs, enrichedInfo, loading, loadingInfoIds, onCall]);
 
   const handleRigStatus = async (rig, targetStatus) => {

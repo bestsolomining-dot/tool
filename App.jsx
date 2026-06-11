@@ -153,6 +153,11 @@ export default function App() {
           });
         }
 
+        // Detect MRR Nonce errors specifically for debugging
+        if (res.status === 401 && String(data?.message || data?.error).toLowerCase().includes('nonce')) {
+          addDebugLog(`MRR Nonce Error detected for ${path}. Backend restart/reset recommended.`, 'error');
+        }
+
         const isAppError = !res.ok || (data && typeof data === 'object' && (data.success === false || data.error));
         addDebugLog(`Response ${res.status} from ${path}`, isAppError ? 'error' : 'success');
 

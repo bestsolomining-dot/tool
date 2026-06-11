@@ -18,6 +18,7 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [wsStatus, setWsStatus] = useState('disconnected');
+  const [wsEnabled, setWsEnabled] = useState(true);
   const [amounts, setAmounts] = useState({ usd: '1' });
   const [baseCoin, setBaseCoin] = useState('bitcoin');
 
@@ -36,14 +37,15 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
       if (data && (data.bitcoin || data.BTC || data.btc)) {
         setPrices(data);
       } else {
-        const isSystemConfig = !!(data && data.environments && data.default_client);
+        const isSystemConfig = data && data.environments && data.default_client;
 
         const detail = isSystemConfig
-          ? "Configuration Error: Backend is misconfigured (Routing Leak)"
+          ? "Backend Routing Error: System Config Leak"
           : (typeof res === 'string')
           ? (res.includes('<!DOCTYPE html>') ? "Cloudflare Block" : `API Error: ${res.slice(0, 50)}`)
           : (res?.error || res?.message || "Invalid Data Shape");
         
+        if (isSystemConfig) setWsEnabled(false);
         setError(detail);
       }
     } catch (err) {
@@ -64,6 +66,8 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
     let retryCount = 0;
 
     const connectWs = () => {
+      if (!wsEnabled) return;
+
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/api/v2/prices/ws`;
       

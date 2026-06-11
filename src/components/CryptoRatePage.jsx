@@ -46,6 +46,7 @@ export default function CryptoRatePage({ onCall }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [wsStatus, setWsStatus] = useState('disconnected');
+  const [wsEnabled, setWsEnabled] = useState(true);
   const [amounts, setAmounts] = useState({ usd: '1000' });
   const [baseCoin, setBaseCoin] = useState('usd');
 
@@ -73,11 +74,15 @@ export default function CryptoRatePage({ onCall }) {
         const isSystemConfig = data && data.environments && data.default_client;
         
         const detail = isSystemConfig 
-          ? "Server returned System Config instead of Market Data. Check Worker routing."
+          ? "Backend Routing Error: Market API obscured by System Config."
           : (typeof res === 'string') 
           ? (res.includes('<!DOCTYPE html>') ? "Cloudflare Intercept" : `API Error: ${res.slice(0, 100)}`)
           : (res?.error || res?.message || `Format Mismatch (Keys: ${res ? Object.keys(res).join(',') : 'null'})`);
         
+        if (isSystemConfig) {
+          setWsEnabled(false); // Kill WS attempts if routing is clearly broken
+        }
+
         if (!prices) setError(`Market data unavailable. ${detail}`);
         throw new Error(detail);
       }
@@ -100,7 +105,7 @@ export default function CryptoRatePage({ onCall }) {
     let retryCount = 0;
 
     const connectWs = () => {
-      if (!isComponentMounted) return;
+      if (!isComponentMounted || !wsEnabled) return;
       
       // Close existing socket if any
       if (socket) {
@@ -131,16 +136,17 @@ export default function CryptoRatePage({ onCall }) {
       };
 
       socket.onclose = () => {
-        if (!isComponentMounted || retryCount >= 3) return; // Reduce retries for obvious routing errors
+        if (!isComponentMounted) return;
         setWsStatus('disconnected');
         
-        if (retryCount < 5) {
+        if (retryCount < 2 && wsEnabled) {
           // Exponential backoff: 5s, 10s, 20s, 30s, 30s
           const delay = Math.min(30000, 5000 * Math.pow(2, retryCount));
           reconnectTimeout = setTimeout(connectWs, delay);
           retryCount++;
         } else {
-          console.log('[WS] Maximum reconnection attempts reached. Staying in polling mode.');
+          setWsEnabled(false);
+          console.warn('[WS] Maximum reconnection attempts reached or disabled. Staying in polling mode.');
         }
       };
 
@@ -149,14 +155,14 @@ export default function CryptoRatePage({ onCall }) {
       };
     };
 
-    connectWs();
+    if (wsEnabled) connectWs();
 
     return () => {
       isComponentMounted = false;
       if (socket) socket.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
-  }, [fetchPrices]);
+  }, [fetchPrices, wsEnabled]);
 
   // Polling fallback: If WebSocket is not connected, refresh prices every 60 seconds
   useEffect(() => {

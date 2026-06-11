@@ -31,15 +31,16 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
         silent: true 
       });
       
-      if (res?.success && res.data) {
-        setPrices(res.data);
+      const data = res?.data || (res && typeof res === 'object' && !res.error ? res : null);
+
+      if (data && (data.bitcoin || data.BTC)) {
+        setPrices(data);
       } else {
         const detail = (typeof res === 'string')
           ? (res.includes('<!DOCTYPE html>') ? "Cloudflare Block" : `API Error: ${res.slice(0, 50)}`)
           : (res?.error || res?.message || "API Data Error");
         
-        if (!prices) setError(detail);
-        throw new Error(detail);
+        console.warn(`[CryptoCalculator] Data invalid: ${detail}`);
       }
     } catch (err) {
       console.error(`[CryptoCalculator] REST fetch failed: ${err.message}`);
@@ -56,6 +57,7 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
 
     let socket = null;
     let reconnectTimeout = null;
+    let retryCount = 0;
 
     const connectWs = () => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -76,7 +78,10 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
 
       socket.onclose = () => {
         setWsStatus('disconnected');
-        reconnectTimeout = setTimeout(connectWs, 5000);
+        if (retryCount < 3) {
+          reconnectTimeout = setTimeout(connectWs, 10000);
+          retryCount++;
+        }
       };
       socket.onerror = () => setWsStatus('error');
     };

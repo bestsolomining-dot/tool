@@ -91,6 +91,7 @@ export default function CryptoRatePage({ onCall }) {
     let socket = null;
     let reconnectTimeout = null;
     let isComponentMounted = true;
+    let retryCount = 0;
 
     const connectWs = () => {
       if (!isComponentMounted) return;
@@ -124,9 +125,16 @@ export default function CryptoRatePage({ onCall }) {
       };
 
       socket.onclose = () => {
-        if (isComponentMounted) {
-          setWsStatus('disconnected');
-          reconnectTimeout = setTimeout(connectWs, 5000); // Retry in 5s
+        if (!isComponentMounted) return;
+        setWsStatus('disconnected');
+        
+        // Exponential backoff or stop after 5 failed attempts to prevent console spam
+        if (retryCount < 5) {
+          const delay = Math.min(30000, 5000 * Math.pow(2, retryCount));
+          reconnectTimeout = setTimeout(connectWs, delay);
+          retryCount++;
+        } else {
+          console.log('[WS] Maximum reconnection attempts reached. Staying in polling mode.');
         }
       };
 

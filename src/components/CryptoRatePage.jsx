@@ -8,6 +8,39 @@ const COINS = [
   { id: 'bitcoin-cash', symbol: 'BCH', name: 'Bitcoin Cash' },
 ];
 
+function Sparkline({ data, width = 120, height = 40, color = '#60a5fa' }) {
+  if (!data || !Array.isArray(data) || data.length < 2) {
+    return (
+      <div style={{ width, height, background: 'rgba(255,255,255,0.02)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: '8px', opacity: 0.2, fontWeight: 'bold', letterSpacing: '0.1em' }}>NO HISTORY</span>
+      </div>
+    );
+  }
+  
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  
+  const points = data.map((val, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - ((val - min) / range) * height;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ overflow: 'visible', filter: `drop-shadow(0 0 4px ${color}44)` }}>
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+    </svg>
+  );
+}
+
 export default function CryptoRatePage({ onCall }) {
   const [prices, setPrices] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -27,17 +60,20 @@ export default function CryptoRatePage({ onCall }) {
     try {
       const ids = COINS.map(c => c.id).join(',');
       const res = await onCall('/api/v2/prices/coingecko', { 
-        query: { ids, vs_currencies: 'usd' }, 
+        query: { ids, vs_currencies: 'usd', sparkline: true }, 
         silent: true 
       });
       
       if (res?.success && res.data) {
         setPrices(res.data);
       } else {
-        throw new Error(res?.error || res?.message || "Invalid data received from price API");
+        // Handle Cloudflare HTML error pages gracefully
+        const detail = (typeof res === 'string' && res.includes('<!DOCTYPE html>')) ? "Cloudflare Intercept" : (res?.error || res?.message || "Format Mismatch");
+        throw new Error(detail);
       }
     } catch (err) {
-      setError(`Rate Fetch Failed: ${err.message}`);
+      console.warn(`[CryptoRate] REST fetch failed (likely Cloudflare), relying on WebSocket: ${err.message}`);
+      // We don't set a hard error here because the WebSocket might still connect and provide data
     } finally {
       setLoading(false);
     }
@@ -106,6 +142,7 @@ export default function CryptoRatePage({ onCall }) {
         ...coin,
         price,
         change: data?.usd_24h_change || 0,
+        history: data?.sparkline_in_7d?.price || data?.sparkline || null,
         calculated: price > 0 ? (usdValue / price) : 0,
         usdValue: usdValue
       };
@@ -166,6 +203,9 @@ export default function CryptoRatePage({ onCall }) {
                 <span style={{ color: coin.change >= 0 ? '#10b981' : '#f87171', fontWeight: 'bold', fontSize: '0.9rem' }}>
                   {coin.change >= 0 ? '▲' : '▼'} {Math.abs(coin.change).toFixed(2)}%
                 </span>
+              </div>
+              <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
+                <Sparkline data={coin.history} color={coin.change >= 0 ? '#10b981' : '#f87171'} />
               </div>
               <div style={{ marginBottom: '15px' }}>
                 <input 

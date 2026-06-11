@@ -26,18 +26,19 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
     try {
       const ids = COINS.map(c => c.id).join(',');
       const res = await onCall('/api/v2/prices/coingecko', { 
-        query: { ids, vs_currencies: 'usd' }, 
+        query: { ids, vs_currencies: 'usd', sparkline: true }, 
         silent: true 
       });
       
       if (res?.success && res.data) {
         setPrices(res.data);
       } else {
-        throw new Error(res?.error || res?.message || "Invalid data received from price API");
+        const detail = (typeof res === 'string' && res.includes('<!DOCTYPE html>')) ? "Cloudflare Block" : (res?.error || res?.message || "API Data Error");
+        throw new Error(detail);
       }
     } catch (err) {
-      console.error('[CryptoCalculator] Fetch failed:', err);
-      setError(`API Error: ${err.message}`);
+      console.warn(`[CryptoCalculator] REST fallback: ${err.message}`);
+      // Don't block the modal; the WebSocket will fill in prices if it connects.
     } finally {
       setLoading(false);
     }

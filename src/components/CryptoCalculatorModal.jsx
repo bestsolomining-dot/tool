@@ -32,13 +32,13 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
       });
       
       const data = res?.data || (res && typeof res === 'object' && !res.error ? res : null);
-
-      if (data && (data.bitcoin || data.BTC)) {
+      
+      if (data && (data.bitcoin || data.BTC || data.btc)) {
         setPrices(data);
       } else {
         const detail = (typeof res === 'string')
           ? (res.includes('<!DOCTYPE html>') ? "Cloudflare Block" : `API Error: ${res.slice(0, 50)}`)
-          : (res?.error || res?.message || "API Data Error");
+          : (res?.error || res?.message || "Invalid Data Shape");
         
         console.warn(`[CryptoCalculator] Data invalid: ${detail}`);
       }
@@ -77,9 +77,10 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
       };
 
       socket.onclose = () => {
+        if (retryCount >= 3) return;
         setWsStatus('disconnected');
         if (retryCount < 3) {
-          reconnectTimeout = setTimeout(connectWs, 10000);
+          reconnectTimeout = setTimeout(connectWs, 15000);
           retryCount++;
         }
       };

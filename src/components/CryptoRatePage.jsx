@@ -64,13 +64,14 @@ export default function CryptoRatePage({ onCall }) {
         silent: true 
       });
       
-      if (res?.success && res.data) {
-        setPrices(res.data);
+      const data = res?.data || (res && typeof res === 'object' && !res.error ? res : null);
+      
+      if (data && (data.bitcoin || data.BTC || data.btc)) {
+        setPrices(data);
       } else {
-        // Handle Cloudflare HTML error pages gracefully
         const detail = (typeof res === 'string') 
           ? (res.includes('<!DOCTYPE html>') ? "Cloudflare Intercept" : `API Error: ${res.slice(0, 100)}`)
-          : (res?.error || res?.message || "Format Mismatch");
+          : (res?.error || res?.message || `Format Mismatch (Keys: ${res ? Object.keys(res).join(',') : 'null'})`);
         
         if (!prices) setError(`Market data unavailable. ${detail}`);
         throw new Error(detail);
@@ -125,11 +126,11 @@ export default function CryptoRatePage({ onCall }) {
       };
 
       socket.onclose = () => {
-        if (!isComponentMounted) return;
+        if (!isComponentMounted || retryCount >= 5) return;
         setWsStatus('disconnected');
         
-        // Exponential backoff or stop after 5 failed attempts to prevent console spam
         if (retryCount < 5) {
+          // Exponential backoff: 5s, 10s, 20s, 30s, 30s
           const delay = Math.min(30000, 5000 * Math.pow(2, retryCount));
           reconnectTimeout = setTimeout(connectWs, delay);
           retryCount++;

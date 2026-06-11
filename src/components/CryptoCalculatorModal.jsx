@@ -17,6 +17,7 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
   const [prices, setPrices] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [wsStatus, setWsStatus] = useState('disconnected');
   const [amounts, setAmounts] = useState({ usd: '1' });
   const [baseCoin, setBaseCoin] = useState('bitcoin');
 
@@ -41,7 +42,7 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
         throw new Error(detail);
       }
     } catch (err) {
-      console.warn(`[CryptoCalculator] REST fallback failure: ${err.message}`);
+      console.error(`[CryptoCalculator] REST fetch failed: ${err.message}`);
       // Don't block the modal; the WebSocket will fill in prices if it connects.
     } finally {
       setLoading(false);
@@ -61,7 +62,9 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
       const wsUrl = `${protocol}//${window.location.host}/api/v2/prices/ws`;
       
       socket = new WebSocket(wsUrl);
+      setWsStatus('connecting');
 
+      socket.onopen = () => setWsStatus('connected');
       socket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
@@ -72,8 +75,10 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
       };
 
       socket.onclose = () => {
+        setWsStatus('disconnected');
         reconnectTimeout = setTimeout(connectWs, 5000);
       };
+      socket.onerror = () => setWsStatus('error');
     };
 
     connectWs();
@@ -83,6 +88,13 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, [isOpen, fetchPrices]);
+
+  // Polling fallback for Modal
+  useEffect(() => {
+    if (!isOpen || wsStatus === 'connected') return;
+    const pollTimer = setInterval(() => fetchPrices(), 60000);
+    return () => clearInterval(pollTimer);
+  }, [isOpen, fetchPrices, wsStatus]);
 
   const results = useMemo(() => {
     // Return empty results but keep symbols if prices aren't loaded yet

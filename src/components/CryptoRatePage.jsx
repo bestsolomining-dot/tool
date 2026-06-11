@@ -76,7 +76,7 @@ export default function CryptoRatePage({ onCall }) {
         throw new Error(detail);
       }
     } catch (err) {
-      console.warn(`[CryptoRate] REST fetch failed, relying on WebSocket: ${err.message}`);
+      console.error(`[CryptoRate] REST fetch failed: ${err.message}`);
       // We don't set a hard error here because the WebSocket might still connect and provide data
     } finally {
       setLoading(false);
@@ -143,6 +143,17 @@ export default function CryptoRatePage({ onCall }) {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, [fetchPrices]);
+
+  // Polling fallback: If WebSocket is not connected, refresh prices every 60 seconds
+  useEffect(() => {
+    const pollTimer = setInterval(() => {
+      if (wsStatus !== 'connected' && !loading) {
+        console.log('[CryptoRate] WS inactive, polling for updates...');
+        fetchPrices();
+      }
+    }, 60000);
+    return () => clearInterval(pollTimer);
+  }, [fetchPrices, wsStatus, loading]);
 
   const getCoinData = (id) => {
     const coin = COINS.find(c => c.id === id);

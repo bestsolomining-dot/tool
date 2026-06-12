@@ -64,7 +64,7 @@ export function createApiClient({ onState } = {}) {
       }
 
       const isAppError = !res.ok ||
-        (data && typeof data === 'object' && (data.success === false || data.error)) ||
+        (data && typeof data === 'object' && (data.success === false || data.error || data.errors)) ||
         (typeof data === 'string' && data.length > 0 && !data.startsWith('{'));
 
       if (!isAppError && (res.status === 304 || res.ok)) {

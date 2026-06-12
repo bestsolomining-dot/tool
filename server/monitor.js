@@ -591,7 +591,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             speedStatus,
             displayTarget,
             '', // extra
-            acct // client
+            acct, // client
+            `${info.price.paid} ${info.price.currency}` // paid
           ));
         }
 

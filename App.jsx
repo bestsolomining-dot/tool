@@ -141,7 +141,7 @@ export default function App() {
           });
         }
 
-        const isAppError = !res.ok || (data && typeof data === 'object' && (data.success === false || data.error));
+        const isAppError = !res.ok || (data && typeof data === 'object' && (data.success === false || data.error || data.errors));
         addDebugLog(`Response ${res.status} from ${path}`, isAppError ? 'error' : 'success');
 
         if (!isAppError && (res.status === 304 || res.ok)) {
@@ -157,7 +157,7 @@ export default function App() {
           const errorMsg =
             typeof data === 'string' && data.length > 0
               ? data
-              : data?.error || data?.message || data?.data?.message || res.statusText || 'Unknown API Error';
+              : data?.errors?.[0]?.message || data?.error || data?.message || data?.data?.message || res.statusText || 'Unknown API Error';
 
           if (options.showModal) {
             setModalContent(data || { error: errorMsg });

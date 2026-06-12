@@ -38,12 +38,15 @@ const divider = '━━━━━━━━━━━━━━';
 export const TelegramTemplates = {
   divider,
 
-  activeRentalLine: (perfEmoji, algo, name, remaining, efficiency, roi, avg, ads, cur, target, extra, client) => {
-    return `${perfEmoji} <b>${escapeHtml(algo)}</b>` + ` 🔀 ` + `<code>${escapeHtml(client)}</code> | ${escapeHtml(name)}\n` +
-           `⏱ Remaining: ${remaining}\n` +
-           `📊 Eff: <code>${typeof efficiency === 'number' ? efficiency.toFixed(1) : efficiency}% (ROI: ${roi}%)</code>\n` +
-           `📈 Avg: <code>${avg}</code> | Ads: <code>${ads}</code>\n` +
-           `⚡ Cur: <code>${cur}</code> | Target: <code>${target.toFixed(2)}</code>\n` +
+  activeRentalLine: (perfEmoji, algo, name, remaining, efficiency, roi, avg, ads, cur, target, extra, client, paid) => {
+    return `${perfEmoji} <b>${escapeHtml(algo)}</b>` + ` 🔀 ` + `<b>${escapeHtml(client)}</b> | ${escapeHtml(name)}\n` +
+           `⏱ Remaining: ${remaining}\n\n` +
+       
+           `⚡ Cur: <code>${cur}</code> | ` +
+           `📊 Eff: <code>${typeof efficiency === 'number' ? efficiency.toFixed(1) : efficiency}%</code>\n` +
+           `📈 Avg: <code>${avg}</code> | Ads: <code>${ads}</code>\n\n` +
+           
+           `💰 Paid: <b>${paid}</b>\n` +
            `${extra}${divider}\n`;
   },
 

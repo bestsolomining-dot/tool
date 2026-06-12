@@ -167,7 +167,7 @@ export default function App() {
           });
         }
 
-        const isAppError = data && (data.success === false || data.error); // Check for common error indicators
+        const isAppError = !res.ok || (data && (data.success === false || data.error || data.errors)); // Check for common error indicators
 
         if (!isAppError && (res.status === 304 || res.ok)) {
           if (!options.silent && options.showModal) {
@@ -190,7 +190,7 @@ export default function App() {
           const errorMsg =
             typeof data === 'string'
               ? data
-              : data?.error || data?.message || data?.data?.message || res.statusText || 'Unknown API Error';
+              : data?.errors?.[0]?.message || data?.error || data?.message || data?.data?.message || res.statusText || 'Unknown API Error';
 
           setError(errorMsg);
           setOutput(null);

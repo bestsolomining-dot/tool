@@ -43,7 +43,7 @@ export const TelegramTemplates = {
            `⏱ Remaining: ${remaining}\n\n` +
        
            `⚡ Cur: <code>${cur}</code> | ` +
-           `📊 Eff: <code>${typeof efficiency === 'number' ? efficiency.toFixed(1) : efficiency}%</code>\n` +
+           `📊 Eff: <code>${typeof efficiency === 'number' ? efficiency.toFixed(2) : efficiency}%</code>\n` +
            `📈 Avg: <code>${avg}</code> | Ads: <code>${ads}</code>\n\n` +
            
            `💰 Paid: <b>${paid}</b>\n` +

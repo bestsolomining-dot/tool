@@ -14,10 +14,15 @@ export function initDatabase() {
         end_time INTEGER,
         algo TEXT,
         target_100 REAL,
+        order_diff REAL,
         last_notified INTEGER DEFAULT 0,
         last_updated INTEGER,
         low_hashrate_start INTEGER DEFAULT 0,
-        zero_hashrate_start INTEGER DEFAULT 0
+        zero_hashrate_start INTEGER DEFAULT 0,
+        current_hashrate REAL,
+        average_hashrate REAL,
+        advertised_hashrate REAL,
+        price_paid REAL
       )`, (err) => {
         if (err) console.error(`[db] Failed to create rentals table: ${err.message}`);
       });
@@ -42,6 +47,32 @@ export function initDatabase() {
       db.run("ALTER TABLE rentals ADD COLUMN end_time INTEGER", (err) => {
         if (err && !err.message.includes('duplicate column name')) {
           console.error(`[db:migration] end_time failed: ${err.message}`);
+        }
+      });
+
+      db.run("ALTER TABLE rentals ADD COLUMN order_diff REAL", (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+          console.error(`[db:migration] order_diff failed: ${err.message}`);
+        }
+      });
+      db.run("ALTER TABLE rentals ADD COLUMN current_hashrate REAL", (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+          console.error(`[db:migration] current_hashrate failed: ${err.message}`);
+        }
+      });
+      db.run("ALTER TABLE rentals ADD COLUMN average_hashrate REAL", (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+          console.error(`[db:migration] average_hashrate failed: ${err.message}`);
+        }
+      });
+      db.run("ALTER TABLE rentals ADD COLUMN advertised_hashrate REAL", (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+          console.error(`[db:migration] advertised_hashrate failed: ${err.message}`);
+        }
+      });
+      db.run("ALTER TABLE rentals ADD COLUMN price_paid REAL", (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+          console.error(`[db:migration] price_paid failed: ${err.message}`);
         }
       });
 

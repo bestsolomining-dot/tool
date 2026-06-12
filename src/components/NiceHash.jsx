@@ -382,7 +382,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
         </div>
         <Accounting onCall={onCall} />
 
-        {localAccounting?.total && localAccounting?.currencies && (
+        {/* {localAccounting?.total && localAccounting?.currencies && (
           <div className="balance-summary-pro" style={{ marginTop: '15px', padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px' }}>
               <div>
@@ -399,7 +399,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
               </div>
             </div>
           </div>
-        )}
+        )} */}
       </div>
     </div>
   );

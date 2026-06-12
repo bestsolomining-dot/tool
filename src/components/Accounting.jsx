@@ -3,7 +3,7 @@ import { apiFetch } from '../core/poolUtils'
 
 const ENDPOINTS = [
   { key: 'balances', label: 'Get All Balances', method: 'GET', path: '/api/v2/accounting/balances' },
-  { key: 'balance', label: 'Get Balance (by currency)', method: 'GET', path: '/api/v2/accounting/balance/{currency}' },
+  // { key: 'balance', label: 'Get Balance (by currency)', method: 'GET', path: '/api/v2/accounting/balance/{currency}' },
   { key: 'activitiesAll', label: 'Get All Activities', method: 'GET', path: '/api/v2/accounting/activities' },
   { key: 'activity', label: 'Get Activities (by currency)', method: 'GET', path: '/api/v2/accounting/activity/{currency}' },
   { key: 'currencies', label: 'Get Currencies', method: 'GET', path: '/api/v2/accounting/currencies' },

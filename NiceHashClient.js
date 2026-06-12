@@ -13,9 +13,9 @@ export class NiceHashClient {
 
   async _delayFirstTime(key) {
     if (!this.initializedPaths.has(key)) {
-      this.initializedPaths.add(key); // Mark immediately to prevent concurrent duplicate logs
       console.log(`[NiceHash] First-time function delay (1s): ${key}`);
       await new Promise(resolve => setTimeout(resolve, 1000));
+      this.initializedPaths.add(key);
     }
   }
 
@@ -73,8 +73,9 @@ export class NiceHashClient {
   async call({ method, path, query = {}, body = null }) {
     await this._delayFirstTime(path);
     
-    // Ensure path and query string are separated
-    let [cleanPath, pathQueryString] = path.split('?');
+    // Ensure path and query string are separated (in case query was included in the path string)
+    const [cleanPath, pathQueryString] = path.split('?');
+
     const serverTime = await this.getServerTime();
     const time = serverTime.toString();
     const nonce = randomUUID();
@@ -83,10 +84,13 @@ export class NiceHashClient {
     const queryParams = new URLSearchParams(pathQueryString || '');
     const additionalParams = new URLSearchParams(query || {});
     additionalParams.forEach((value, key) => queryParams.set(key, value));
+    
+    // Remove 'client' from query before sending to NiceHash upstream, 
+    // as it is only intended for our backend's internal routing.
+    queryParams.delete('client');
 
-    // For Hashpower Private API, ts and nonce MUST be in the query string.
-    // We skip this for public endpoints to avoid malformed request errors.
-    if (cleanPath.includes('/hashpower/') && !cleanPath.includes('/public/')) {
+    // For Hashpower Private API, ts and nonce MUST be in the query string
+    if (cleanPath.includes('/hashpower/')) {
       queryParams.set('ts', time);
       queryParams.set('nonce', nonce);
     }
@@ -116,7 +120,7 @@ export class NiceHashClient {
       let errorMessage = errorText;
       try {
         const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.message || errorJson.error || errorText;
+        errorMessage = errorJson.errors?.[0]?.message || errorJson.message || errorJson.error || errorText;
       } catch (e) { /* use raw text */ }
 
       const error = new Error(errorMessage);

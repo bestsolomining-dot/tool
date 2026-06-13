@@ -11,6 +11,9 @@ const getAlgoDisplayName = (code) => {
   return ALGO_DISPLAY_NAMES[uc] || code;
 };
 
+const resolveRentalAlgo = (r, info) =>
+  info?.algo || r?.algo || r?.algorithm || r?.miningAlgorithm || r?.rig?.type || r?.rig?.algo || r?.type || 'N/A';
+
 // ==========================
 //  Global State (Persisted in DB)
 // ==========================
@@ -302,7 +305,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             const lastRigAlert = lastAlertTimes.get(rigAlertKey) || 0;
 
             if (now - lastRigAlert > ALERT_COOLDOWN_MS) {
-              const rigMsg = TelegramTemplates.rigStatusWarning(acct, rig);
+              const rigMsg = TelegramTemplates.rigStatusWarning(acct, rig, resolveRentalAlgo(rig));
               await sendTelegramInternal(rigMsg).catch(() => {});
               lastAlertTimes.set(rigAlertKey, now);
             }
@@ -493,7 +496,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             const alertKey = `${r.id}_low_50`;
             const lastAlert = lastAlertTimes.get(alertKey) || 0;
             if (now - lastAlert > ALERT_COOLDOWN_MS) {
-              const msg = TelegramTemplates.efficiency(acct, r, info, efficiency, displayTarget);
+              const msg = TelegramTemplates.efficiency(acct, r, info, efficiency, displayTarget, resolveRentalAlgo(r, info));
               await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Low hashrate alert failed: ${e.message}`));
               lastAlertTimes.set(alertKey, now);
             }
@@ -509,7 +512,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             const alertKey = `${r.id}_zero_10m`;
             const lastAlert = lastAlertTimes.get(alertKey) || 0;
             if (now - lastAlert > ALERT_COOLDOWN_MS) {
-              const msg = TelegramTemplates.zeroHashrate(acct, r, info);
+              const msg = TelegramTemplates.zeroHashrate(acct, r, info, resolveRentalAlgo(r, info));
               await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Zero hashrate alert failed: ${e.message}`));
               lastAlertTimes.set(alertKey, now);
             }
@@ -523,7 +526,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const startupKey = `${r.id}_startup_70`;
           const lastAlert = lastAlertTimes.get(startupKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
-            const msg = TelegramTemplates.startup(acct, r, info, efficiency, displayTarget);
+            const msg = TelegramTemplates.startup(acct, r, info, efficiency, displayTarget, resolveRentalAlgo(r, info));
             await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Startup alert failed: ${e.message}`));
             lastAlertTimes.set(startupKey, now);
           }
@@ -534,7 +537,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const completionKey = `${r.id}_completion_70`;
           const lastAlert = lastAlertTimes.get(completionKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
-            const msg = TelegramTemplates.completionAlert(acct, r, info, efficiency, displayTarget);
+            const msg = TelegramTemplates.completionAlert(acct, r, info, efficiency, displayTarget, resolveRentalAlgo(r, info));
             await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Completion alert failed: ${e.message}`));
             lastAlertTimes.set(completionKey, now);
           }
@@ -545,7 +548,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const successKey = `${r.id}_success_95`;
           const lastAlert = lastAlertTimes.get(successKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
-            const msg = TelegramTemplates.completionSuccess(acct, r, info.niceAverageHashrate, '', efficiency, `${info.price.paid} ${info.price.currency}`);
+            const msg = TelegramTemplates.completionSuccess(acct, r, info.niceAverageHashrate, '', efficiency, `${info.price.paid} ${info.price.currency}`, resolveRentalAlgo(r, info));
             await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Success alert failed: ${e.message}`));
             lastAlertTimes.set(successKey, now);
           }
@@ -556,7 +559,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const perfectKey = `perfect_100_${r.id}`;
           const lastPerfect = lastAlertTimes.get(perfectKey) || 0;
           if (now - lastPerfect >= 3600000) { // Every 1 hour
-            const msg = TelegramTemplates.perfectEfficiency(acct, r, efficiency, `${info.price.paid} ${info.price.currency}`, remainingMs);
+            const msg = TelegramTemplates.perfectEfficiency(acct, r, efficiency, `${info.price.paid} ${info.price.currency}`, remainingMs, resolveRentalAlgo(r, info));
             await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Perfect efficiency alert failed: ${e.message}`));
             lastAlertTimes.set(perfectKey, now);  
           }
@@ -578,10 +581,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           accountRentedActive++;
           const currentSpeedVal = parseFloat(info.hashrate.current || 0);
           const speedStatus = currentSpeedVal > 0 ? `<b>${info.niceHashrate}H</b>` : '⚠️ <b>0 H/s</b>';
+          const algo = resolveRentalAlgo(r, info);
 
           activeRentalLines.push(TelegramTemplates.activeRentalLine(
             perfEmoji,
-            getAlgoDisplayName(info.algo),
+            getAlgoDisplayName(algo),
             r.name || r.id,
             remStr_s,
             info.percent,
@@ -611,7 +615,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const remM = Math.floor((displayRemN % 3600000) / 60000);
           const remStr = displayRemN <= 0 ? 'Finished' : (remD > 0 ? `${remD}d ${remH}h` : `${remH}h ${remM}m`);
 
-          const msg = TelegramTemplates.rentedNotice(hbType, r, info, acct, orderDiff, remStr);
+          const msg = TelegramTemplates.rentedNotice(hbType, r, info, acct, orderDiff, remStr, resolveRentalAlgo(r, info));
 
           try {
             await sendTelegramInternal(msg);
@@ -663,7 +667,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       }
 
       const info = extractRentalInfo(enriched);
-      const finishMsg = TelegramTemplates.finished(enriched, info);
+      const finishMsg = TelegramTemplates.finished(enriched, info, resolveRentalAlgo(enriched, info));
       try {
         await sendTelegramInternal(finishMsg);
         notifications.push({ id: fr.id, client: fr.client, status: 'Sent', type: 'Finished', telegram: 'ok' });

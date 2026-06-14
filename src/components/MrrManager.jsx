@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import PoolEditorPopup from './PoolEditorPopup';
+import CrytoRatePage from './CryptoRatePage';
 
 /**
  * MrrPoolManager Component
@@ -331,6 +332,8 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
           />
         )}
       </div>
+              <CrytoRatePage onCall={onCall} />
+
     </div>
   );
 

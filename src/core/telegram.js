@@ -96,7 +96,7 @@ export const TelegramTemplates = {
   },
 
   completionAlert: (acct, r, info, eff, target, algo = 'N/A') => {
-    return `🏁 <b>[COMPLETION NEAR]</b>\n` +
+    return `🏁 <b>[ALMOST COMPLETE]</b>\n` +
            `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
            `${divider}\n` +
            `<b>Rig:</b> ${formatRig(r)}\n` +

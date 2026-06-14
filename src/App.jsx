@@ -146,7 +146,7 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <div className="brand-block">
-          <h2>Ben Tre Mining Tool</h2>
+          {/* <h2>Ben Tre Mining Tool</h2> */}
           <p className="subtitle">
             A powerful desktop tool for Nicehash miners. Manage rigs, monitor stats, and automate hashpower purchases with ease.
           </p>

@@ -281,7 +281,7 @@ export default function App() {
         alignItems: 'flex-end'
       }}>
         <div className="brand-block" style={{ flex: 1 }}>
-          <h3>Ben Tre Mining Tool</h3>
+          {/* <h3>Ben Tre Mining Tool</h3> */}
           <div className="status-card" style={{ marginBottom: '2px' }}>
             <div className="status-item">
               <span style={{ opacity: 0.5, marginRight: '10px' }}>SYSTEM:</span>

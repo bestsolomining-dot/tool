@@ -224,23 +224,15 @@ export function nextMrrNonce(apiKey, clientLabel) {
   
   const lastNonce = BigInt(mrrLastNonceByClient.get(apiKey) || 0n);
 
-  // Safety: If nonce approaches the 64-bit unsigned limit or is massively in the future, reset it.
-  // 18.4 quintillion is the limit for uint64; we reset if we cross into that dangerous territory.
-  if (lastNonce > 18000000000000000000n) {
-    console.warn(`[mrr:${clientLabel}] Nonce overflow safety triggered. Resetting baseline.`);
-    mrrLastNonceByClient.set(apiKey, 0n);
+  // Safety: Only reset if we hit the actual 64-bit unsigned limit (18.4 quintillion).
+  // Your logs show nonces around 1.8 quintillion, which is perfectly safe for Uint64.
+  // We REMOVE the future-drift reset to allow the "Nuclear Jump" to actually catch up to MRR.
+  if (lastNonce > 18446744073709551615n) {
+    console.warn(`[mrr:${clientLabel}] Nonce overflow (Uint64). Resetting baseline.`);
+    mrrLastNonceByClient.set(apiKey, 1n);
   }
 
-  // Safety: If nonce is massively in the future compared to our best known time, reset it.
-  // Increased limit to 24 hours to ensure manual high nonces aren't immediately reset.
-  const futureLimitNano = (mrrClockSynced ? 1440n : 2880n) * 60n * 1000n * 1000000n;
-  const nowNano = (BigInt(Date.now()) + mrrClockOffset) * 1000000n;
-  if (lastNonce > 9999999999999999999n || lastNonce > (nowNano + futureLimitNano)) {
-    console.warn(`[mrr:${clientLabel}] Resetting future-drifted nonce baseline (${lastNonce}) to current time. (Safety Limit: ${futureLimitNano/1000000n/60000n}m)`);
-    mrrLastNonceByClient.set(apiKey, nowNano);
-  }
-
-  const nowMs = BigInt(Date.now()) + (mrrClockSynced ? mrrClockOffset : 0n);
+  const nowMs = BigInt(Date.now()) + mrrClockOffset;
   const now19 = BigInt(nowMs) * 1000000n;
 
   // Đảm bảo nonce luôn tăng và cộng thêm biến đếm toàn cục để tránh va chạm mili giây

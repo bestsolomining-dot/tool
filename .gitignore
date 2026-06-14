@@ -1,16 +1,10 @@
-mrr_monitor.db
-mrr_monitor.db-shm
-mrr_monitor.db-wal
-*.csv
+# Ignore SQLite databases
+*.db
+
+# Ignore environment variables and dependencies
 .env
-*.db
-wrangler.toml
-wrangler.generated.toml
+node_modules/
+
+# Ignore exported CSV data files
+*.csv
 package-lock.json
-*.log
-*.xlsx
-/dist
-/node_modules
-mrr_monitor.db
-mrr_monitor.db
-*.db

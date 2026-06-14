@@ -8,3 +8,4 @@ node_modules/
 # Ignore exported CSV data files
 *.csv
 package-lock.json
+mrr_monitor.db-journal

@@ -36,6 +36,30 @@ const MRR_CACHE_TTL_DEFAULT = 10000; // 10 seconds cache
 const MRR_CACHE_TTL_STABLE = 300000; // 5 minutes for stable info/algos
 const MRR_NONCE_RECOVERY_JUMP_SMALL = 60000000000n; // 1 minute
 const MRR_NONCE_RECOVERY_JUMP_LARGE = 3600000000000n; // 1 hour
+const MRR_MAX_TRUSTED_POSITIVE_CLOCK_SKEW_MS = 5n * 60n * 1000n; // 5 minutes
+
+function parseTrustedNonceOverride(rawValue, label) {
+  if (!rawValue) return null;
+
+  try {
+    const override = BigInt(rawValue);
+    const localNonceNow = BigInt(Date.now()) * 1000000n;
+    const maxFuture = MRR_MAX_TRUSTED_POSITIVE_CLOCK_SKEW_MS * 1000000n;
+
+    if (override > (localNonceNow + maxFuture)) {
+      console.warn(
+        `[mrr:init] Ignoring stale nonce override for ${label}; ` +
+        `it is too far in the future (${override}).`,
+      );
+      return null;
+    }
+
+    return override;
+  } catch {
+    console.warn(`[mrr:init] Ignoring invalid nonce override for ${label}.`);
+    return null;
+  }
+}
 
 const mrrInstances = new Map(); // This map will store resolved client configs
 
@@ -44,22 +68,22 @@ export function initMrrConfigs(env) {
     BT: {
       apiKey: normalizeCredential(env.MRR_KEY_RIG_BT),
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_BT),
-      nonceOverride: env.MRR_NONCE_OVERRIDE_BT ? BigInt(env.MRR_NONCE_OVERRIDE_BT) : null,
+      nonceOverride: parseTrustedNonceOverride(env.MRR_NONCE_OVERRIDE_BT, 'BT'),
     },
     SL: {
       apiKey: normalizeCredential(env.MRR_KEY_RIG_SL),
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_SL),
-      nonceOverride: env.MRR_NONCE_OVERRIDE_SL ? BigInt(env.MRR_NONCE_OVERRIDE_SL) : null,
+      nonceOverride: parseTrustedNonceOverride(env.MRR_NONCE_OVERRIDE_SL, 'SL'),
     },
     LN: {
       apiKey: normalizeCredential(env.MRR_KEY_RIG_LN),
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_LN),
-      nonceOverride: env.MRR_NONCE_OVERRIDE_LN ? BigInt(env.MRR_NONCE_OVERRIDE_LN) : null,
+      nonceOverride: parseTrustedNonceOverride(env.MRR_NONCE_OVERRIDE_LN, 'LN'),
     },
     LUCKY: {
       apiKey: normalizeCredential(env.MRR_KEY_RIG_LUCKY),
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_LUCKY),
-      nonceOverride: env.MRR_NONCE_OVERRIDE_LUCKY ? BigInt(env.MRR_NONCE_OVERRIDE_LUCKY) : null,
+      nonceOverride: parseTrustedNonceOverride(env.MRR_NONCE_OVERRIDE_LUCKY, 'LUCKY'),
     },
   };
 
@@ -71,7 +95,7 @@ export function initMrrConfigs(env) {
         mrrConfigs[acct] = {
           apiKey: normalizeCredential(env[key]),
           apiSecret: normalizeCredential(env[`MRR_SECRET_RIG_${acct}`] || env[`MRR_API_SECRET_${acct}`]),
-          nonceOverride: env[`MRR_NONCE_OVERRIDE_${acct}`] ? BigInt(env[`MRR_NONCE_OVERRIDE_${acct}`]) : null,
+          nonceOverride: parseTrustedNonceOverride(env[`MRR_NONCE_OVERRIDE_${acct}`], acct),
         };
       };
     }
@@ -195,7 +219,17 @@ export async function syncMrrClock(force = false) {
       // NTP-style: Estimate server time at the moment of 'endSync'
       // by adding half the round-trip time to the server's reported time.
       const estimatedServerTimeAtEnd = (serverTimeMs ?? BigInt(endSync)) + (rtt / 2n);
-      mrrClockOffset = estimatedServerTimeAtEnd - BigInt(endSync);
+
+      const rawOffset = estimatedServerTimeAtEnd - BigInt(endSync);
+      if (rawOffset > MRR_MAX_TRUSTED_POSITIVE_CLOCK_SKEW_MS) {
+        console.warn(
+          `[mrr:clock] Ignoring suspicious positive offset of ${rawOffset}ms; ` +
+          'using local clock to avoid future-drifted nonces.',
+        );
+        mrrClockOffset = 0n;
+      } else {
+        mrrClockOffset = rawOffset;
+      }
       mrrClockSynced = true;
 
       if (!serverTimeMs) {

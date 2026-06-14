@@ -1,9 +1,7 @@
 export const TELEGRAM_CONFIG = {
   ALERT_COOLDOWN_MS: 10 * 60 * 1000,
   WARNING_RIG_THRESHOLD: 3,
-  RENTED_HEARTBEAT_MS: 60 * 60 * 1000, // Used for internal logic, not for summary interval
-  SUMMARY_HEARTBEAT_INTERVAL_MS: 15 * 60 * 1000, // 15 minutes
-  MS_PER_HOUR: 60 * 60 * 1000, // 1 hour
+  RENTED_HEARTBEAT_MS: 60 * 60 * 1000,
 };
 
 export function escapeHtml(text) {
@@ -41,15 +39,18 @@ export const TelegramTemplates = {
   divider,
 
   activeRentalLine: (perfEmoji, algo, name, remaining, efficiency, roi, avg, ads, cur, target, extra, client, paid) => {
-    return `${perfEmoji} <b>${escapeHtml(algo)}</b> 🔀 <b>${escapeHtml(client)}</b> | ${escapeHtml(name)}\n` +
+    return `${perfEmoji} <b>${escapeHtml(algo)}</b>` + ` 🔀 ` + `<b>${escapeHtml(client)}</b> | ${escapeHtml(name)}\n` +
            `⏱ Remaining: ${remaining}\n\n` +
-           `⚡ Cur: <code>${cur}</code> | 📊 Eff: <code>${typeof efficiency === 'number' ? efficiency.toFixed(2) : efficiency}%</code>\n` +
+       
+           `⚡ Cur: <b>${cur}</b> | ` +
+           `📊 Eff: <code>${typeof efficiency === 'number' ? efficiency.toFixed(2) : efficiency}%</code>\n` +
            `📈 Avg: <code>${avg}</code> | Ads: <code>${ads}</code>\n\n` +
+           
            `💰 Paid: <b>${paid}</b>\n` +
            `${extra}${divider}\n`;
   },
 
-  rentedNotice: (type, r, info, acct, diff, rem, algo) => {
+  rentedNotice: (type, r, info, acct, diff, rem, algo = 'N/A') => {
     return `🚀 <b>[${type}]</b>\n` +
            `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
            `${divider}\n` +
@@ -63,7 +64,7 @@ export const TelegramTemplates = {
            `<b>Target to 100%:</b> ${info.targetHashrate || 'N/A'}`;
   },
 
-  zeroHashrate: (acct, r, info, algo) => {
+  zeroHashrate: (acct, r, info, algo = 'N/A') => {
     return `⚠️ <b>[ZERO HASHRATE]</b>\n` +
            `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
            `${divider}\n` +
@@ -73,7 +74,7 @@ export const TelegramTemplates = {
            `<b>Rental:</b> <code>${r.id}</code>`;
   },
 
-  efficiency: (acct, r, info, eff, target, algo) => {
+  efficiency: (acct, r, info, eff, target, algo = 'N/A') => {
     return `📉 <b>[LOW EFFICIENCY]</b>\n` +
            `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
            `${divider}\n` +
@@ -84,7 +85,7 @@ export const TelegramTemplates = {
            `<b>Target to 100%:</b> ${target.toFixed(2)} ${info.hashrate.suffix || ''}`;
   },
 
-  startup: (acct, r, info, eff, target, algo) => {
+  startup: (acct, r, info, eff, target, algo = 'N/A') => {
     return `⏱ <b>[STARTUP ALERT]</b>\n` +
            `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
            `${divider}\n` +
@@ -94,7 +95,7 @@ export const TelegramTemplates = {
            `<b>Target:</b> ${target.toFixed(2)} ${info.hashrate.suffix || ''}`;
   },
 
-  completionAlert: (acct, r, info, eff, target, algo) => {
+  completionAlert: (acct, r, info, eff, target, algo = 'N/A') => {
     return `🏁 <b>[COMPLETION NEAR]</b>\n` +
            `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
            `${divider}\n` +
@@ -104,7 +105,7 @@ export const TelegramTemplates = {
            `<b>Target:</b> ${target.toFixed(2)}`;
   },
 
-  completionSuccess: (acct, r, avg, suffix, eff, paid, algo) => {
+  completionSuccess: (acct, r, avg, suffix, eff, paid, algo = 'N/A') => {
     return `✅ <b>[RENTAL SUCCESS]</b>\n` +
            `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
            `${divider}\n` +
@@ -115,7 +116,7 @@ export const TelegramTemplates = {
            `<b>Paid:</b> ${paid}`;
   },
 
-  perfectEfficiency: (acct, r, eff, paid, remainingMs, algo) => {
+  perfectEfficiency: (acct, r, eff, paid, remainingMs, algo = 'N/A') => {
     const remH = Math.floor(remainingMs / 3600000);
     return `💯 <b>[PERFECT 100%]</b>\n` +
            `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
@@ -127,7 +128,7 @@ export const TelegramTemplates = {
            `<b>Cost:</b> ${paid}`;
   },
 
-  finished: (r, info, algo) => {
+  finished: (r, info, algo = 'N/A') => {
     return `🏁 <b>[RENTAL FINISHED]</b>\n` +
            `<b>Account:</b> <code>${formatAccount(r.client)}</code>\n` +
            `${divider}\n` +
@@ -151,6 +152,6 @@ export const TelegramTemplates = {
            `<b>Active Rentals Detail:</b>\n\n<code>${lines.join('')}</code>`;
   },
 
-  rigStatusWarning: (acct, rig, algo) => `⚠️ <b>[RIG WARNING]</b>\n<b>MRR:</b> ${formatAccount(acct)}\n<b>Rig:</b> ${formatRig(rig)}\n<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n<b>Status:</b> <code>${rig.status?.status || rig.status}</code>`,
+  rigStatusWarning: (acct, rig, algo = 'N/A') => `⚠️ <b>[RIG WARNING]</b>\n<b>MRR:</b> ${formatAccount(acct)}\n<b>Rig:</b> ${formatRig(rig)}\n<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n<b>Status:</b> <code>${rig.status?.status || rig.status}</code>`,
   highWarningCount: (acct, count, algo) => `⚠️ <b>[SYSTEM ALERT]</b>\n<b>MRR:</b> ${formatAccount(acct)}\n<b>High Warning Count:</b> <b>${count}</b> rigs in warning state.`
 };

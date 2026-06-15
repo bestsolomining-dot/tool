@@ -14,3 +14,4 @@ mrr_monitor.db
 .vite
 .wrangler
 .vscode
+*.db-journal

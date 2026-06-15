@@ -215,7 +215,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             const fetchPrice = async (path) => {
               const query = {
                 algorithm: String(nhAlgo),
-                market: '1', // Use ID '1' for USA market to avoid 400 Bad Request
+                market: 'USA',
                 client: (mrrClient === 'VN' || mrrClient === 'ALL' || !mrrClient) ? 'BT' : mrrClient
               };
               const data = await onCall(path, { query, silent: true });
@@ -656,4 +656,16 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                         handlePriceChange={handlePriceChange}
                         expandedPools={expandedPools}
                         togglePoolInfo={togglePoolInfo}
-                        setEnrichedInfo={s
+                        setEnrichedInfo={setEnrichedInfo}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

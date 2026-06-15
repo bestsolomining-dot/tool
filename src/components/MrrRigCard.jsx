@@ -14,8 +14,8 @@ import {
   getRentalAverageHashrate,
   getStatusClass,
   getRoiColor
-} from '../core/mrrUtils';
-import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils';
+} from '../core/mrrUtils.js';
+import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils.js';
 import { getAlgoDisplayName, normalizeAlgoForNiceHash, calculatePriceComparison } from '../core/mapping.js';
 
 const MrrRigCard = ({ 
@@ -45,104 +45,99 @@ const MrrRigCard = ({
   const rawNhData = algoMarketPrices[algoName.toUpperCase()] || info?.nicehashPrice;
   const nhBase = Array.isArray(rawNhData) ? rawNhData[0] : rawNhData;
   const nhData = nhBase?.price || nhBase;
-  const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised);
-  const displayPriceData = getPriceDataLocal(rig.price || info?.price || rig.min_price);
-  const displayPrice1000 = displayPriceData.value;
-  const BASE_UNIT_FACTOR = 1000;
-  const isEquihash = algoName.toLowerCase() === 'equihash';
-  const displayPrice = isEquihash ? displayPrice1000 : displayPrice1000 * BASE_UNIT_FACTOR;
-  const displayPriceCurrency = displayPriceData.currency || 'BTC';
-  const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid);
-  const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || '';
-  const paidLabel = paidAmount > 0 && paidCurrency ? `${paidAmount.toFixed(8)} ${paidCurrency}` : null;
-
-  const effectivePriceSource = (info?.price?.paid !== undefined || rig.price?.paid !== undefined)
-    ? { ...(rig.price || {}), ...(info?.price || {}), paid: info?.price?.paid ?? rig.price?.paid, currency: String(info?.price?.currency || rig.price?.currency || info?.price?.price_unit || rig.price?.price_unit || 'BTC').toUpperCase() }
-    : rig.price_converted || info?.price_converted || info?.price?.BTC || rig?.price?.BTC || rig.price || info?.price || rig.min_price;
-
-  const btcPriceData = getBtcPriceDataUtils(effectivePriceSource);
-  const isMrrBtc = btcPriceData.currency === 'BTC' && btcPriceData.value > 0;
-  const mrrComparePriceValue = btcPriceData.value;
-  const isTotalCost = info?.price?.paid !== undefined || rig.price?.paid !== undefined;
-
-  // Get the standard list price rate for fallback
-  const listPriceSource = rig.price_converted || info?.price_converted || info?.price?.BTC || rig?.price?.BTC || rig.price || info?.price || rig.min_price;
-  const listBtcData = getBtcPriceDataUtils(listPriceSource);
-  const listRate = listBtcData.value;
-
-  const mrrPriceNum = (() => {
-    const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
-    const BASE_UNIT_FACTOR = 1000;
-    const isEquihash = algoName.toLowerCase() === 'equihash';
-
-    // If rented, calculate the realized daily rate from the paid amount
-    if (isTotalCost && adsVal > 0 && hours > 0 && btcPriceData.value > 0) {
-      const realizedRate = btcPriceData.value / (hours / 24) / adsVal;
-      // Normalize to "per 1000 units" to match MRR list price and comparison logic
-      return isEquihash ? realizedRate : realizedRate * BASE_UNIT_FACTOR;
-    }
-    // Fallback to the daily list price if not rented or if paid conversion failed
-    return Number.isFinite(listRate) ? listRate : 0;
-  })();
-
-  const mrrUnit = clean(info?.advertised || rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH');
-  const nhOrder = nhOrders.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
-  const myNhPrice = nhOrder ? parseFloat(nhOrder.price) : 0;
-  const nhPriceWithFee = myNhPrice > 0 ? (parseFloat(nhOrder.add_fee) || (myNhPrice * 1.04)) : 0;
-  const isRandomX = algoName.toLowerCase().includes('RANDOMX');
-  const isSha256 = algoName.toUpperCase().includes('SHA256');
-  // Corrected unit fallbacks to prevent SHA256/RandomX overlaps in NiceHash price comparison
-  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : (isRandomX ? 'MH' : 'GH'));
+  const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0;
+  const avgVal = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash) || 0;
   
-  // ReferenceError fix: Ensure eff and effNum are always defined at the top level
-  const rawEffValue = info?.percent ?? rig.hashrate?.average?.percent ?? rig.percent ?? 0;
+  // 1. Efficiency and Styling initialization (Fixed ReferenceErrors)
+  const rawEffValue = info?.percent ?? rig.hashrate?.average?.percent ?? rig.percent ?? (adsVal > 0 ? (avgVal / adsVal * 100) : 0);
   const effNum = parseFloat(rawEffValue);
   const eff = effNum.toFixed(2);
-
-  // ROI Logic: Only show price-based ROI if we have valid price data from NiceHash
-  const myOrderDiffRaw = (myNhPrice > 0 && mrrPriceNum > 0 && isMrrBtc) ? calculatePriceComparison(
-    mrrPriceNum,
-    mrrUnit, // Pass mrrUnit directly; calculatePriceComparison should handle conversion
-    nhPriceWithFee,
-    myNhUnit
-  ) : null;
-  
-  const myOrderDiff = myOrderDiffRaw !== null ? (parseFloat(myOrderDiffRaw) * -1).toFixed(1) : null;
-
-  const rentalStartTime = info?.startTime || rig.start;
-  const startT = new Date(rentalStartTime + (String(rentalStartTime).endsWith('UTC') ? '' : ' UTC')).getTime();
-  const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end).endsWith('UTC') ? '' : ' UTC')).getTime();
-  const avgVal = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash);
-  const hSuffix = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || '';
-  const totalMs = endT - startT;
-  const elapsedMs = Math.max(0, Math.min(Date.now() - startT, totalMs));
-  const timeProgress = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
-  const targetHashrate = (totalMs - elapsedMs) > 0 ? ((adsVal * (totalMs / 1000) - avgVal * (elapsedMs / 1000)) / ((totalMs - elapsedMs) / 1000)) : 0;
-  const isBehind = targetHashrate > adsVal;
 
   let effectBg = isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)';
   let effectBorder = isMine ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)';
   let effectTextColor = '#fbbf24';
 
   if (effNum > 0) {
-    if (effNum < 50) {
-      effectBg = `linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, ${effectBg} 100%)`;
-      effectBorder = '1px solid rgba(239, 68, 68, 0.4)';
-      effectTextColor = '#ef4444';
-    } else if (effNum < 70) {
-      effectBg = `linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, ${effectBg} 100%)`;
-      effectBorder = '1px solid rgba(245, 158, 11, 0.4)';
-      effectTextColor = '#f59e0b';
-    } else if (effNum >= 100) {
-      effectBg = `linear-gradient(135deg, rgba(255, 22, 255, 0.39) 0%, ${effectBg} 100%)`;
-      effectBorder = '1px solid rgba(36, 208, 251, 0.4)';
-      effectTextColor = '#00eeff';
-    } else if (effNum > 90) {
-      effectBg = `linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, ${effectBg} 100%)`;
-      effectBorder = '1px solid rgba(16, 185, 129, 0.4)';
-      effectTextColor = '#10b981';
-    }
+    if (effNum < 50) { effectBg = `linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, ${effectBg} 100%)`; effectBorder = '1px solid rgba(239, 68, 68, 0.4)'; effectTextColor = '#ef4444'; }
+    else if (effNum < 70) { effectBg = `linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, ${effectBg} 100%)`; effectBorder = '1px solid rgba(245, 158, 11, 0.4)'; effectTextColor = '#f59e0b'; }
+    else if (effNum >= 100) { effectBg = `linear-gradient(135deg, rgba(255, 22, 255, 0.39) 0%, ${effectBg} 100%)`; effectBorder = '1px solid rgba(36, 208, 251, 0.4)'; effectTextColor = '#00eeff'; }
+    else if (effNum > 90) { effectBg = `linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, ${effectBg} 100%)`; effectBorder = '1px solid rgba(16, 185, 129, 0.4)'; effectTextColor = '#10b981'; }
   }
+
+  // 2. Financial and ROI Logic
+  const BASE_UNIT_FACTOR = 1000;
+  const isEquihash = algoName.toLowerCase() === 'equihash';
+  const displayPriceData = getPriceDataLocal(rig.price || info?.price || rig.min_price);
+  const displayPrice = isEquihash ? displayPriceData.value : displayPriceData.value * BASE_UNIT_FACTOR;
+  const displayPriceCurrency = displayPriceData.currency || 'BTC';
+
+  // Daily rate for ROI comparison, adjusted by performance (AVG hashrate)
+  const listPriceSource = rig.price_converted || info?.price_converted || info?.price?.BTC || rig?.price?.BTC || rig.price || info?.price || rig.min_price;
+  const listBtcData = getBtcPriceDataUtils(listPriceSource);
+
+  const mrrPriceNum = (() => {
+    const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
+    const days = hours / 24;
+    const effectivePriceSource = { 
+      ...(rig.price || {}), ...(info?.price || {}), 
+      paid: info?.price?.paid ?? rig.price?.paid,
+      BTC: rig.price_converted || info?.price_converted || info?.price?.BTC || rig?.price?.BTC 
+    };
+    const btcData = getBtcPriceDataUtils(effectivePriceSource);
+    
+    if (btcData.value > 0 && btcData.currency === 'BTC') {
+      if (btcData.isTotalCost && days > 0) {
+        // Use avgVal for "dependence of effect" to get the TRUE cost per delivered hash
+        const effectiveHashrate = (isRented && avgVal > 0) ? avgVal : adsVal;
+        if (effectiveHashrate > 0) {
+          const rate = btcData.value / days / effectiveHashrate;
+          return isEquihash ? rate : rate * BASE_UNIT_FACTOR;
+        }
+      }
+      return btcData.value;
+    }
+    return listBtcData.value;
+  })();
+
+  const mrrComparePriceValue = listBtcData.value;
+  const isMrrBtc = listBtcData.currency === 'BTC' && listBtcData.value > 0;
+  const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid);
+  const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || '';
+  const paidLabel = paidAmount > 0 && paidCurrency ? `${paidAmount.toFixed(8)} ${paidCurrency}` : null;
+
+  const mrrUnit = clean(info?.advertised || rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH');
+  const nhOrder = nhOrders?.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
+  
+  // Fallback to market price (nhData) if no active user order is found
+  const myNhPrice = nhOrder ? parseFloat(nhOrder.price) : parseFloat(nhData || 0);
+  const nhPriceWithFee = myNhPrice > 0 ? (nhOrder?.add_fee ? parseFloat(nhOrder.add_fee) : (myNhPrice * 1.04)) : 0;
+  const isRandomX = algoName.toLowerCase().includes('RANDOMX');
+  const isSha256 = algoName.toUpperCase().includes('SHA256');
+  // Corrected unit fallbacks to prevent SHA256/RandomX overlaps in NiceHash price comparison
+  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : (isRandomX ? 'MH' : 'GH'));
+
+  // ROI Logic: Only show price-based ROI if we have valid price data from NiceHash
+  const myOrderDiffRaw = (myNhPrice > 0 && mrrPriceNum > 0) ? calculatePriceComparison(
+    mrrPriceNum,
+    mrrUnit, // Pass mrrUnit directly; calculatePriceComparison should handle conversion
+    nhPriceWithFee,
+    myNhUnit
+  ) : null;
+  const myOrderDiff = myOrderDiffRaw !== null ? (parseFloat(myOrderDiffRaw) * -1).toFixed(1) : null;
+
+  // 3. Time and Consumption tracking
+  const rentalStartTime = info?.startTime || rig.start;
+  const startT = new Date(rentalStartTime + (String(rentalStartTime).endsWith('UTC') ? '' : ' UTC')).getTime();
+  const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end).endsWith('UTC') ? '' : ' UTC')).getTime();
+  const totalMs = endT - startT;
+  const elapsedMs = Math.max(0, Math.min(Date.now() - startT, totalMs));
+  const timeProgress = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
+  const timeProgressFactor = Math.max(0, Math.min(1, timeProgress / 100));
+  const currentPayValue = paidAmount > 0 ? (paidAmount * timeProgressFactor) : 0;
+  const realizedPayValue = currentPayValue * (effNum / 100);
+  const targetHashrate = (totalMs - elapsedMs) > 0 ? ((adsVal * (totalMs / 1000) - avgVal * (elapsedMs / 1000)) / ((totalMs - elapsedMs) / 1000)) : 0;
+  const isBehind = targetHashrate > adsVal;
+  const hSuffix = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || '';
 
   return (
     <div className="rig-card" style={{ background: effectBg, border: effectBorder, borderRadius: '12px', padding: '10px', position: 'relative', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', transition: 'transform 0.15s ease' }}>
@@ -187,10 +182,10 @@ const MrrRigCard = ({
                 )}
               </div>
             )}
-            {nhOrder && myOrderDiff !== null && (
+            {myNhPrice > 0 && myOrderDiff !== null && (
               <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ opacity: 0.7, fontSize: '8px' }}>Order: </span>
+                  <span style={{ opacity: 0.7, fontSize: '8px' }}>{nhOrder ? 'Order' : 'Market'}: </span>
                   <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhPrice.toFixed(8)}</span>
                   {/* {myOrderDiff !== null && (
                     <span style={{ color: parseFloat(myOrderDiff) > 0 ? '#f87171' : '#10b981', fontSize: '0.7rem', marginLeft: '4px' }}>
@@ -198,7 +193,7 @@ const MrrRigCard = ({
                     </span>
                   )} */}
                 </div>
-                <div><span style={{ opacity: 0.7, fontSize: '9px' }}>ROI: </span><span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>{parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%</span></div>
+                <div><span style={{ opacity: 0.7, fontSize: '9px' }}>{nhOrder ? 'ROI' : 'VS Market'}: </span><span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>{parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%</span></div>
               </div>
             )}
           </div>

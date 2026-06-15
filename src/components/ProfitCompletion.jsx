@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { getPriceData, getBtcPriceData, parsePriceValue } from '../core/priceUtils';
+import { getPriceData, getBtcPriceData, parsePriceValue } from '../core/priceUtils.js';
 
 function resolveUnit(value) {
   const map = { EH: 1e18, PH: 1e15, TH: 1e12, GH: 1e9, MH: 1e6, KH: 1e3, H: 1 };
@@ -247,7 +247,7 @@ export default function HashCompletionCalculator({
                 {results.savingsBtc >= 0 ? 'Potential Savings' : 'Cost Overage'}
               </div>
               <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                {results.savingsPercent.toFixed(1)}%
+                {Math.abs(results.savingsPercent).toFixed(1)}%
               </div>
               <div style={{ fontSize: '9px', opacity: 0.7 }}>
                 {results.savingsBtc >= 0 ? 'Cheaper than NiceHash' : 'More expensive than NH'}

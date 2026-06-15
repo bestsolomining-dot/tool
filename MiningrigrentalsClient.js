@@ -1,68 +1,41 @@
 import { request } from 'undici';
 import { createHmac, createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 
-// ─── Persistent Nonce Store ──────────────────────────────────────────
-// All nonces are stored in a local JSON file.
-// This guarantees nonces never go backwards, even after restarts.
-// Escalation on Bad Nonce automatically catches up with server expectations.
-// ─────────────────────────────────────────────────────────────────────
-
-const NONCE_FILE = process.env.MRR_NONCE_FILE || join(process.cwd(), 'mrr_nonces.json');
-
-function readNonceStore() {
-  try {
-    if (existsSync(NONCE_FILE)) {
-      return JSON.parse(readFileSync(NONCE_FILE, 'utf-8'));
-    }
-  } catch (err) {
-    console.error(`[mrr] Nonce file read error: ${err.message}. Starting fresh.`);
-  }
-  return {};
-}
-
-function writeNonceStore(store) {
-  try {
-    writeFileSync(NONCE_FILE, JSON.stringify(store, null, 2), 'utf-8');
-  } catch (err) {
-    console.error(`[mrr] Nonce file write error: ${err.message}`);
-  }
-}
-
-let nonceStore = readNonceStore();
+// Shared state to track nonces across client instances and prevent "Bad Nonce"
+// errors when multiple calls happen in the same millisecond or clients are re-instantiated.
+const mrrLastNonces = new Map();
 
 /**
- * Returns the next nonce for the given API key as a string.
- * - First call for a key initialises it to 0 (or MRR_INITIAL_NONCE env if set for legacy reasons).
- * - With forceValue, you can jump to an explicit higher nonce.
- * - Increments by 1 on each normal call.
- * Persists immediately after every change.
+ * Shared Nonce Provider Logic
+ * Generates a 19-digit high-precision nonce (ms * 1,000,000) to satisfy MRR requirements.
  */
-function getNextSharedNonce(apiKey, forceValue = null) {
-  if (!(apiKey in nonceStore)) {
-    // Start from 0 (or env var if you ever need a manual bootstrap)
-    nonceStore[apiKey] = process.env.MRR_INITIAL_NONCE || '0';
-    console.log(`[mrr] Initializing nonce for ${apiKey.slice(0, 6)}... to ${nonceStore[apiKey]}`);
+function getNextSharedNonce(apiKey, forceJumpValue = null) {
+  const lastNonce = BigInt(mrrLastNonces.get(apiKey) || 0n);
+  
+  // If we were explicitly told to jump (e.g. after a Bad Nonce error)
+  if (forceJumpValue) {
+    const jumped = BigInt(forceJumpValue);
+    const final = jumped > lastNonce ? jumped : lastNonce + 1000000n;
+    mrrLastNonces.set(apiKey, final);
+    return final.toString();
   }
 
-  let current = BigInt(nonceStore[apiKey]);
-  let next;
+  // Standardize on 19-digit nonces (Microseconds)
+  // ms * 1,000,000 ensures we are always in the same magnitude
+  const now19 = BigInt(Date.now()) * 1000000n;
+  let nonce = now19 > lastNonce ? now19 : lastNonce + 1n;
 
-  if (forceValue !== null) {
-    const forced = BigInt(forceValue);
-    next = forced > current ? forced : current + 1n;
-    console.log(`[mrr] Nonce manually set to ${next} for key ${apiKey.slice(0, 6)}`);
-  } else {
-    next = current + 1n;
+  // Safety: If our last nonce is more than 10 years in the future compared to 
+  // current system time, we likely have a bad baseline and should warn/reset.
+  const driftLimit = 3650n * 24n * 60n * 60n * 1000n * 1000000n;
+  if (lastNonce > (now19 + driftLimit)) {
+    console.warn(`[mrr] Nonce for ${apiKey.slice(0,6)} is drifted too far into future. Resetting to system time.`);
+    nonce = now19;
   }
 
-  nonceStore[apiKey] = next.toString();
-  writeNonceStore(nonceStore);
-  return next.toString();
+  mrrLastNonces.set(apiKey, nonce);
+  return nonce.toString();
 }
-
-// ─── MiningRigRentals Client ─────────────────────────────────────────
 
 export class MiningRigRentalsClient {
   constructor({ apiKey, apiSecret, name = '' }) {
@@ -77,13 +50,14 @@ export class MiningRigRentalsClient {
     const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const cleanPath = path.replace(/\/+$/, '') || '/';
 
-    const sendRequest = async (authType = 'standard', nonceOverride = null) => {
-      const activeNonce = nonceOverride || getNextSharedNonce(this.apiKey);
-
+    const sendRequest = async (authType = 'standard', customNonce = null) => {
+      const activeNonce = customNonce || getNextSharedNonce(this.apiKey);
       const url = new URL(`${this.baseUrl}${cleanPath}`);
-      Object.entries(query).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
-      });
+      if (query) {
+        Object.entries(query).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
+        });
+      }
 
       let headers = {
         'user-agent': 'Ben Tre Mining Tool/2.0',
@@ -112,29 +86,25 @@ export class MiningRigRentalsClient {
       });
     };
 
-    // ── First attempt: standard HMAC ─────────────────
     let response = await sendRequest('standard');
-    let data;
-    try { data = await response.body.json(); } catch { data = {}; }
+    let data = await response.body.json();
 
+    // --- Robust Nonce & Auth Recovery ---
     const errorMessage = String(data.message || data.data?.message || '');
-    const isBadNonce = errorMessage.includes('Bad Nonce') ||
-                       (response.statusCode === 401 && errorMessage.includes('Nonce'));
-
-    // ── Auto‑escalation on Bad Nonce ─────────────────
-    // Instead of dying, we multiply the current nonce by 10 and retry.
-    // After a few attempts, the nonce will exceed any high server value.
-    if (isBadNonce && retryCount < 5) {
-      const currentNonce = BigInt(nonceStore[this.apiKey] || '0');
-      // If currentNonce is 0 (first call), start at a large 1e18 to skip low numbers.
-      const escalated = currentNonce > 0n ? currentNonce * 10n : 1000000000000000000n;
-      console.log(`[mrr:${this.clientName}] 🔁 Bad Nonce – escalating to ${escalated}`);
-      // Force store to this new high nonce
-      getNextSharedNonce(this.apiKey, escalated.toString());
+    const isBadNonce = errorMessage.includes('Bad Nonce') || 
+                       (response.statusCode === 401 && (errorMessage.includes('Nonce') || /signature|invalid|key/i.test(errorMessage)));
+    
+    if (isBadNonce && retryCount < 3) {
+      // NUCLEAR JUMP: If we get a Bad Nonce, jump forward by 90 days worth of nanoseconds 
+      // to get ahead of any server-side clock issues or previous high nonces.
+      const jumpValue = (BigInt(Date.now()) + 7776000000n) * 1000000n;
+      console.log(`[mrr:${this.clientName}] ☢️ NUCLEAR JUMP: Recovering from Bad Nonce. New baseline: ${jumpValue} (+90d)`);
+      mrrLastNonces.set(this.apiKey, jumpValue);
+      
       return this.call({ method, endpoint, query, body, retryCount: retryCount + 1 });
     }
 
-    // ── Legacy fallback for certain account types ────
+    // Legacy Fallback for certain account types
     const isAuthError = !data.success && (
       errorMessage.includes('Signature') ||
       errorMessage.includes('Invalid Key') ||
@@ -142,11 +112,10 @@ export class MiningRigRentalsClient {
       response.statusCode === 401
     );
 
-    if (isAuthError && retryCount === 0) {
+    if (isAuthError) {
       console.log(`[mrr:${this.clientName}] HMAC failed, retrying with Legacy SHA1...`);
-      const legacyNonce = nonceStore[this.apiKey] || getNextSharedNonce(this.apiKey);
-      response = await sendRequest('legacy', legacyNonce);
-      try { data = await response.body.json(); } catch { data = {}; }
+      response = await sendRequest('legacy');
+      data = await response.body.json();
     }
 
     return { statusCode: response.statusCode, data };

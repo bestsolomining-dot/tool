@@ -89,8 +89,8 @@ const MrrRigCard = ({
     nhPriceWithFee,
     myNhUnit
   ) : null;
-  // ROI matches summary logic: 100% - Actual Efficiency
-  const myOrderDiff = (100 - parseFloat(effValue)).toFixed(1);
+  // Use price-based ROI if available, otherwise fallback to efficiency drift
+  const myOrderDiff = myOrderDiffRaw !== null ? myOrderDiffRaw : (100 - parseFloat(effValue)).toFixed(1);
 
   
   const eff = parseFloat(effValue).toFixed(2);

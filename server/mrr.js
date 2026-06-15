@@ -36,30 +36,6 @@ const MRR_CACHE_TTL_DEFAULT = 10000; // 10 seconds cache
 const MRR_CACHE_TTL_STABLE = 300000; // 5 minutes for stable info/algos
 const MRR_NONCE_RECOVERY_JUMP_SMALL = 60000000000n; // 1 minute
 const MRR_NONCE_RECOVERY_JUMP_LARGE = 3600000000000n; // 1 hour
-const MRR_MAX_TRUSTED_POSITIVE_CLOCK_SKEW_MS = 5n * 60n * 1000n; // 5 minutes
-
-function parseTrustedNonceOverride(rawValue, label) {
-  if (!rawValue) return null;
-
-  try {
-    const override = BigInt(rawValue);
-    const localNonceNow = BigInt(Date.now()) * 1000000n;
-    const maxFuture = MRR_MAX_TRUSTED_POSITIVE_CLOCK_SKEW_MS * 1000000n;
-
-    if (override > (localNonceNow + maxFuture)) {
-      console.warn(
-        `[mrr:init] Ignoring stale nonce override for ${label}; ` +
-        `it is too far in the future (${override}).`,
-      );
-      return null;
-    }
-
-    return override;
-  } catch {
-    console.warn(`[mrr:init] Ignoring invalid nonce override for ${label}.`);
-    return null;
-  }
-}
 
 const mrrInstances = new Map(); // This map will store resolved client configs
 
@@ -68,22 +44,22 @@ export function initMrrConfigs(env) {
     BT: {
       apiKey: normalizeCredential(env.MRR_KEY_RIG_BT),
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_BT),
-      nonceOverride: parseTrustedNonceOverride(env.MRR_NONCE_OVERRIDE_BT, 'BT'),
+      nonceOverride: env.MRR_NONCE_OVERRIDE_BT ? BigInt(env.MRR_NONCE_OVERRIDE_BT) : null,
     },
     SL: {
       apiKey: normalizeCredential(env.MRR_KEY_RIG_SL),
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_SL),
-      nonceOverride: parseTrustedNonceOverride(env.MRR_NONCE_OVERRIDE_SL, 'SL'),
+      nonceOverride: env.MRR_NONCE_OVERRIDE_SL ? BigInt(env.MRR_NONCE_OVERRIDE_SL) : null,
     },
     LN: {
       apiKey: normalizeCredential(env.MRR_KEY_RIG_LN),
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_LN),
-      nonceOverride: parseTrustedNonceOverride(env.MRR_NONCE_OVERRIDE_LN, 'LN'),
+      nonceOverride: env.MRR_NONCE_OVERRIDE_LN ? BigInt(env.MRR_NONCE_OVERRIDE_LN) : null,
     },
     LUCKY: {
       apiKey: normalizeCredential(env.MRR_KEY_RIG_LUCKY),
       apiSecret: normalizeCredential(env.MRR_SECRET_RIG_LUCKY),
-      nonceOverride: parseTrustedNonceOverride(env.MRR_NONCE_OVERRIDE_LUCKY, 'LUCKY'),
+      nonceOverride: env.MRR_NONCE_OVERRIDE_LUCKY ? BigInt(env.MRR_NONCE_OVERRIDE_LUCKY) : null,
     },
   };
 
@@ -95,7 +71,7 @@ export function initMrrConfigs(env) {
         mrrConfigs[acct] = {
           apiKey: normalizeCredential(env[key]),
           apiSecret: normalizeCredential(env[`MRR_SECRET_RIG_${acct}`] || env[`MRR_API_SECRET_${acct}`]),
-          nonceOverride: parseTrustedNonceOverride(env[`MRR_NONCE_OVERRIDE_${acct}`], acct),
+          nonceOverride: env[`MRR_NONCE_OVERRIDE_${acct}`] ? BigInt(env[`MRR_NONCE_OVERRIDE_${acct}`]) : null,
         };
       };
     }
@@ -219,17 +195,7 @@ export async function syncMrrClock(force = false) {
       // NTP-style: Estimate server time at the moment of 'endSync'
       // by adding half the round-trip time to the server's reported time.
       const estimatedServerTimeAtEnd = (serverTimeMs ?? BigInt(endSync)) + (rtt / 2n);
-
-      const rawOffset = estimatedServerTimeAtEnd - BigInt(endSync);
-      if (rawOffset > MRR_MAX_TRUSTED_POSITIVE_CLOCK_SKEW_MS) {
-        console.warn(
-          `[mrr:clock] Ignoring suspicious positive offset of ${rawOffset}ms; ` +
-          'using local clock to avoid future-drifted nonces.',
-        );
-        mrrClockOffset = 0n;
-      } else {
-        mrrClockOffset = rawOffset;
-      }
+      mrrClockOffset = estimatedServerTimeAtEnd - BigInt(endSync);
       mrrClockSynced = true;
 
       if (!serverTimeMs) {
@@ -258,23 +224,15 @@ export function nextMrrNonce(apiKey, clientLabel) {
   
   const lastNonce = BigInt(mrrLastNonceByClient.get(apiKey) || 0n);
 
-  // Safety: If nonce approaches the 64-bit unsigned limit or is massively in the future, reset it.
-  // 18.4 quintillion is the limit for uint64; we reset if we cross into that dangerous territory.
-  if (lastNonce > 18000000000000000000n) {
-    console.warn(`[mrr:${clientLabel}] Nonce overflow safety triggered. Resetting baseline.`);
-    mrrLastNonceByClient.set(apiKey, 0n);
+  // Safety: Only reset if we hit the actual 64-bit unsigned limit (18.4 quintillion).
+  // Your logs show nonces around 1.8 quintillion, which is perfectly safe for Uint64.
+  // We REMOVE the future-drift reset to allow the "Nuclear Jump" to actually catch up to MRR.
+  if (lastNonce > 18446744073709551615n) {
+    console.warn(`[mrr:${clientLabel}] Nonce overflow (Uint64). Resetting baseline.`);
+    mrrLastNonceByClient.set(apiKey, 1n);
   }
 
-  // Safety: If nonce is massively in the future compared to our best known time, reset it.
-  // Increased limit to 24 hours to ensure manual high nonces aren't immediately reset.
-  const futureLimitNano = (mrrClockSynced ? 1440n : 2880n) * 60n * 1000n * 1000000n;
-  const nowNano = (BigInt(Date.now()) + mrrClockOffset) * 1000000n;
-  if (lastNonce > 9999999999999999999n || lastNonce > (nowNano + futureLimitNano)) {
-    console.warn(`[mrr:${clientLabel}] Resetting future-drifted nonce baseline (${lastNonce}) to current time. (Safety Limit: ${futureLimitNano/1000000n/60000n}m)`);
-    mrrLastNonceByClient.set(apiKey, nowNano);
-  }
-
-  const nowMs = BigInt(Date.now()) + (mrrClockSynced ? mrrClockOffset : 0n);
+  const nowMs = BigInt(Date.now()) + mrrClockOffset;
   const now19 = BigInt(nowMs) * 1000000n;
 
   // Đảm bảo nonce luôn tăng và cộng thêm biến đếm toàn cục để tránh va chạm mili giây

@@ -3,7 +3,9 @@ import { mrrApiCall, mrrConfigs } from './mrr.js';
 import { resolveNhClient, getNiceHashApp, isAggregate } from './nh.js';
 import { extractRentalInfo, extractRigInfo } from './utils.js';
 import { TELEGRAM_CONFIG, TelegramTemplates } from '../src/core/telegram.js';
-import { ALGO_DISPLAY_NAMES } from '../src/core/mapping.js';
+import { ALGO_DISPLAY_NAMES, normalizeAlgoForNiceHash, calculatePriceComparison } from '../src/core/mapping.js';
+import { clean } from '../src/core/mrrUtils.js';
+import { getBtcPriceData } from '../src/core/priceUtils.js';
 
 const getAlgoDisplayName = (code) => {
   if (!code) return 'N/A';
@@ -67,6 +69,7 @@ const RENTED_HEARTBEAT_MS = 15 * 60 * 1000; // Force heartbeat summary to every 
 // In‑memory state
 const lastAlertTimes = new Map([['global_summary', Date.now()]]);   // key → timestamp
 const lastRigStates = new Map();    // rigId → status string
+const monitorNhPriceCache = new Map(); // algo:client -> {price, unit}
 
 // ==========================
 //  Helper: HTML escaping
@@ -444,8 +447,38 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const requiredHashrate = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
         const displayTarget = (Number.isFinite(requiredHashrate) && requiredHashrate > 0) ? requiredHashrate : 0;
         const efficiency = parseFloat(info.percent || 0);
-        const orderDiff = (100 - efficiency).toFixed(1);
         const currentHash = info.hashrate.current;
+
+        // Calculate Price ROI (ROI = (MarketPrice - YourPrice) / MarketPrice)
+        let priceRoi = null;
+        try {
+          const nhAlgo = normalizeAlgoForNiceHash(info.algo);
+          const cacheKey = `${nhAlgo}:${acct}`;
+          let nhP = monitorNhPriceCache.get(cacheKey);
+          
+          if (!nhP) {
+            const { client: nhCl } = resolveNhClient(acct);
+            const pData = await getNiceHashApp(nhCl).hashpower.getOrderPrice({ algorithm: nhAlgo, market: 'USA' });
+            const rawP = pData?.price || pData;
+            nhP = {
+              price: parseFloat(rawP?.fixedPrice || rawP?.standardPrice?.fast || rawP?.price || 0),
+              unit: rawP?.speedUnit || rawP?.unit || (nhAlgo.includes('SHA256') ? 'EH' : 'TH')
+            };
+            monitorNhPriceCache.set(cacheKey, nhP);
+          }
+
+          const mrrBtcData = getBtcPriceData(r.price || info.price);
+          const mrrUnit = clean(info.hashrate.suffix || 'TH');
+          const mrrPriceNorm = (parseFloat(info.price.paid) > 0 && advertised > 0 && info.duration > 0)
+            ? (mrrBtcData.value / (parseFloat(info.duration) / 24) / advertised)
+            : mrrBtcData.value;
+
+          if (nhP.price > 0 && mrrPriceNorm > 0) {
+            priceRoi = calculatePriceComparison(mrrPriceNorm, mrrUnit, nhP.price, nhP.unit);
+          }
+        } catch (e) { console.warn(`[monitor] ROI calc failed for ${r.id}: ${e.message}`); }
+
+        const orderDiff = priceRoi !== null ? priceRoi : (100 - efficiency).toFixed(1);
 
         // Get current DB state (promisified)
         let row;

@@ -1,4 +1,3 @@
-mrr_monitor.db
 mrr_monitor.db-shm
 mrr_monitor.db-wal
 *.csv
@@ -12,5 +11,6 @@ package-lock.json
 /dist
 /node_modules
 mrr_monitor.db
-mrr_monitor.db
-*.db
+.vite
+.wrangler
+.vscode

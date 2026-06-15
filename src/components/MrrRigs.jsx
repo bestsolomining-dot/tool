@@ -215,7 +215,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             const fetchPrice = async (path) => {
               const query = {
                 algorithm: String(nhAlgo),
-                market: 'USA', // NiceHash v2 expects string 'USA' or 'EU'
+                market: '1', // Use ID '1' for USA market to avoid 400 Bad Request
                 client: (mrrClient === 'VN' || mrrClient === 'ALL' || !mrrClient) ? 'BT' : mrrClient
               };
               const data = await onCall(path, { query, silent: true });
@@ -358,6 +358,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     const rigId = rig.rigid || rig.rig_id || rig.rig?.id || (isRented ? '' : rig.id);
     const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id || (isRented ? rig.id : '');
 
+    const effectiveClient = rig.mrrClient || rig.client || mrrClient;
+
     if (typeof onCall !== 'function') {
       console.error("fetchRigDetailInfo: onCall is not a function. Check prop passing in parent component.");
       return;
@@ -370,7 +372,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         : `/api/v2/mrr/rig/${encodeURIComponent(rigId || rig.id)}/info`;
 
       const data = await onCall(path, {
-        query: { client: mrrClient },
+        query: { client: effectiveClient },
         silent: true,
         background: true // Use background mode to avoid interrupting the user
       });

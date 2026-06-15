@@ -4,7 +4,6 @@ export function getPriceData(source) {
   if (!source) return { value: 0, currency: 'BTC' };
   
   if (typeof source === 'object') {
-    // Priority: paid value (total cost), then list value (rate)
     const val = parsePriceValue(source.paid ?? source.value ?? source.amount ?? source.BTC ?? source.price);
     const curr = (source.currency ?? source.price_unit ?? source.unit ?? 'BTC').toUpperCase();
     return { value: val, currency: curr };
@@ -17,12 +16,9 @@ export function getBtcPriceData(source) {
   if (!source) return { value: 0, currency: 'BTC', isTotalCost: false, isPerHashRate: true };
   
   const data = getPriceData(source);
-  
-  // Detect if it's a rental total cost or a listing rate
   const isTotalCost = !!(typeof source === 'object' && (source.paid !== undefined || source.amount !== undefined));
   const isPerHashRate = !isTotalCost;
   
-  // Handle MRR-style nested price objects specifically for rates
   if (typeof source === 'object' && !source.paid && source.BTC) {
     return {
       value: parsePriceValue(source.BTC),

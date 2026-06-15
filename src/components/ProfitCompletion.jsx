@@ -153,7 +153,7 @@ export default function HashCompletionCalculator({
     const nhMarketRate = nhMarketInfo.rate;
     const nhEstimatedCost = nhMarketRate * adsValueTh * durationDays;
     const savingsBtc = nhEstimatedCost > 0 ? nhEstimatedCost - totalBtcCost : 0;
-    const savingsPercent = nhEstimatedCost > 0 ? (savingsBtc / nhEstimatedCost * 100) : 0;
+    const savingsPercent = (nhEstimatedCost > 0 && totalBtcCost > 0) ? (savingsBtc / nhEstimatedCost * 100) : 0;
 
     const remainingSeconds = remainingMs / 1000;
     const requiredHashrateRaw = remainingSeconds > 0 ? remainingHashesNeeded / remainingSeconds : 0;

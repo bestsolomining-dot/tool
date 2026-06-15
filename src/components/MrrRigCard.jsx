@@ -63,15 +63,26 @@ const MrrRigCard = ({
   const btcPriceData = getBtcPriceDataUtils(effectivePriceSource);
   const isMrrBtc = btcPriceData.currency === 'BTC' && btcPriceData.value > 0;
   const mrrComparePriceValue = btcPriceData.value;
-  const nhPriceValue = getNiceHashPriceValue(rawNhData);
   const isTotalCost = info?.price?.paid !== undefined || rig.price?.paid !== undefined;
 
+  // Get the standard list price rate for fallback
+  const listPriceSource = rig.price_converted || info?.price_converted || info?.price?.BTC || rig?.price?.BTC || rig.price || info?.price || rig.min_price;
+  const listBtcData = getBtcPriceDataUtils(listPriceSource);
+  const listRate = listBtcData.value;
+
   const mrrPriceNum = (() => {
-    let val = mrrComparePriceValue;
-    if (typeof val === 'string') val = parseFloat(val.replace(/,/g, '')) || 0;
     const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
-    if (isTotalCost && adsVal > 0 && hours > 0) return val / (hours / 24) / adsVal;
-    return Number.isFinite(val) ? val : 0;
+    const BASE_UNIT_FACTOR = 1000;
+    const isEquihash = algoName.toLowerCase() === 'equihash';
+
+    // If rented, calculate the realized daily rate from the paid amount
+    if (isTotalCost && adsVal > 0 && hours > 0 && btcPriceData.value > 0) {
+      const realizedRate = btcPriceData.value / (hours / 24) / adsVal;
+      // Normalize to "per 1000 units" to match MRR list price and comparison logic
+      return isEquihash ? realizedRate : realizedRate * BASE_UNIT_FACTOR;
+    }
+    // Fallback to the daily list price if not rented or if paid conversion failed
+    return Number.isFinite(listRate) ? listRate : 0;
   })();
 
   const mrrUnit = clean(info?.advertised || rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH');
@@ -82,17 +93,21 @@ const MrrRigCard = ({
   const isSha256 = algoName.toUpperCase().includes('SHA256');
   // Corrected unit fallbacks to prevent SHA256/RandomX overlaps in NiceHash price comparison
   const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : (isRandomX ? 'MH' : 'GH'));
-  const effValue = info?.percent ?? rig.hashrate?.average?.percent ?? rig.percent ?? 0;
-  const eff = parseFloat(effValue).toFixed(2);
-  const effNum = parseFloat(effValue);
+  
+  // ReferenceError fix: Ensure eff and effNum are always defined at the top level
+  const rawEffValue = info?.percent ?? rig.hashrate?.average?.percent ?? rig.percent ?? 0;
+  const effNum = parseFloat(rawEffValue);
+  const eff = effNum.toFixed(2);
 
+  // ROI Logic: Only show price-based ROI if we have valid price data from NiceHash
   const myOrderDiffRaw = (myNhPrice > 0 && mrrPriceNum > 0 && isMrrBtc) ? calculatePriceComparison(
     mrrPriceNum,
     mrrUnit, // Pass mrrUnit directly; calculatePriceComparison should handle conversion
     nhPriceWithFee,
     myNhUnit
   ) : null;
-  const myOrderDiff = myOrderDiffRaw !== null ? myOrderDiffRaw : (100 - parseFloat(effValue)).toFixed(1);
+  
+  const myOrderDiff = myOrderDiffRaw !== null ? (parseFloat(myOrderDiffRaw) * -1).toFixed(1) : null;
 
   const rentalStartTime = info?.startTime || rig.start;
   const startT = new Date(rentalStartTime + (String(rentalStartTime).endsWith('UTC') ? '' : ' UTC')).getTime();
@@ -153,7 +168,25 @@ const MrrRigCard = ({
             <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price:</div>
             <div style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold' }}>{displayPrice.toFixed(8)} <small style={{ opacity: 0.5 }}>{displayPriceCurrency}</small></div>
             {displayPriceCurrency !== 'BTC' && isMrrBtc && <div style={{ fontSize: '9px', color: '#fbbf24', opacity: 0.8 }}>≈ {(isTotalCost ? mrrPriceNum : (isEquihash ? mrrComparePriceValue : mrrComparePriceValue * BASE_UNIT_FACTOR)).toFixed(8)} <small>BTC</small></div>}
-            {isRented && paidLabel && <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '1px 4px', borderRadius: '3px' }}>Paid: <strong>{paidLabel}</strong></div>}
+            {isRented && paidLabel && (
+              <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '4px', borderRadius: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Paid: <strong>{paidLabel}</strong></span>
+                </div>
+                {currentPayValue > 0 && (
+                  <div style={{ marginTop: '3px', paddingTop: '3px', borderTop: '1px solid rgba(16, 185, 129, 0.1)' }}>
+                    <div style={{ fontSize: '9px', opacity: 0.8, display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Spent (Time):</span>
+                      <strong>{currentPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
+                    </div>
+                    <div style={{ fontSize: '9px', color: effNum < 100 ? '#f87171' : '#34d399', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Value (Effect):</span>
+                      <strong>{realizedPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {nhOrder && myOrderDiff !== null && (
               <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}>

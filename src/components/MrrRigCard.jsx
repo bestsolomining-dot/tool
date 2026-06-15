@@ -77,23 +77,23 @@ const MrrRigCard = ({
   const mrrUnit = clean(info?.advertised || rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH');
   const nhOrder = nhOrders.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
   const myNhPrice = nhOrder ? parseFloat(nhOrder.price) : 0;
+  const nhPriceWithFee = myNhPrice > 0 ? (parseFloat(nhOrder.add_fee) || (myNhPrice * 1.04)) : 0;
   const isRandomX = algoName.toLowerCase().includes('RANDOMX');
   const isSha256 = algoName.toUpperCase().includes('SHA256');
-  
-  // Priority: Use active order price, fallback to market benchmark price
-  const benchmarkPrice = myNhPrice > 0 ? (parseFloat(nhOrder.add_fee) || (myNhPrice * 1.04)) : nhPriceValue;
-  const benchmarkUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : (isRandomX ? 'MH' : 'GH'));
+  // Corrected unit fallbacks to prevent SHA256/RandomX overlaps in NiceHash price comparison
+  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : (isRandomX ? 'MH' : 'GH'));
+  const effValue = info?.percent ?? rig.hashrate?.average?.percent ?? rig.percent ?? 0;
+  const eff = parseFloat(effValue).toFixed(2);
+  const effNum = parseFloat(effValue);
 
-  const effValue = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
-  
-  const myOrderDiffRaw = (benchmarkPrice > 0 && mrrPriceNum > 0 && isMrrBtc) ? calculatePriceComparison(
+  const myOrderDiffRaw = (myNhPrice > 0 && mrrPriceNum > 0 && isMrrBtc) ? calculatePriceComparison(
     mrrPriceNum,
-    mrrUnit,
-    benchmarkPrice,
-    benchmarkUnit
+    mrrUnit, // Pass mrrUnit directly; calculatePriceComparison should handle conversion
+    nhPriceWithFee,
+    myNhUnit
   ) : null;
-
   const myOrderDiff = myOrderDiffRaw !== null ? myOrderDiffRaw : (100 - parseFloat(effValue)).toFixed(1);
+
   const rentalStartTime = info?.startTime || rig.start;
   const startT = new Date(rentalStartTime + (String(rentalStartTime).endsWith('UTC') ? '' : ' UTC')).getTime();
   const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end).endsWith('UTC') ? '' : ' UTC')).getTime();
@@ -108,7 +108,6 @@ const MrrRigCard = ({
   let effectBg = isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)';
   let effectBorder = isMine ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)';
   let effectTextColor = '#fbbf24';
-  const effNum = parseFloat(effValue);
 
   if (effNum > 0) {
     if (effNum < 50) {

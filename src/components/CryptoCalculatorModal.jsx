@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 /**
  * A multi-currency calculator modal for BTC, ETH, LTC, DOGE, and BCH.
@@ -22,7 +22,7 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
   const [amounts, setAmounts] = useState({ bitcoin: '0.001' });
   const [baseCoin, setBaseCoin] = useState('bitcoin');
 
-  const fetchPrices = async () => {
+  const fetchPrices = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -54,7 +54,7 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [onCall]);
 
   useEffect(() => {
     if (!isOpen) return;

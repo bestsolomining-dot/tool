@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import PoolEditorPopup from './PoolEditorPopup' // Use the new wrapper
 import Modal from './Modal' // Import the new Modal component
 import { poolHelpers as ph, poolApi, apiFetch } from '../core/poolUtils'
 import { getAlgoDisplayName } from '../core/mapping'
@@ -34,9 +33,10 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   const [useBrowser, setUseBrowser] = useState(false)
   const [showBrowser, setShowBrowser] = useState(false)
   const [errorModalOpen, setErrorModalOpen] = useState(false) // State for the error detail modal
+  const [inventoryModalOpen, setInventoryModalOpen] = useState(false)
+  const [connectionModalOpen, setConnectionModalOpen] = useState(false)
   const [lastRunSummary, setLastRunSummary] = useState(null)
 
-  const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
   const [selectorOpen, setSelectorOpen] = useState(false)
   const didAutoStartRef = useRef(false);
   const runTimerRef = useRef(null)
@@ -112,25 +112,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
       setLoading(false);
     }
   }, []);
-
-  const openNewPoolEditor = () => {
-    const editor = {
-      key: 'new',
-      label: 'New Pool',
-      id: null,
-      initialData: {
-        name: "My New Pool",
-        algorithm: "SHA256",
-        stratumHostname: "stratum.example.com",
-        stratumPort: 3333,
-        username: "worker",
-        password: "x"
-      },
-      isNew: true,
-      usePopout: false
-    };
-    setActiveEditors(prev => [...prev.filter(e => e.key !== 'new'), editor]);
-  };
 
   // Function to load NiceHash pools for the selected client
   const loadPools = useCallback(async () => {
@@ -270,10 +251,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     }
   }
 
-  const handleEditorSaveSuccess = async (savedPoolId) => {
-    await loadPools(); // Reload pools after a successful save
-    // Optionally, update the selected pool if the saved one is relevant
-  };
   async function verify() {
     if (!selected) {
       setError('Select a pool first.')
@@ -550,7 +527,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
       }
 
       setRunCount(prev => prev + 1);
-      setNextRunCountdown(null); // Clear previous countdown display
+      setNextRunCountdown(null); // Clear previous countdown display before a new cycle starts
       if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
 
       await verifyAllOnce({ resetStop: false, keepRunning: true });
@@ -563,7 +540,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         return;
       }
 
-      let remaining = intervalMs / 1000; // Total seconds for the next countdown
+      let remaining = intervalMs / 1000; // Total seconds for the next countdown display
       setNextRunCountdown(remaining);
 
       countdownTimerRef.current = setInterval(() => {
@@ -621,36 +598,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     setLastRunTime(null) // Clear the last run time when automation is stopped
   }
 
-  const openPoolEditor = (item) => {
-    const poolRecord = pools.find((pool, index) => ph.getKey(pool, index) === item.key) || null
-    const poolDetails = item.result?.poolDetails || item.result?.requestBody || poolRecord || null
-    const editor = {
-      key: item.key,
-      label: item.label,
-      id: ph.getId(poolDetails) || item.id || ph.getId(poolRecord),
-      initialData: poolDetails,
-      isNew: item.key === 'new',
-      usePopout: false
-    };
-    setActiveEditors(prev => {
-      if (prev.find(e => e.key === editor.key)) return prev;
-      return [...prev, editor];
-    });
-  };
-
-  const closePoolEditor = (key) => {
-    setActiveEditors(prev => prev.filter(e => e.key !== key));
-  };
-
-  const handleEditorVerifySuccess = (verificationResult) => {
-    // Update the verification results in the main Pools component
-    const poolDetails = verificationResult.result?.poolDetails || verificationResult.result?.requestBody;
-    setVerifyResults(prev => [
-      ...prev.filter(item => item.key !== verificationResult.key),
-      { ...verificationResult, algorithm: ph.getAlgo(poolDetails) },
-    ]);
-  }
-
   const handleExportResults = () => {
     const resultsToExport = verifyResults.filter(item => !item.result?.pending);
 
@@ -670,7 +617,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         'Port': p.stratumPort || p.port || '',
         'Username': p.username || '',
         'Message': ph.getVerifyMessage(item.result),
-        'Verified At': new Date().toLocaleString()
+        'Verified At': new Date().toLocaleString() + ' (Local)' // Explicitly state local time
       };
     });
     if (poolData.length > 0) {
@@ -817,8 +764,10 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                   </label>
                 </div>
               </div>
-              <div style={{ fontSize: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div style={{ fontSize: '10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '8px' }}>
                 <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()}>Import XLSX</button>
+                <button className="btn-pro secondary" onClick={() => setInventoryModalOpen(true)}>Inventory</button>
+                <button className="btn-pro secondary" onClick={() => setConnectionModalOpen(true)}>Connect Manager</button>
                 <button className="btn-pro secondary" onClick={handleExportResults} disabled={completedResults.length === 0}>
                   Export Results ({completedResults.length})
                 </button>
@@ -836,7 +785,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8, color: '#10b981' }}>
                 <span>Last Cycle End:</span>
-                <span>{lastRunTime || 'N/A'}</span>
+                <span>{lastRunTime ? `${lastRunTime} (Local)` : 'N/A'}</span> {/* Clarify local time */}
               </div>
               {nextRunCountdown !== null && running && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fbbf24', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px', marginTop: '2px' }}>
@@ -996,28 +945,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                           ? 'Waiting...'
                           : ph.getVerifyMessage(item.result)}
                       </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: '8px',
-                          flexShrink: 0
-                        }}
-                      >
-                        <button
-                          className="text-button"
-                          style={{ fontSize: '11px' }}
-                          onClick={() => setInspectData(item.result)}
-                        >
-                          Inspect
-                        </button>
-                        <button
-                          className="text-button"
-                          style={{ fontSize: '11px' }}
-                          onClick={() => openPoolEditor(item)}
-                        >
-                          Edit
-                        </button>
-                      </div>
                     </div>
                   );
                 })}
@@ -1070,16 +997,6 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         )}
       </div>
       {error && <pre className="error-message">{error}</pre>}
-      {activeEditors.map(editor => (
-        <PoolEditorPopup
-          key={editor.key}
-          editor={editor}
-          onClose={() => closePoolEditor(editor.key)}
-          onSaveSuccess={handleEditorSaveSuccess}
-          onVerifySuccess={handleEditorVerifySuccess}
-          nhClient={nhClient}
-        />
-      ))}
       {/* Pool Selector Modal */}
       <Modal isOpen={selectorOpen} onClose={() => setSelectorOpen(false)} title="Select a Stratum Pool" maxWidth="600px">
         <div className="select-dropdown-pro" style={{ position: 'static', boxShadow: 'none', border: 'none', padding: 0 }}>
@@ -1099,17 +1016,119 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                   <code style={{ fontSize: '11px', opacity: 0.7 }}>{getAlgoDisplayName(ph.getAlgo(pool))}</code>
                   {(pool.client || pool.nhClient) && <span style={{ fontSize: '9px', color: '#10b981', marginTop: '2px' }}>Account: {pool.client || pool.nhClient}</span>}
                 </div>
-                <button
-                  type="button"
-                  className="btn-pro secondary"
-                  style={{ fontSize: '10px', padding: '4px 8px' }}
-                  onClick={(e) => { e.stopPropagation(); openPoolEditor({ key, label }); }}
-                >
-                  Edit
-                </button>
               </div>
             )
           })}
+        </div>
+      </Modal>
+      {/* Pool Inventory Modal */}
+      <Modal isOpen={inventoryModalOpen} onClose={() => setInventoryModalOpen(false)} title="Pool Inventory" maxWidth="1200px">
+        <div style={{ maxHeight: '75vh', overflowY: 'auto', padding: '10px' }}>
+          <table className="pro-table">
+            <thead>
+              <tr style={{ fontSize: '11px', opacity: 0.6 }}>
+                <th>NAME</th>
+                <th>ALGORITHM</th>
+                <th>STRATUM HOST</th>
+                <th>PORT</th>
+                <th>USERNAME</th>
+                <th>ACCOUNT</th>
+                <th style={{ textAlign: 'right' }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activePoolSource.map((pool, idx) => {
+                const key = ph.getKey(pool, idx);
+                const label = ph.getLabel(pool, idx);
+                const algo = ph.getAlgo(pool);
+                return (
+                  <tr key={key} style={{ fontSize: '11px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <td style={{ fontWeight: 'bold', color: '#f8fafc' }}>{label}</td>
+                    <td style={{ color: '#60a5fa' }}>{getAlgoDisplayName(algo)}</td>
+                    <td style={{ fontFamily: 'monospace', opacity: 0.8 }}>{pool.stratumHost || pool.stratumHostname || pool.host || 'N/A'}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{pool.stratumPort || pool.port || 'N/A'}</td>
+                    <td style={{ fontFamily: 'monospace', opacity: 0.8 }}>{pool.username || pool.user || 'N/A'}</td>
+                    <td>
+                      <span style={{ fontSize: '9px', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>
+                        {pool.client || pool.nhClient || nhClient}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button 
+                          className="text-button" 
+                          style={{ color: '#10b981' }} 
+                          onClick={() => {
+                            setSelected(pool);
+                            setSelectedId(key);
+                            setInventoryModalOpen(false);
+                          }}
+                        >
+                          Select
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {activePoolSource.length === 0 && <div style={{ textAlign: 'center', padding: '40px', opacity: 0.5 }}>No pools found.</div>}
+        </div>
+        <div className="modal-actions" style={{ justifyContent: 'flex-end', marginTop: '15px' }}>
+          <button className="btn-pro secondary" onClick={() => setInventoryModalOpen(false)}>Close</button>
+        </div>
+      </Modal>
+      {/* Pool Connection Manager Modal (Same style as MRR) */}
+      <Modal isOpen={connectionModalOpen} onClose={() => setConnectionModalOpen(false)} title="Pool Connection Manager" maxWidth="1000px">
+        <div style={{ padding: '10px' }}>
+          <div className="pool-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '70vh', overflowY: 'auto', paddingRight: '5px' }}>
+            {activePoolSource.map((pool, idx) => {
+              const key = ph.getKey(pool, idx);
+              const label = ph.getLabel(pool, idx);
+              const algo = ph.getAlgo(pool);
+              const isSelected = selectedId === key;
+
+              return (
+                <div 
+                  key={key} 
+                  className="pool-item" 
+                  style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '45px 1.2fr 1.5fr 1fr 80px', 
+                    gap: '15px', 
+                    alignItems: 'center', 
+                    fontSize: '11px', 
+                    background: isSelected ? 'rgba(59, 130, 246, 0.08)' : 'rgba(255,255,255,0.02)', 
+                    padding: '12px 16px', 
+                    borderRadius: '8px', 
+                    border: isSelected ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.05)',
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold', textAlign: 'center', opacity: 0.5 }}>#{idx + 1}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                    <div style={{ fontWeight: '600', color: isSelected ? '#60a5fa' : '#f8fafc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
+                    <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#60a5fa', opacity: 0.8 }}>{getAlgoDisplayName(algo)}</div>
+                  </div>
+                  <div style={{ opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '10px' }}>
+                    <span style={{ opacity: 0.4 }}>host:</span> {pool.stratumHost || pool.stratumHostname || pool.host}:{pool.stratumPort || pool.port}
+                  </div>
+                  <div style={{ opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '10px' }}>
+                    <span style={{ opacity: 0.4 }}>user:</span> {pool.username || pool.user}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <button className="btn-pro secondary" style={{ fontSize: '10px', padding: '4px 8px', borderColor: isSelected ? '#34d399' : '' }} onClick={() => onSelect(key)}>
+                      {isSelected ? 'Selected' : 'Select'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {activePoolSource.length === 0 && <div style={{ textAlign: 'center', padding: '40px', opacity: 0.5 }}>No pools found.</div>}
+        </div>
+        <div className="modal-actions" style={{ justifyContent: 'flex-end', marginTop: '15px' }}>
+          <button className="btn-pro secondary" onClick={() => setConnectionModalOpen(false)}>Close</button>
         </div>
       </Modal>
       {/* Error Details Modal */}

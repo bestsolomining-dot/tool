@@ -153,17 +153,23 @@ export default function TelegramManager({ onCall, mrrClient }) {
 
   // Fetch current notification status from server on mount
   useEffect(() => {
+    let isMounted = true;
+
     onCall('/api/v2/notify/telegram/status', { method: 'GET', silent: true })
       .then(res => {
-        if (res && typeof res.enabled === 'boolean') setIsTelegramOn(res.enabled);
+        if (isMounted && res && typeof res.enabled === 'boolean') setIsTelegramOn(res.enabled);
       })
       .catch(() => { });
 
     onCall('/api/v2/notify/telegram/health', { method: 'GET', silent: true })
       .then(res => {
-        setHealth(res);
+        if (isMounted) setHealth(res);
       })
       .catch(() => { });
+
+    return () => {
+      isMounted = false;
+    };
   }, [onCall]);
 
   const handleToggle = async () => {

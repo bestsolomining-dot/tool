@@ -7,6 +7,7 @@ import MiningRigRental from './src/components/MiningRigRental';
 import MiningRigSection from './src/components/MiningRigSection';
 import HashrateCalculator from './src/components/HashrateCalculator';
 import MrrPoolsManager from './src/components/MrrManager';
+import HeroMinersCard from './src/components/HeroMinersCard';
 import { RentedRigProvider } from './src/components/RentedRigContext';
 import './src/App.css';
 
@@ -372,13 +373,16 @@ export default function App() {
                 />
               </article>
             <article className="panel">
-              <MrrPoolsManager
-                onCall={handleMiningCall}
-                mrrClient={mrrClient}
-                externalPoolData={mrrPoolData}
-                externalRigId={mrrPoolRigId}
-                externalRentalId={mrrPoolRentalId}
-              />
+              <HeroMinersCard onCall={handleMiningCall} />
+              <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.9rem' }}>Mining-Dutch</h4>
+                  <a href="https://www.mining-dutch.nl/" target="_blank" rel="noopener noreferrer" className="btn-pro secondary" style={{ fontSize: '10px', textDecoration: 'none', padding: '4px 8px' }}>
+                    Open Dashboard
+                  </a>
+                </div>
+                <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--muted)' }}>Multi-pool for various algorithms and auto-exchange.</p>
+              </div>
             </article>
           </section>
         </main>
@@ -398,6 +402,22 @@ export default function App() {
             {JSON.stringify(modalContent, null, 2)}
           </pre>
         </Modal>
+
+        {/* MRR Pool Configuration Modal */}
+        {(mrrPoolData || mrrPoolRigId) && (
+          <MrrPoolsManager
+            onCall={handleMiningCall}
+            mrrClient={mrrClient}
+            externalPoolData={mrrPoolData}
+            externalRigId={mrrPoolRigId}
+            externalRentalId={mrrPoolRentalId}
+            onClose={() => {
+              setMrrPoolData(null);
+              setMrrPoolRigId('');
+              setMrrPoolRentalId('');
+            }}
+          />
+        )}
 
         <Modal
           isOpen={calculatorModalOpen}

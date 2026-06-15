@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
-import PoolEditorPopup from './PoolEditorPopup';
 import CrytoRatePage from './CryptoRatePage';
 
 /**
@@ -13,7 +12,7 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
   const [rigs, setRigs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [editorState, setEditorState] = useState(null);
+  const [heroMinersStats, setHeroMinersStats] = useState(null); // New state for HeroMiners statistics
   const [activeRigId, setActiveRigId] = useState(null);
   const [draggedItemIndex, setDraggedItemIndex] = useState(null);
 
@@ -167,6 +166,50 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
     }
   };
 
+  const runWebSocketFetch = (type, rig) => {
+    setLoading(true);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/v2/mrr/fetch/ws`;
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      socket.send(JSON.stringify({
+        action: type,
+        rigid: rig.rigid || rig.id,
+        client: mrrClient
+      }));
+    };
+
+    socket.onmessage = async (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.success && data.pools) {
+          // "Paste" the fetched pools directly into the rig's live configuration
+          await updatePools(rig, data.pools);
+        }
+        if (data.success && data.stats) { // Handle HeroMiners statistics
+          setHeroMinersStats(data.stats);
+        } else if (data.error) {
+          setError(data.error);
+        }
+      } catch (err) {
+        setError("Failed to parse WebSocket data");
+      } finally {
+        socket.close();
+        setLoading(false);
+      }
+    };
+
+    socket.onerror = () => {
+      setError("WebSocket connection failed");
+      setLoading(false);
+    };
+  };
+
+  const fetchHeroMiners = (rig) => runWebSocketFetch('herominers', rig);
+  const fetchMiningPoolDutch = (rig) => runWebSocketFetch('miningpooldutch', rig);
+  const fetchAllConfigs = (rig) => runWebSocketFetch('all', rig);
+
   const handleDragStart = (e, index) => {
     setDraggedItemIndex(index);
     e.dataTransfer.effectAllowed = "move";
@@ -189,18 +232,9 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
     const updatedPools = [...rig.pools];
     updatedPools[poolIndex] = {
       ...updatedPools[poolIndex],
-      priority: parseInt(newPriority) || 0
+      priority: parseInt(newPriority, 10) || 0
     };
     await updatePools(rig, updatedPools);
-  };
-
-  const handleEditPool = (pool, rig) => {
-    setEditorState({
-      initialData: pool, // Pass raw MRR pool data without metadata pollution
-      label: pool.name || rig.name || (rig.isProfile ? 'Pool Profile' : 'Rig Pool'),
-      rig,
-      isNew: false
-    });
   };
 
   const content = (
@@ -234,6 +268,10 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
               <h3 style={{ margin: 0, fontSize: '1rem', color: '#60a5fa' }}>{rig.name || (rig.isProfile ? 'Pool Profile' : 'Rig')} (ID: {rig.rigid || rig.id})</h3>
               {!rig.isProfile && (
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <button className="text-button" style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold' }} onClick={() => fetchAllConfigs(rig)}>Fetch All</button>
+                  <button className="text-button" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => fetchHeroMiners(rig)}>HeroMiners</button>
+                  <button className="text-button" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => fetchMiningPoolDutch(rig)}>Fetch MiningPoolDutch</button>
+                  <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.1)', margin: '0 5px' }}></div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <label style={{ fontSize: '10px', opacity: 0.6 }}>Price:</label>
                     <input 
@@ -302,44 +340,81 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
                   <div style={{ opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '10px' }}>
                     <span style={{ opacity: 0.4 }}>user:</span> {pool.user}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <button className="text-button" style={{ color: '#60a5fa', fontWeight: '600' }} onClick={() => handleEditPool(pool, rig)}>Edit</button>
-                  </div>
                 </div>
               ))}
             </div>
           </div>
         ))}
 
-        {editorState && (
-          <PoolEditorPopup
-            editor={editorState}
-            onClose={() => setEditorState(null)}
-            onSave={async (updatedData) => {
-              const rig = editorState.rig;
-              const updatedPools = [...(rig.pools || [])];
-              // Find and replace the edited pool in the local array
-              const idx = updatedPools.findIndex(p => 
-                (p.id && p.id === updatedData.id) || (p.priority === updatedData.priority)
-              );
-              if (idx > -1) updatedPools[idx] = updatedData;
-              else updatedPools[0] = updatedData;
+        {/* HeroMiners Statistics Display */}
+        {heroMinersStats && (
+          <div style={{ marginTop: '2rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px' }}>
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: '#60a5fa' }}>HeroMiners Statistics</h3>
+            
+            {heroMinersStats.globalHashrates && (
+              <div style={{ marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
+                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: '#fbbf24' }}>Global Hashrates</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', fontSize: '11px' }}>
+                  {Object.entries(heroMinersStats.globalHashrates).map(([algo, rate]) => (
+                    <div key={algo} style={{ background: 'rgba(255,255,255,0.05)', padding: '5px 8px', borderRadius: '4px' }}>
+                      <span style={{ opacity: 0.7 }}>{algo}:</span> <strong style={{ color: '#f8fafc' }}>{rate}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-              await updatePools(rig, updatedPools);
-              setEditorState(null);
-              fetchPools();
-            }}
-          />
+            {heroMinersStats.coinStats && heroMinersStats.coinStats.length > 0 && (
+              <div style={{ maxHeight: '400px', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.15) transparent' }}>
+                <table className="pro-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ fontSize: '10px', opacity: 0.7, textTransform: 'uppercase' }}>
+                      <th style={{ padding: '8px', textAlign: 'left' }}>Coin</th>
+                      <th style={{ padding: '8px', textAlign: 'left' }}>Algo</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Net Hash</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Pool Hash</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Height</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Blocks</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Miners</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Workers</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>USD/day</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {heroMinersStats.coinStats.map((coin, idx) => (
+                      <tr key={idx} style={{ fontSize: '11px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                        <td style={{ padding: '8px', fontWeight: 'bold', color: '#f8fafc' }}>{coin.coin}</td>
+                        <td style={{ padding: '8px', color: '#60a5fa' }}>{coin.algorithm}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontFamily: 'monospace' }}>{coin.networkHashrate}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontFamily: 'monospace' }}>{coin.poolHashrate}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>{coin.blockHeight}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>{coin.blocksFound}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>{coin.miners}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>{coin.workers}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#10b981', fontWeight: 'bold' }}>{coin.usdPerDay}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {!heroMinersStats.globalHashrates && !heroMinersStats.coinStats && (
+              <div style={{ opacity: 0.5, fontSize: '12px', textAlign: 'center', padding: '10px' }}>
+                No HeroMiners statistics available.
+              </div>
+            )}
+          </div>
         )}
+
       </div>
               <CrytoRatePage onCall={onCall} />
 
     </div>
   );
 
-  if (rentalIds && !externalPoolData) {
+  if (onClose && (rentalIds || externalPoolData || externalRigId)) {
     return (
-      <Modal isOpen={true} onClose={onClose} title="Pool Manager" maxWidth="1000px">
+      <Modal isOpen={true} onClose={onClose} title="Pool Configuration" maxWidth="1000px">
         {content}
       </Modal>
     );

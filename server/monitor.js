@@ -453,13 +453,19 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         let priceRoi = null;
         try {
           const nhAlgo = normalizeAlgoForNiceHash(info.algo);
+          if (!nhAlgo || nhAlgo === 'Unknown' || nhAlgo === 'N/A') throw new Error('Unsupported algorithm');
+
           const cacheKey = `${nhAlgo}:${acct}`;
           let nhP = monitorNhPriceCache.get(cacheKey);
           
           if (!nhP) {
             const { client: nhCl } = resolveNhClient(acct);
-            const pData = await getNiceHashApp(nhCl).hashpower.getOrderPrice({ algorithm: nhAlgo, market: '1' });
-            const rawP = pData?.price || pData;
+            const pData = await getNiceHashApp(nhCl).hashpower.getOrderPrice({ 
+              algorithm: nhAlgo, 
+              market: '1', 
+              amount: '0.005' 
+            });
+            const rawP = pData;
             nhP = {
               price: parseFloat(rawP?.fixedPrice || rawP?.standardPrice?.fast || rawP?.price || 0),
               unit: rawP?.speedUnit || rawP?.unit || (nhAlgo.includes('SHA256') ? 'EH' : 'TH')
@@ -478,7 +484,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           }
         } catch (e) { console.warn(`[monitor] ROI calc failed for ${r.id}: ${e.message}`); }
 
-        const orderDiff = priceRoi !== null ? priceRoi : (100 - efficiency).toFixed(1);
+        const orderDiff = (priceRoi !== null && !isNaN(priceRoi)) ? priceRoi : (100 - (parseFloat(efficiency) || 0)).toFixed(1);
 
         // Get current DB state (promisified)
         let row;

@@ -13,7 +13,9 @@ const nhInflight = new Map();
 
 /** Normalizes market strings (USA/EU) to NiceHash numeric IDs (1/0) */
 export function normalizeMarket(market) {
-  if (typeof market === 'number' || !isNaN(Number(market))) return String(market);
+  if (typeof market === 'number') return String(Math.floor(market));
+  if (market === '1' || market === '0') return market;
+  if (!isNaN(Number(market)) && market !== null && market !== '') return String(Number(market));
   const m = String(market || '0').toUpperCase().trim();
   if (m === 'USA' || m === 'AMERICA' || m === 'US') return '1';
   if (m === 'EU' || m === 'EUROPE') return '0';
@@ -278,10 +280,6 @@ export const getNiceHashApp = (client) => ({
         query: {
           algorithm: normalizeAlgoForNiceHash(algorithm),
           market: normalizeMarket(market),
-          type: query.type || 'STANDARD',
-          price: query.price || '0.001',
-          limit: query.limit || '0.01',
-          amount: query.amount || '0.005',
           ...rest
         }
       });
@@ -294,10 +292,6 @@ export const getNiceHashApp = (client) => ({
         query: {
           algorithm: normalizeAlgoForNiceHash(algorithm),
           market: normalizeMarket(market),
-          type: query.type || 'STANDARD',
-          price: query.price || '0.001',
-          limit: query.limit || '0.01',
-          amount: query.amount || '0.005',
           ...rest
         }
       });

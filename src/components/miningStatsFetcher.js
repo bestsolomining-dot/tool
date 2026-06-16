@@ -16,7 +16,7 @@ export async function fetchMiningStats(type, client, rigId = null) {
   // Sanitize client: 'VN' is an aggregate identifier and lacks direct API keys on the backend.
   // We default to 'BT' for stats and pool config operations if the context is currently 'VN'.
   let targetClient = client;
-  if (targetClient === 'VN' && (type === 'miningpooldutch' || type === 'herominers' || type === 'all')) {
+  if (targetClient === 'VN' && (type === 'miningpooldutch' || type === 'herominers' || type === 'herominers_global' || type === 'all')) {
     targetClient = 'BT';
   }
 
@@ -50,8 +50,10 @@ export async function fetchMiningStats(type, client, rigId = null) {
       clearTimeout(timeout);
       try {
         const data = JSON.parse(event.data);
-        if (data.success) resolve(data);
-        else reject(new Error(data.error || "Request failed"));
+        // The backend now returns a flatter 'data' object.
+        // We resolve the internal data to make it easier for components to consume.
+        if (data.success) resolve(data.data || data);
+        else reject(new Error(data.error || "Mining stats request failed"));
       } catch (err) {
         reject(new Error("Parse error: " + err.message));
       } finally {

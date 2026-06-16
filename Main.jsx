@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import Pools from './src/components/Pools';
 import Modal from './src/components/Modal';
 import HashpowerBot from './src/components/HashpowerBot';
@@ -7,13 +7,20 @@ import MiningRigRental from './src/components/MiningRigRental';
 import MiningRigSection from './src/components/MiningRigSection';
 import HashrateCalculator from './src/components/HashrateCalculator';
 import HashCompletionCalculator from './src/components/HashCompletionCalculator';
-import MrrPoolsManager from './src/components/MrrPoolsManager';
+import MrrPoolsManager from './src/components/MrrManager';
+import Login from './src/components/Login';
+import HeroMinersCard from './src/components/HeroMinersCard';
+import { RentedRigProvider } from './src/components/RentedRigContext';
 import './src/App.css';
 
 export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [output, setOutput] = useState(null);
+  
+  // Auth state initialized from localStorage
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem('token'));
+
   const [lastCall, setLastCall] = useState(null);
   const [activeSection, setActiveSection] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
@@ -28,6 +35,21 @@ export default function App() {
   const [mrrPoolRigId, setMrrPoolRigId] = useState('');
   const [mrrPoolRentalId, setMrrPoolRentalId] = useState('');
   const [completionCalculatorContext, setCompletionCalculatorContext] = useState(null);
+
+  const inFlightRequests = useRef(new Map());
+
+  const handleLoginSuccess = useCallback((token) => {
+    localStorage.setItem('token', token);
+    setAuthToken(token);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('token');
+    setAuthToken(null);
+    setOutput(null);
+    setMrrPoolData(null);
+    setError('');
+  }, []);
 
   const toDateTimeLocal = (value) => {
     if (!value) return '';
@@ -89,6 +111,7 @@ export default function App() {
     });
     setCompletionModalOpen(true);
   }, []);
+
   const scrollToPools = useCallback(() => {
     const poolsEl = document.querySelector('.pools-section');
     if (poolsEl) poolsEl.scrollIntoView({ behavior: 'smooth' });
@@ -97,16 +120,28 @@ export default function App() {
   const callApi = useCallback(async (path, options = {}) => {
     const startedAt = performance.now();
     const method = options.method || 'GET';
-    const { query, section, ...fetchOptions } = options;
+    const { query, section, silent, ...fetchOptions } = options;
+    const isSilent = !!silent;
+
+    // Prepare headers with Auth Token
+    const token = authToken;
+    const headers = { 
+      ...fetchOptions.headers,
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+
     let finalPath = path;
     const enrichedQuery = { ...query };
     if (path.startsWith('/api/v2/') && !path.startsWith('/api/v2/mrr/')) {
       if (!enrichedQuery.ts) enrichedQuery.ts = Date.now();
       if (!enrichedQuery.client) {
         enrichedQuery.client = nhClient;
-        console.log(`[App.jsx:callApi] Using nhClient: ${nhClient}`);
       }
     }
+
+    // Deduplication check
+    const cacheKey = `${method}:${path}:${JSON.stringify(enrichedQuery)}:${fetchOptions.body || ''}`;
+    if (inFlightRequests.current.has(cacheKey)) return inFlightRequests.current.get(cacheKey);
 
     if (Object.keys(enrichedQuery).length > 0) {
       const params = new URLSearchParams();
@@ -117,52 +152,42 @@ export default function App() {
       if (qs) finalPath += (finalPath.includes('?') ? '&' : '?') + qs;
     }
 
-    if (!options.silent) {
+    if (!isSilent) {
       setActiveSection(section || null);
       setLoading(true);
       setError('');
-    }
-
-    if (!options.silent) {
       setLastCall({ method, path: finalPath, status: 'Pending', durationMs: null });
     }
 
-    // Use relative API paths so development proxy and production same-origin routing both work.
-    const apiBase = '';
-
-    const token = localStorage.getItem('token');
-    const headers = { 
-      ...fetchOptions.headers,
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-    };
-    let body = fetchOptions.body;
-
-    // Automatically stringify object bodies and set the default Content-Type
-    if (body && typeof body === 'object' && !(body instanceof FormData)) {
-      body = JSON.stringify(body);
-      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
-    }
-
-    try {
-      const res = await fetch(`${apiBase}${finalPath}`, {
-        ...fetchOptions,
-        method,
-        headers,
-        body,
-        mode: 'cors',
-        credentials: 'omit',
-      });
-
-      let data = null;
-      if (res.status !== 204) {
-        const text = await res.text();
-        try {
-          data = text ? JSON.parse(text) : null;
-        } catch {
-          data = text;
+    const requestPromise = (async () => {
+      try {
+        let body = fetchOptions.body;
+        if (body && typeof body === 'object' && !(body instanceof FormData)) {
+          body = JSON.stringify(body);
+          headers['Content-Type'] = headers['Content-Type'] || 'application/json';
         }
 
-        if (!options.silent) {
+        const res = await fetch(finalPath, {
+          ...fetchOptions,
+          method,
+          headers,
+          body,
+          mode: 'cors',
+          credentials: 'omit',
+        });
+
+        if (res.status === 401) {
+          handleLogout();
+          return null;
+        }
+
+        let data = null;
+        if (res.status !== 204) {
+          const text = await res.text();
+          try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+        }
+
+        if (!isSilent) {
           setLastCall({
             method,
             path: finalPath,
@@ -274,7 +299,12 @@ export default function App() {
     }
   }, [handleMiningCall, mrrClient]);
 
+  if (!authToken) {
+    return <Login onLoginSuccess={handleLoginSuccess} onCall={callApi} />;
+  }
+
   return (
+    <RentedRigProvider nhClient={nhClient} callApi={callApi}>
     <div className="app-shell" style={{ padding: '0 20px 40px', maxWidth: '1600px', margin: '0 auto' }}>
       <header className="app-header" style={{
         padding: '40px 0',
@@ -292,6 +322,9 @@ export default function App() {
               <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`}>
                 {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
               </span>
+            </div>
+            <div style={{ marginTop: '10px' }}>
+              <button className="text-button" onClick={handleLogout} style={{ fontSize: '10px' }}>Logout</button>
             </div>
           </div>
         </div>
@@ -358,14 +391,18 @@ export default function App() {
               onOpenMrrPools={handleOpenMrrPools}
             />
           </article>
-          <article className="panel">
+          <article className="panel" style={{ maxHeight: '800px', overflowY: 'auto' }}>
             <MrrPoolsManager
               onCall={handleMiningCall}
               mrrClient={mrrClient}
               externalPoolData={mrrPoolData}
               externalRigId={mrrPoolRigId}
               externalRentalId={mrrPoolRentalId}
+              onClose={() => setMrrPoolData(null)}
             />
+          </article>
+          <article className="panel">
+            <HeroMinersCard mrrClient={mrrClient} />
           </article>
         </section>
       </main>
@@ -401,5 +438,6 @@ export default function App() {
         </pre>
       </Modal>
     </div>
+    </RentedRigProvider>
   );
 }

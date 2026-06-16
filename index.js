@@ -5,6 +5,7 @@ import { WebSocketServer } from 'ws';
 import { createApp, initializeApp } from './server/app.js';
 import { verifyToken } from './server/auth.js';
 import { resolveNhClient, getNiceHashApp } from './server/nh.js';
+import { mrrApiCall } from './server/mrr.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,66 +29,139 @@ const server = app.listen(PORT, (err) => {
 // Handles real-time stats fetching requests from miningStatsFetcher.js
 const wss = new WebSocketServer({ noServer: true });
 
+// Handle server-level WebSocket errors
+wss.on('error', (err) => {
+  console.error('[wss] Global WebSocket error:', err.message);
+});
+
 wss.on('connection', (ws, request) => {
   console.log(`[ws] New connection established`);
   
   ws.on('message', async (data) => {
     try {
-      const { action, client, rigid } = JSON.parse(data.toString());
+      const payload = JSON.parse(data.toString());
+      const { action, client, rigid, coin: payloadCoin } = payload;
       let responseData = {};
+
+      // New action to fetch global statistics for all HeroMiners pools
+      if (action === 'herominers_global') {
+        try {
+          const url = 'https://herominers.com/api/stats';
+          const hmRes = await fetch(url, { headers: { 'User-Agent': 'MiningTool/2.0' } });
+          if (hmRes.ok) {
+            responseData.herominers_global = await hmRes.json();
+          }
+        } catch (err) {
+          console.error(`[ws:herominers_global] ${err.message}`);
+        }
+      }
 
       if (action === 'herominers' || action === 'all') {
         try {
+          // 0. Determine which HeroMiners coin subdomain to use
+          let coin = payloadCoin || 'kaspa';
+
+          // Automatically map algorithm to the correct HeroMiners subdomain
+          const algoMap = {
+            'randomx': 'monero', 'rx/0': 'monero', 'kawpow': 'ravencoin',
+            'ironfish': 'ironfish', 'kheavyhash': 'kaspa', 'kaspa': 'kaspa',
+            'autolykos': 'ergo', 'etchash': 'ethereum-classic', 'nexapow': 'nexa',
+            'dynex': 'dynex', 'blake3': 'alephium'
+          };
+
+          if (!payloadCoin && rigid) {
+            const isRental = String(rigid).length >= 5;
+            const mrrRes = await mrrApiCall({ 
+              endpoint: isRental ? `/rental/${rigid}` : `/rig/${rigid}`, 
+              clientNameRaw: client 
+            });
+            const info = mrrRes.data?.data || mrrRes.data;
+            const algo = String(info?.algo || info?.type || info?.algorithm || '').toLowerCase().trim();
+
+            for (const [key, value] of Object.entries(algoMap)) {
+              if (algo.includes(key)) {
+                coin = value;
+                break;
+              }
+            }
+          }
+
           // 1. Resolve the address for the requested client (defaults to NiceHash address)
           const { client: nhClientInstance } = resolveNhClient(client);
           const nhApp = getNiceHashApp(nhClientInstance);
           const addrData = await nhApp.mining.getMiningAddress();
           const address = addrData.miningAddress;
 
-          // 2. Fetch from HeroMiners (Example using 'kaspa', change as needed)
-          const coin = 'kaspa'; 
+          // 2. Fetch from HeroMiners
           const url = `https://${coin}.herominers.com/api/stats/${address}`;
+          console.log(`[ws:herominers] Fetching ${coin} stats for ${address}...`);
           const hmRes = await fetch(url, { headers: { 'User-Agent': 'MiningTool/2.0' } });
           
           if (hmRes.ok) {
-            responseData.herominers = await hmRes.json();
+            const result = await hmRes.json();
+            responseData.herominers = { success: true, ...result };
+          } else if (hmRes.status === 404) {
+            responseData.herominers = { success: false, error: `Address not found on HeroMiners ${coin} pool. Make sure the rig is actively mining to this pool.` };
           } else {
             throw new Error(`HeroMiners returned ${hmRes.status}`);
           }
         } catch (err) {
-          console.error(`[ws:herominers] Fetch failed: ${err.message}`);
+          console.error(`[ws:herominers] ${err.message}`);
           responseData.herominers = { success: false, error: err.message };
         }
       }
 
       if (action === 'miningpooldutch' || action === 'all') {
         responseData.miningpooldutch = {
-          stats: { hashrate: 0 },
+          success: true,
+          stats: { hashrate: 0, balance: 0 },
           workers: []
         };
       }
 
+      // Determine overall success. If "all", we succeed if at least one part exists.
+      // If specific action, we succeed only if that specific action succeeded.
+      const isSuccess = action === 'all' 
+        ? (Object.keys(responseData).length > 0) 
+        : (responseData[action]?.success !== false);
+      
+      const errorMsg = !isSuccess ? (responseData[action]?.error || 'Fetch failed') : null;
+
+      // IMPORTANT: We always send the full responseData object.
+      // This ensures the frontend always finds data.herominers or data.miningpooldutch
+      // regardless of whether one or all were requested, keeping the data shape consistent.
       ws.send(JSON.stringify({
-        success: true,
+        success: isSuccess,
+        error: errorMsg,
         action,
         client,
         data: responseData
       }));
     } catch (err) {
-      ws.send(JSON.stringify({ success: false, error: 'Invalid request format' }));
+      console.error('[ws:message] Error:', err.message);
+      ws.send(JSON.stringify({ success: false, error: 'Internal server error: ' + err.message }));
     }
   });
 });
 
 server.on('upgrade', (request, socket, head) => {
-  const url = new URL(request.url, `http://${request.headers.host}`);
+  try {
+    const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+    const pathname = url.pathname.replace(/\/$/, ''); // Remove trailing slash
 
-  if (url.pathname === '/api/v2/mrr/fetch/ws') {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit('connection', ws, request);
-    });
-  } else {
-    // Let other upgrades fall through or destroy
+    if (pathname === '/api/v2/mrr/fetch/ws') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } else {
+      // Only destroy if it's explicitly an API path we don't recognize.
+      // If it's a root path, it might be Vite's HMR, so we let it be.
+      if (pathname.startsWith('/api')) {
+        socket.destroy();
+      }
+    }
+  } catch (err) {
+    console.error('[ws:upgrade] Error during upgrade:', err.message);
     socket.destroy();
   }
 });

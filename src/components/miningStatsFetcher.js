@@ -10,6 +10,9 @@
  *                            or rejects with an error.
  */
 export async function fetchMiningStats(type, client, rigId = null) {
+  const maxAttempts = 5;
+  const baseDelay = 1000;
+
   // Sanitize client: 'VN' is an aggregate identifier and lacks direct API keys on the backend.
   // We default to 'BT' for stats and pool config operations if the context is currently 'VN'.
   let targetClient = client;
@@ -17,66 +20,58 @@ export async function fetchMiningStats(type, client, rigId = null) {
     targetClient = 'BT';
   }
 
-  return new Promise((resolve, reject) => {
+  const attemptFetch = () => new Promise((resolve, reject) => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
-    // Fix: derivce the backend host for local development (Vite port 5173 -> Backend port 3000)
-    const host = window.location.port === '5173' ? 'localhost:3000' : window.location.host;
+    // Use the current host to allow the Vite proxy to handle the upgrade request.
+    // Ensure your vite.config.js has 'ws: true' in the proxy settings.
+    const host = window.location.host;
     const wsUrl = `${protocol}//${host}/api/v2/mrr/fetch/ws`;
     
     let socket;
-
     try {
       socket = new WebSocket(wsUrl);
     } catch (err) {
-      return reject(new Error(`Failed to establish WebSocket connection: ${err.message}`));
+      return reject(new Error(`WebSocket error: ${err.message}`));
     }
 
-    // Add a timeout to prevent the UI from hanging if the socket never responds
     const timeout = setTimeout(() => {
-      socket.close();
-      reject(new Error("Connection timed out after 10 seconds."));
-    }, 10000);
+      if (socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
+        socket.close();
+      }
+      reject(new Error(`Fetch timed out for ${type} at ${wsUrl} after 15s`));
+    }, 15000);
 
     socket.onopen = () => {
-      const message = {
-        action: type,
-        client: targetClient
-      };
-      if (rigId) {
-        message.rigid = rigId;
-      }
-      socket.send(JSON.stringify(message));
+      socket.send(JSON.stringify({ action: type, client: targetClient, rigid: rigId }));
     };
 
     socket.onmessage = (event) => {
       clearTimeout(timeout);
       try {
         const data = JSON.parse(event.data);
-        if (data.success) {
-          resolve(data); // Resolve with the entire data object if successful
-        } else if (data.error) {
-          reject(new Error(data.error));
-        } else {
-          reject(new Error("Unknown WebSocket data format or missing 'success' field."));
-        }
+        if (data.success) resolve(data);
+        else reject(new Error(data.error || "Request failed"));
       } catch (err) {
-        reject(new Error("Failed to parse WebSocket data: " + err.message));
+        reject(new Error("Parse error: " + err.message));
       } finally {
         socket.close();
       }
     };
 
-    socket.onerror = (event) => {
+    socket.onerror = () => {
       clearTimeout(timeout);
-      console.error(`WebSocket Error for type '${type}', client '${targetClient}', rigId '${rigId}':`, event);
-      reject(new Error(`WebSocket connection failed for type '${type}' and client '${targetClient}'. Please check network, backend status, or console for more details.`));
+      reject(new Error(`Connection failed for ${type} at ${wsUrl}. Check if the backend is running on port ${host.split(':')[1] || 'default'}.`));
       socket.close();
     };
-
-    socket.onclose = (event) => {
-      // This callback is primarily for cleanup or detecting unexpected closures.
-      // Actual errors/success should be handled by onmessage/onerror.
-    };
   });
+
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return await attemptFetch();
+    } catch (err) {
+      if (i === maxAttempts - 1) throw err;
+      await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, i)));
+    }
+  }
 }

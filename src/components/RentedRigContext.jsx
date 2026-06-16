@@ -57,7 +57,7 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
             const priceData = await callApi('/api/v2/hashpower/order/price', {
               query: { 
                 algorithm: String(nhAlgo), 
-                market: marketName === 'EU' ? '0' : '1',
+                market: marketName === 'EU' ? 'EU' : 'USA',
                 client: priceLookupClient 
               },
               silent: true

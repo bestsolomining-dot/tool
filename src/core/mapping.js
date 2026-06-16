@@ -30,7 +30,7 @@ export const algoMap = {
 
   // Common ASIC Algorithms
   'SHA256': 'SHA256',
-  'SHA256ASICBOOST': 'SHA256ASICBOOST',
+  'SHA256ASICBOOST': 'SHA256',
   'SHA256AB': 'SHA256ASICBOOST',
   'BTC': 'SHA256',
   'SCRYPT': 'SCRYPT',

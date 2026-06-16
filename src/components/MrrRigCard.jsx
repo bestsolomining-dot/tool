@@ -200,7 +200,7 @@ const MrrRigCard = ({
                     <span>Value (Effect):</span>
                     <strong>{realizedPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
                   </div>
-                    <div style={{ fontSize: '9px', color: '#60a5fa', display: 'flex', justifyContent: 'space-between' }}>
+                    {/* <div style={{ fontSize: '9px', color: '#60a5fa', display: 'flex', justifyContent: 'space-between' }}>
                       <span>Worth (NH):</span>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                         {nhPriceRatio > 0 && (
@@ -210,7 +210,7 @@ const MrrRigCard = ({
                         )}
                         <strong>{nhValueEquivalent.toFixed(8)} <small>{paidCurrency}</small></strong>
                       </div>
-                    </div>
+                    </div> */}
                 </div>
               )}
               {myNhPrice > 0 && myOrderDiff !== null && (

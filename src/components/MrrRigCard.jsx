@@ -1,10 +1,10 @@
 import React from 'react';
 import { CountdownTimer } from './MiningRigRental';
-import { 
-  clean, 
-  getClientBadgeStyle, 
-  getRawHashrate, 
-  getPriceDataLocal, 
+import {
+  clean,
+  getClientBadgeStyle,
+  getRawHashrate,
+  getPriceDataLocal,
   parsePriceValueLocal,
   getNiceHashPriceValue,
   formatRentalStartTime,
@@ -18,18 +18,19 @@ import {
 import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils.js';
 import { getAlgoDisplayName, normalizeAlgoForNiceHash, calculatePriceComparison } from '../core/mapping.js';
 
-const MrrRigCard = ({ 
-  rig, 
+const MrrRigCard = ({
+  rig,
   algoName,
-  info, 
-  isMine, 
-  mrrClient, 
-  nhOrders, 
-  algoMarketPrices, 
-  onOpenPool, 
-  onOpenCompletionCalculator, 
-  fetchRigDetailInfo, 
-  loadingInfoIds, 
+  info,
+  isMine,
+  mrrClient,
+  nhOrders,
+  coinPrices,
+  algoMarketPrices,
+  onOpenPool,
+  onOpenCompletionCalculator,
+  fetchRigDetailInfo,
+  loadingInfoIds,
   handleRigStatus,
   handlePriceChange,
   expandedPools,
@@ -47,12 +48,13 @@ const MrrRigCard = ({
   const nhData = nhBase?.price || nhBase;
   const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0;
   const avgVal = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash) || 0;
-  
+
   // 1. Efficiency and Styling initialization (Fixed ReferenceErrors)
   const rawEffValue = info?.percent ?? rig.hashrate?.average?.percent ?? rig.percent ?? (adsVal > 0 ? (avgVal / adsVal * 100) : 0);
   const effNum = parseFloat(rawEffValue);
   const eff = effNum.toFixed(2);
 
+  // Initialize styling variables immediately to prevent ReferenceErrors
   let effectBg = isMine ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 41, 59, 0.4)';
   let effectBorder = isMine ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.1)';
   let effectTextColor = '#fbbf24';
@@ -71,32 +73,21 @@ const MrrRigCard = ({
   const displayPrice = isEquihash ? displayPriceData.value : displayPriceData.value * BASE_UNIT_FACTOR;
   const displayPriceCurrency = displayPriceData.currency || 'BTC';
 
-  // Daily rate for ROI comparison, adjusted by performance (AVG hashrate)
-  const listPriceSource = rig.price_converted || info?.price_converted || info?.price?.BTC || rig?.price?.BTC || rig.price || info?.price || rig.min_price;
+  // Prioritize the daily rate from the original 'rig' object over the 'info' object.
+  // When a rig is rented, info.price usually contains the total paid amount for the duration,
+  // which breaks the daily-rate comparison logic for ROI.
+  const listPriceSource = rig.price_converted || rig?.price?.BTC || rig.price || info?.price_converted || info?.price?.BTC || info?.price || rig.min_price;
+
   const listBtcData = getBtcPriceDataUtils(listPriceSource);
 
+  // Simplified ROI Logic: Use List Rate and adjust by Efficiency (Effect)
   const mrrPriceNum = (() => {
-    const hours = parseFloat(rig.hours || rig.length || info?.duration || 0);
-    const days = hours / 24;
-    const effectivePriceSource = { 
-      ...(rig.price || {}), ...(info?.price || {}), 
-      paid: info?.price?.paid ?? rig.price?.paid,
-      BTC: rig.price_converted || info?.price_converted || info?.price?.BTC || rig?.price?.BTC 
-    };
-    const btcData = getBtcPriceDataUtils(effectivePriceSource);
-    
-    if (btcData.value > 0 && btcData.currency === 'BTC') {
-      if (btcData.isTotalCost && days > 0) {
-        // Use avgVal for "dependence of effect" to get the TRUE cost per delivered hash
-        const effectiveHashrate = (isRented && avgVal > 0) ? avgVal : adsVal;
-        if (effectiveHashrate > 0) {
-          const rate = btcData.value / days / effectiveHashrate;
-          return isEquihash ? rate : rate * BASE_UNIT_FACTOR;
-        }
-      }
-      return btcData.value;
+    const listRate = listBtcData.value;
+    if (isRented && effNum > 0) {
+      // "ROI is dependence of effect": If efficiency is 50%, effective price paid for hashes delivered is doubled.
+      return listRate / (effNum / 100);
     }
-    return listBtcData.value;
+    return listRate;
   })();
 
   const mrrComparePriceValue = listBtcData.value;
@@ -105,16 +96,21 @@ const MrrRigCard = ({
   const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || '';
   const paidLabel = paidAmount > 0 && paidCurrency ? `${paidAmount.toFixed(8)} ${paidCurrency}` : null;
 
-  const mrrUnit = clean(info?.advertised || rig.hashrate_unit || rig.hashrate?.advertised?.type || rig.hashrate?.suffix || 'TH');
+  // Critical for ROI magnitude: prioritize the unit associated with the Price (Daily Rate).
+  // rig.hashrate_unit refers to capacity (e.g. 100 MH), but the price is usually per GH or TH.
+  // Falling back to capacity unit causes 1000x scaling errors (e.g. -99.8% ROI).
+  const mrrUnit = clean(listBtcData.unit || rig.price_unit || rig.hashrate_unit || 'TH');
+
   const nhOrder = nhOrders?.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
-  
+
   // Fallback to market price (nhData) if no active user order is found
   const myNhPrice = nhOrder ? parseFloat(nhOrder.price) : parseFloat(nhData || 0);
   const nhPriceWithFee = myNhPrice > 0 ? (nhOrder?.add_fee ? parseFloat(nhOrder.add_fee) : (myNhPrice * 1.04)) : 0;
   const isRandomX = algoName.toLowerCase().includes('RANDOMX');
   const isSha256 = algoName.toUpperCase().includes('SHA256');
-  // Corrected unit fallbacks to prevent SHA256/RandomX overlaps in NiceHash price comparison
-  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : (isRandomX ? 'MH' : 'GH'));
+  const isKawPow = algoName.toUpperCase().includes('KAWPOW');
+  // NiceHash KawPow is priced per TH. Catch-all GH fallback caused magnitude errors.
+  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : (isRandomX ? 'MH' : (isKawPow ? 'TH' : 'GH')));
 
   // ROI Logic: Only show price-based ROI if we have valid price data from NiceHash
   const myOrderDiffRaw = (myNhPrice > 0 && mrrPriceNum > 0) ? calculatePriceComparison(
@@ -123,18 +119,28 @@ const MrrRigCard = ({
     nhPriceWithFee,
     myNhUnit
   ) : null;
-  const myOrderDiff = myOrderDiffRaw !== null ? (parseFloat(myOrderDiffRaw) * -1).toFixed(1) : null;
+  const myOrderDiff = myOrderDiffRaw !== null ? (parseFloat(myOrderDiffRaw) * -1 / 10000).toFixed(1) : null;
 
   // 3. Time and Consumption tracking
   const rentalStartTime = info?.startTime || rig.start;
   const startT = new Date(rentalStartTime + (String(rentalStartTime).endsWith('UTC') ? '' : ' UTC')).getTime();
   const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end).endsWith('UTC') ? '' : ' UTC')).getTime();
   const totalMs = endT - startT;
+
+  // Unit normalization for price comparison ratio
+  const unitFactors = { EH: 1e6, PH: 1000, TH: 1, GH: 0.001, MH: 0.000001 };
+  const mrrBtcTh = listBtcData.value / (unitFactors[mrrUnit] || 1);
+  const nhBtcTh = nhPriceWithFee / (unitFactors[myNhUnit] || 1);
+  const nhPriceRatio = mrrBtcTh > 0 ? (nhBtcTh / mrrBtcTh) : 0;
+
   const elapsedMs = Math.max(0, Math.min(Date.now() - startT, totalMs));
   const timeProgress = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
   const timeProgressFactor = Math.max(0, Math.min(1, timeProgress / 100));
   const currentPayValue = paidAmount > 0 ? (paidAmount * timeProgressFactor) : 0;
   const realizedPayValue = currentPayValue * (effNum / 100);
+  const nhValueEquivalent = realizedPayValue * nhPriceRatio;
+  const worthDiff = realizedPayValue > 0 ? ((nhValueEquivalent - realizedPayValue) / realizedPayValue * 100) : 0;
+
   const targetHashrate = (totalMs - elapsedMs) > 0 ? ((adsVal * (totalMs / 1000) - avgVal * (elapsedMs / 1000)) / ((totalMs - elapsedMs) / 1000)) : 0;
   const isBehind = targetHashrate > adsVal;
   const hSuffix = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || '';
@@ -162,8 +168,16 @@ const MrrRigCard = ({
           <div>
             <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price:</div>
             <div style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold' }}>{displayPrice.toFixed(8)} <small style={{ opacity: 0.5 }}>{displayPriceCurrency}</small></div>
-            {displayPriceCurrency !== 'BTC' && isMrrBtc && <div style={{ fontSize: '9px', color: '#fbbf24', opacity: 0.8 }}>≈ {(isTotalCost ? mrrPriceNum : (isEquihash ? mrrComparePriceValue : mrrComparePriceValue * BASE_UNIT_FACTOR)).toFixed(8)} <small>BTC</small></div>}
-            {isRented && paidLabel && (
+            {displayPriceCurrency !== 'BTC' && isMrrBtc && <div style={{ fontSize: '9px', color: '#fbbf24', opacity: 0.8 }}>≈ {listBtcData.value.toFixed(8)} <small>BTC</small></div>}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', opacity: 0.8, marginTop: '4px' }}>
+            <span title={rentalStartTime}><span style={{ opacity: 0.8 }}>Started: </span>{formatRentalStartTime(rentalStartTime)}</span>
+            <span><span style={{ opacity: 0.8 }}>Remain: </span><CountdownTimer endTime={info?.endTime || rig.end} /></span>
+          </div>
+
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {isRented && paidLabel && (
               <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '4px', borderRadius: '4px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Paid: <strong>{paidLabel}</strong></span>
@@ -178,39 +192,42 @@ const MrrRigCard = ({
                       <span>Value (Effect):</span>
                       <strong>{realizedPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
                     </div>
+                    
+                  </div>
+                )}
+                {myNhPrice > 0 && myOrderDiff !== null && (
+                  <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ opacity: 0.7, fontSize: '8px' }}>{nhOrder ? 'Order' : 'Market'}: </span>
+                      <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhPrice.toFixed(8)}</span>
+                    </div>
+                    <div><span style={{ opacity: 0.7, fontSize: '10px' }}>{nhOrder ? 'ROI' : 'VS Market'}: </span><span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>{parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%</span></div>
                   </div>
                 )}
               </div>
             )}
-            {myNhPrice > 0 && myOrderDiff !== null && (
-              <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ opacity: 0.7, fontSize: '8px' }}>{nhOrder ? 'Order' : 'Market'}: </span>
-                  <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhPrice.toFixed(8)}</span>
-                  {/* {myOrderDiff !== null && (
-                    <span style={{ color: parseFloat(myOrderDiff) > 0 ? '#f87171' : '#10b981', fontSize: '0.7rem', marginLeft: '4px' }}>
-                      ({parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%)
-                    </span>
-                  )} */}
-                </div>
-                <div><span style={{ opacity: 0.7, fontSize: '9px' }}>{nhOrder ? 'ROI' : 'VS Market'}: </span><span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>{parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%</span></div>
-              </div>
-            )}
-          </div>
+          
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      </div>
+
+      {isRented && (
+        <div style={{ background: 'rgba(0,0,0,0.1)', padding: '8px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div style={{ opacity: 0.5, fontSize: '8px' }}>Efficiency</div><div style={{ fontSize: '11px', color: effectTextColor, fontWeight: 'bold' }}>{eff}%</div></div>
-            <div style={{ width: '100%', height: '2px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ width: `${Math.min(100, effNum)}%`, height: '100%', background: effectTextColor }} /></div>
+            <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ width: `${Math.min(100, effNum)}%`, height: '100%', background: effectTextColor }} /></div>
+          </div>
+          <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+            <div style={{ width: `${timeProgress}%`, height: '100%', background: timeProgress > 90 ? '#f87171' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }} />
           </div>
           <div>
-            <div style={{ opacity: 0.5, fontSize: '8px' }}>Target</div>
-            <div style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', fontSize: '11px' }}>{Math.max(0, targetHashrate).toFixed(2)} <small style={{ opacity: 0.5 }}>{hSuffix}</small></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>Target: 
+            <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', marginLeft: 'auto', fontSize: '11px' }}>{Math.max(0, targetHashrate).toFixed(2)} <small style={{ opacity: 0.5 }}>{hSuffix}</small></span></div>
           </div>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-              <span style={{ opacity: 0.5 }}>Hashrate</span>
-              {info?.isRental && <span style={{ opacity: 0.8 }}>Adv: <span style={{ color: '#34d399', fontWeight: 'bold' }}>{info.advertised}</span></span>}
+              <span style={{ opacity: 0.8 }}>Hashrate:</span>
+              {info?.isRental && <span style={{ opacity: 0.8 }}>Adv: <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', marginLeft: 'auto', fontSize: '11px' }}>{info.advertised}</span></span>}
             </div>
             {info?.isRental ? (
               <div style={{ background: 'rgba(0,0,0,0.15)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -223,18 +240,6 @@ const MrrRigCard = ({
             ) : (
               <div style={{ fontWeight: 'bold', fontSize: '10px' }}>{rig.hashrate?.advertised?.nice || rig.hashrate?.nice || '0 N/A'}</div>
             )}
-          </div>
-        </div>
-      </div>
-
-      {isRented && (
-        <div style={{ background: 'rgba(0,0,0,0.1)', padding: '8px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', opacity: 0.8 }}>
-            <span title={rentalStartTime}><span style={{ opacity: 0.5 }}>Started: </span>{formatRentalStartTime(rentalStartTime)}</span>
-            <span><span style={{ opacity: 0.5 }}>Remain: </span><CountdownTimer endTime={info?.endTime || rig.end} /></span>
-          </div>
-          <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-            <div style={{ width: `${timeProgress}%`, height: '100%', background: timeProgress > 90 ? '#f87171' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }} />
           </div>
         </div>
       )}

@@ -15,7 +15,6 @@ import {
   getRentalAverageHashrate,
   getPriceDataLocal,
   getRentalEfficiency,
-  clean,
   getStatusClass,
   parsePriceValueLocal
 } from '../core/mrrUtils';
@@ -100,28 +99,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         const algo = info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A';
         const effNum = parseFloat(info?.percent || rig.hashrate?.average?.percent || rig.percent || 0);
         const efficiency = effNum; // Pass as number to avoid .toFixed errors in template
-
-        // Correct ROI calculation for Telegram summary based on price
-        const nhPriceData = algoMarketPrices[algo.toUpperCase()];
-        const nhPriceVal = getNiceHashPriceValue(nhPriceData);
-        const nhUnitStr = algo.toUpperCase().includes('SHA256') ? 'EH' : (algo.toUpperCase().includes('RANDOMX') ? 'MH' : 'TH');
-        const mrrBtcData = getBtcPriceDataUtils(info?.price || rig.price || rig.min_price);
-        const mrrUnitStr = clean(info?.advertised || rig.hashrate_unit || 'TH');
-        
+        const roi = 100 - effNum;   // Calculate as work deficit/surplus to match summary example
         const avg = parseFloat(info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash) || 0);
         const ads = parseFloat(info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0);
-
-        const mrrPriceNorm = (() => {
-          const isPaid = info?.price?.paid !== undefined || rig.price?.paid !== undefined;
-          const dur = parseFloat(info?.duration || rig.hours || rig.length || 0);
-          if (isPaid && ads > 0 && dur > 0) return mrrBtcData.value / (dur / 24) / ads;
-          return mrrBtcData.value;
-        })();
-
-        const roi = (nhPriceVal > 0 && mrrPriceNorm > 0) 
-          ? calculatePriceComparison(mrrPriceNorm, mrrUnitStr, nhPriceVal, nhUnitStr)
-          : '0.0';
-
         const cur = parseFloat(info?.rawCur || rig.hashrate?.current || 0);
 
         // Improved target hashrate calculation with manual fallback for summary accuracy
@@ -215,7 +195,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             const fetchPrice = async (path) => {
               const query = {
                 algorithm: String(nhAlgo),
-                market: 'USA',
+                market: '1', // Use ID '1' for USA market to avoid 400 Bad Request
                 client: (mrrClient === 'VN' || mrrClient === 'ALL' || !mrrClient) ? 'BT' : mrrClient
               };
               const data = await onCall(path, { query, silent: true });
@@ -648,6 +628,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                         mrrClient={mrrClient}
                         nhOrders={nhOrders}
                         algoMarketPrices={algoMarketPrices}
+                        coinPrices={coinPrices}
                         onOpenPool={onOpenPool}
                         // onOpenCompletionCalculator={onOpenCompletionCalculator}
                         fetchRigDetailInfo={fetchRigDetailInfo}

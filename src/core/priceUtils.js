@@ -4,11 +4,18 @@ export function getPriceData(source) {
   if (!source) return { value: 0, currency: 'BTC' };
   
   if (typeof source === 'object') {
-    // Priority: paid value (total cost), then list value (rate)
-    // If we have an explicit BTC rate, use it over 'paid' to avoid breaking ROI daily rate calculations
-    const val = parsePriceValue(source.BTC ?? source.paid ?? source.value ?? source.amount ?? source.price);
+    // If source has 'paid', it's a total amount, not a rate.
+    if (source.paid !== undefined) {
+      return { 
+        value: parsePriceValue(source.paid), 
+        currency: (source.currency ?? source.price_unit ?? source.unit ?? 'BTC').toUpperCase(),
+        isTotalCost: true
+      };
+    }
+    // Otherwise, assume it's a rate or a single value
+    const val = parsePriceValue(source.BTC ?? source.value ?? source.amount ?? source.price);
     const curr = (source.currency ?? source.price_unit ?? source.unit ?? 'BTC').toUpperCase();
-    return { value: val, currency: curr };
+    return { value: val, currency: curr, isTotalCost: false };
   }
   
   return { value: parsePriceValue(source), currency: 'BTC' };

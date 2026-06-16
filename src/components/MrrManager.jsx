@@ -12,7 +12,12 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
   const [rigs, setRigs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+<<<<<<< Updated upstream
   const [editorState, setEditorState] = useState(null);
+=======
+  const [heroMinersStats, setHeroMinersStats] = useState(null); // New state for HeroMiners statistics
+  const [miningPoolDutchStats, setMiningPoolDutchStats] = useState(null); // New state for Mining Pool Dutch statistics
+>>>>>>> Stashed changes
   const [activeRigId, setActiveRigId] = useState(null);
   const [draggedItemIndex, setDraggedItemIndex] = useState(null);
 
@@ -166,6 +171,55 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
     }
   };
 
+<<<<<<< Updated upstream
+=======
+  const runWebSocketFetch = (type, rig) => {
+    setLoading(true);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/v2/mrr/fetch/ws`;
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      socket.send(JSON.stringify({
+        action: type,
+        rigid: rig.rigid || rig.id,
+        client: mrrClient
+      }));
+    };
+
+    socket.onmessage = async (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.success && data.pools) {
+          // "Paste" the fetched pools directly into the rig's live configuration
+          await updatePools(rig, data.pools);
+        }
+        if (data.success && data.stats) {
+          if (type === 'herominers') setHeroMinersStats(data.stats);
+          if (type === 'miningpooldutch') setMiningPoolDutchStats(data.stats);
+        } else if (data.error) {
+          setError(data.error);
+        }
+      } catch (err) {
+        setError("Failed to parse WebSocket data");
+      } finally {
+        socket.close();
+        setLoading(false);
+      }
+    };
+
+    socket.onerror = () => {
+      setError("WebSocket connection failed");
+      setLoading(false);
+    };
+  };
+
+  const fetchHeroMiners = (rig) => runWebSocketFetch('herominers', rig);
+  const fetchMiningPoolDutch = (rig) => runWebSocketFetch('miningpooldutch', rig);
+  const fetchAllConfigs = (rig) => runWebSocketFetch('all', rig);
+  const fetchPoolInfo = (type, rig) => runWebSocketFetch(type, rig);
+
+>>>>>>> Stashed changes
   const handleDragStart = (e, index) => {
     setDraggedItemIndex(index);
     e.dataTransfer.effectAllowed = "move";
@@ -301,9 +355,23 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
                   <div style={{ opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '10px' }}>
                     <span style={{ opacity: 0.4 }}>user:</span> {pool.user}
                   </div>
+<<<<<<< Updated upstream
                   <div style={{ textAlign: 'right' }}>
                     <button className="text-button" style={{ color: '#60a5fa', fontWeight: '600' }} onClick={() => handleEditPool(pool, rig)}>Edit</button>
                   </div>
+=======
+
+                  {/* Stats buttons for known providers */}
+                  {(pool.host?.includes('herominers') || pool.host?.includes('mining-dutch')) && (
+                    <button 
+                      className="text-button" 
+                      style={{ fontSize: '9px', color: '#fbbf24', marginLeft: 'auto', fontWeight: 'bold' }}
+                      onClick={(e) => { e.stopPropagation(); fetchPoolInfo(pool.host.includes('herominers') ? 'herominers' : 'miningpooldutch', rig); }}
+                    >
+                      Stats
+                    </button>
+                  )}
+>>>>>>> Stashed changes
                 </div>
               ))}
             </div>
@@ -330,6 +398,35 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
             }}
           />
         )}
+<<<<<<< Updated upstream
+=======
+
+        {/* Mining Pool Dutch Statistics Display */}
+        {miningPoolDutchStats && (
+          <div style={{ marginTop: '2rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', color: '#60a5fa' }}>Mining Pool Dutch Statistics</h3>
+              <button className="text-button" style={{ fontSize: '10px' }} onClick={() => setMiningPoolDutchStats(null)}>Clear</button>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
+              {Object.entries(miningPoolDutchStats).map(([key, val]) => {
+                if (typeof val === 'object' && val !== null) return null; // Skip complex nested data for summary
+                return (
+                  <div key={key} style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
+                    <div style={{ fontSize: '9px', opacity: 0.5, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '11px', color: '#f8fafc' }}>{String(val)}</div>
+                  </div>
+                );
+              })}
+            </div>
+            {miningPoolDutchStats.error && (
+              <div style={{ color: '#f87171', fontSize: '11px', marginTop: '10px' }}>{miningPoolDutchStats.error}</div>
+            )}
+          </div>
+        )}
+
+>>>>>>> Stashed changes
       </div>
     </div>
   );

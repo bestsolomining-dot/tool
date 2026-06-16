@@ -1,53 +1,48 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
+import { fetchMiningStats } from './miningStatsFetcher';
 /**
  * HeroMinersCard Component
  * Fetches and displays live stats from HeroMiners and Mining Pool Dutch using WebSocket.
  * Resolves the 404 error from the legacy /api/v2/external/fetch REST endpoint.
  */
-export default function HeroMinersCard({ onCall, mrrClient = 'VN' }) {
+export default function HeroMinersCard({ mrrClient = 'VN' }) {
   const [heroStats, setHeroStats] = useState(null);
   const [dutchStats, setDutchStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeType, setActiveType] = useState('herominers');
 
-  const fetchStats = useCallback((type) => {
+  const fetchStats = useCallback(async (type) => {
     setLoading(true);
     setError(null);
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/v2/mrr/fetch/ws`;
-    const socket = new WebSocket(wsUrl);
+    const maxAttempts = 5;
+    const baseDelay = 1000; // Start with 1 second delay
 
-    socket.onopen = () => {
-      socket.send(JSON.stringify({
-        action: type,
-        client: mrrClient
-      }));
-    };
-
-    socket.onmessage = (event) => {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const data = JSON.parse(event.data);
+        const data = await fetchMiningStats(type, mrrClient);
         if (data.success && data.stats) {
-          if (type === 'herominers') setHeroStats(data.stats);
-          if (type === 'miningpooldutch') setDutchStats(data.stats);
-        } else if (data.error) {
-          setError(data.error);
+          if (type === 'herominers' || type === 'all') setHeroStats(data.stats);
+          if (type === 'miningpooldutch' || type === 'all') setDutchStats(data.stats);
+          setError(null);
+          setLoading(false);
+          return;
         }
       } catch (err) {
-        setError("Failed to parse WebSocket data");
-      } finally {
-        socket.close();
-        setLoading(false);
+        if (attempt === maxAttempts) {
+          setError(`Failed after ${maxAttempts} attempts: ${err.message}`);
+          if (type === 'herominers' || type === 'all') setHeroStats(null);
+          if (type === 'miningpooldutch' || type === 'all') setDutchStats(null);
+        } else {
+          const delay = baseDelay * Math.pow(2, attempt - 1);
+          setError(`Retry ${attempt}/${maxAttempts} in ${delay / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
       }
-    };
-
-    socket.onerror = () => {
-      setError("WebSocket connection failed");
-      setLoading(false);
-    };
+    }
+    setLoading(false);
   }, [mrrClient]);
 
   useEffect(() => {
@@ -72,6 +67,13 @@ export default function HeroMinersCard({ onCall, mrrClient = 'VN' }) {
           >
             MiningPoolDutch
           </button>
+          <button 
+            className="text-button" 
+            style={{ fontSize: '14px', color: activeType === 'all' ? '#60a5fa' : '#94a3b8', fontWeight: activeType === 'all' ? 'bold' : 'normal' }}
+            onClick={() => setActiveType('all')}
+          >
+            All
+          </button>
         </div>
         <button className="text-button" onClick={() => fetchStats(activeType)} disabled={loading} style={{ fontSize: '11px' }}>
           {loading ? '...' : 'Refresh'}
@@ -81,20 +83,35 @@ export default function HeroMinersCard({ onCall, mrrClient = 'VN' }) {
       {error && <div style={{ fontSize: '11px', color: '#f87171', marginBottom: '10px' }}>{error}</div>}
 
       <div className="code-block-content" style={{ maxHeight: '300px', overflowY: 'auto', fontSize: '11px', color: '#94a3b8', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px' }}>
-        {activeType === 'herominers' && heroStats && (
+        {(activeType === 'herominers' || activeType === 'all') && heroStats && (
           <div>
+            <div style={{ color: '#fbbf24', marginBottom: '8px', fontSize: '10px', textTransform: 'uppercase' }}>HeroMiners Global Content</div>
             {heroStats.globalHashrates && Object.entries(heroStats.globalHashrates).map(([algo, rate]) => (
               <div key={algo} style={{ marginBottom: '4px' }}>
                 <span style={{ opacity: 0.6 }}>{algo}:</span> <strong>{rate}</strong>
               </div>
             ))}
-            <div style={{ marginTop: '10px', opacity: 0.4, fontSize: '9px' }}>
-              Detailed stats available in Pool Configuration modal.
-            </div>
+            {heroStats.coinStats && heroStats.coinStats.length > 0 && (
+              <div style={{ marginTop: '12px' }}>
+                <div style={{ color: '#fbbf24', marginBottom: '4px', fontSize: '10px', textTransform: 'uppercase' }}>Top Coin Statistics</div>
+                {heroStats.coinStats.slice(0, 10).map((coin, idx) => (
+                   <div key={idx} style={{ marginBottom: '2px', display: 'flex', justifyContent: 'space-between' }}>
+                     <span>{coin.coin} ({coin.algorithm})</span>
+                     <span style={{ color: '#10b981' }}>{coin.usdPerDay}</span>
+                   </div>
+                ))}
+              </div>
+            )}
+            {activeType !== 'all' && (
+              <div style={{ marginTop: '10px', opacity: 0.4, fontSize: '9px' }}>
+                Detailed stats available in Pool Configuration modal.
+              </div>
+            )}
           </div>
         )}
-        {activeType === 'miningpooldutch' && dutchStats && (
+        {(activeType === 'miningpooldutch' || activeType === 'all') && dutchStats && (
           <div>
+            <div style={{ color: '#fbbf24', margin: '12px 0 8px', fontSize: '10px', textTransform: 'uppercase' }}>MiningPoolDutch (BT API)</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               {Object.entries(dutchStats).slice(0, 8).map(([key, val]) => (
                 <div key={key}>

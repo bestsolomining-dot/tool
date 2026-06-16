@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import CrytoRatePage from './CryptoRatePage';
 
+import { fetchMiningStats } from './miningStatsFetcher';
+
 /**
  * MrrPoolManager Component
  * 
@@ -166,49 +168,29 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
     }
   };
 
-  const runWebSocketFetch = (type, rig) => {
+  const runWebSocketFetch = async (type, rig) => {
     setLoading(true);
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/v2/mrr/fetch/ws`;
-    const socket = new WebSocket(wsUrl);
+    setError(null);
 
-    socket.onopen = () => {
-      socket.send(JSON.stringify({
-        action: type,
-        rigid: rig.rigid || rig.id,
-        client: mrrClient
-      }));
-    };
+    // Resolve the specific sub-account client (BT/SL/PH) from rig metadata if the global context is 'VN' (aggregate).
+    // This ensures we use valid API credentials for the account owning the rig when fetching pool configurations.
+    const targetClient = (mrrClient === 'VN' && rig.mrrClient) ? rig.mrrClient : mrrClient;
 
-    socket.onmessage = async (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.success && data.pools) {
-          // "Paste" the fetched pools directly into the rig's live configuration
-          await updatePools(rig, data.pools);
-        }
-        if (data.success && data.stats) { // Handle HeroMiners statistics
-          setHeroMinersStats(data.stats);
-        } else if (data.error) {
-          setError(data.error);
-        }
-      } catch (err) {
-        setError("Failed to parse WebSocket data");
-      } finally {
-        socket.close();
-        setLoading(false);
+    try {
+      const data = await fetchMiningStats(type, targetClient, rig.rigid || rig.id);
+      if (data.pools) {
+        // "Paste" the fetched pools directly into the rig's live configuration
+        await updatePools(rig, data.pools);
       }
-    };
-
-    socket.onerror = () => {
-      setError("WebSocket connection failed");
+      if (data.stats) { // Handle HeroMiners statistics
+        setHeroMinersStats(data.stats);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setLoading(false);
-    };
+    }
   };
-
-  const fetchHeroMiners = (rig) => runWebSocketFetch('herominers', rig);
-  const fetchMiningPoolDutch = (rig) => runWebSocketFetch('miningpooldutch', rig);
-  const fetchAllConfigs = (rig) => runWebSocketFetch('all', rig);
 
   const handleDragStart = (e, index) => {
     setDraggedItemIndex(index);
@@ -268,9 +250,9 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
               <h3 style={{ margin: 0, fontSize: '1rem', color: '#60a5fa' }}>{rig.name || (rig.isProfile ? 'Pool Profile' : 'Rig')} (ID: {rig.rigid || rig.id})</h3>
               {!rig.isProfile && (
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <button className="text-button" style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold' }} onClick={() => fetchAllConfigs(rig)}>Fetch All</button>
-                  <button className="text-button" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => fetchHeroMiners(rig)}>HeroMiners</button>
-                  <button className="text-button" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => fetchMiningPoolDutch(rig)}>Fetch MiningPoolDutch</button>
+                  <button className="text-button" style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold' }} onClick={() => runWebSocketFetch('all', rig)}>Fetch All</button>
+                  <button className="text-button" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => runWebSocketFetch('herominers', rig)}>HeroMiners</button>
+                  <button className="text-button" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => runWebSocketFetch('miningpooldutch', rig)}>Fetch MiningPoolDutch</button>
                   <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.1)', margin: '0 5px' }}></div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <label style={{ fontSize: '10px', opacity: 0.6 }}>Price:</label>

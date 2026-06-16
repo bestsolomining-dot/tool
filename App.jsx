@@ -14,7 +14,10 @@ import './src/App.css';
 export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [output, setOutput] = useState(null);
+  const [poolData, setPoolData] = useState(null);
+  const [niceHashData, setNiceHashData] = useState(null);
+  const [rigsData, setRigsData] = useState(null);
+
   const [lastCall, setLastCall] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
@@ -38,16 +41,11 @@ export default function App() {
   const apiCache = useRef(new Map());
   const inFlightRequests = useRef(new Map());
 
-  const scrollToPools = useCallback(() => {
-    const poolsEl = document.querySelector('.pools-section');
-    if (poolsEl) poolsEl.scrollIntoView({ behavior: 'smooth' });
-  }, []);
-
   const callApi = useCallback(async (path, options = {}) => {
     const startedAt = performance.now();
     const method = options.method || 'GET';
     const { query, section, ...fetchOptions } = options;
-    const isBackground = !!options.background;
+    const isSilent = !!options.silent || !!options.background;
 
     // Normalize headers and body early for consistent cache key
     const headers = { ...fetchOptions.headers };
@@ -79,7 +77,7 @@ export default function App() {
       const cached = apiCache.current.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < 10000) {
         addDebugLog(`Serving ${path} from cache`, 'api');
-        if (cached.data && (!options.silent || isBackground)) setOutput(cached.data);
+        if (cached.data && !isSilent) updateSectionState(section, cached.data);
         return Promise.resolve(cached.data);
       }
     }
@@ -101,13 +99,13 @@ export default function App() {
 
     addDebugLog(`API Call: ${method} ${finalPath}`, 'api');
 
-    if (!options.silent && !isBackground) {
+    if (!isSilent) {
       setActiveSection(section || null);
       setLoading(true);
       setError('');
     }
 
-    if (!options.silent && !isBackground) {
+    if (!isSilent) {
       setLastCall({ method, path: finalPath, status: 'Pending', durationMs: null });
     }
 
@@ -133,7 +131,7 @@ export default function App() {
           }
         }
 
-        if (!options.silent && !isBackground) {
+        if (!isSilent) {
           setLastCall({
             method,
             path: finalPath,
@@ -151,10 +149,10 @@ export default function App() {
             setModalContent(data || { success: true });
             setResponseModalOpen(true);
           }
-          if (data && (!options.silent || isBackground)) {
-            setOutput(data);
+          if (data) {
+            updateSectionState(section, data);
           }
-        } else if (!options.silent && !isBackground) {
+        } else if (!isSilent) {
           const errorMsg =
             typeof data === 'string' && data.length > 0
               ? data
@@ -164,8 +162,6 @@ export default function App() {
             setModalContent(data || { error: errorMsg });
             setResponseModalOpen(true);
           }
-          setError(errorMsg);
-          setOutput(null);
         }
 
         // Cache successful GET responses
@@ -196,13 +192,21 @@ export default function App() {
         throw err;
       } finally {
         inFlightRequests.current.delete(cacheKey);
-        if (!options.silent && !isBackground) setLoading(false);
+        if (!isSilent) setLoading(false);
       }
     })();
 
     inFlightRequests.current.set(cacheKey, requestPromise);
     return requestPromise;
   }, [nhOrderClient, addDebugLog]);
+
+  const updateSectionState = (section, data) => {
+    if (section === 'pools') setPoolData(data);
+    else if (section === 'mining') setNiceHashData(data);
+    else if (section === 'rigs') setRigsData(data);
+    // If no specific section, we check paths or default
+    else if (!section && niceHashData === null) setNiceHashData(data);
+  };
 
   const forceCheckStatus = useCallback(async () => {
     addDebugLog('Force checking system status...', 'warn');
@@ -217,11 +221,13 @@ export default function App() {
 
   // Clear output when switching accounts to prevent showing stale data
   useEffect(() => {
-    setOutput(null);
+    setNiceHashData(null);
+    setPoolData(null);
+    setRigsData(null);
     setError('');
     addDebugLog(`Account switch detected. nhOrderClient: ${nhOrderClient}, mrrClient: ${mrrClient}`);
     // Background silent fetch to populate main dashboard data for new account
-    callApi('/api/v2/mining/address', { silent: true, background: true });
+    callApi('/api/v2/mining/address', { silent: true, background: true, section: 'mining' });
   }, [nhOrderClient, mrrClient, callApi, addDebugLog]);
 
   useEffect(() => {
@@ -232,7 +238,7 @@ export default function App() {
   useEffect(() => {
     const intervalId = setInterval(() => {
       if (nhOrderClient) {
-        callApi('/api/v2/mining/address', { silent: true, background: true });
+        callApi('/api/v2/mining/address', { silent: true, background: true, section: 'mining' });
       }
     }, 60000); // 60 seconds
     return () => clearInterval(intervalId);
@@ -241,19 +247,6 @@ export default function App() {
   const handleMiningCall = useCallback((path, opts = {}) => {
     return callApi(path, { ...opts, section: 'mining' });
   }, [callApi]);
-
-  const handleHashpowerCall = useCallback((path, opts = {}) => {
-    // If the path involves ordering or pricing and client is "VN", 
-    // fallback to "BT" because NiceHash pricing/ordering requires a specific account context.
-    const isOrderPath = path.includes('/hashpower/order') || path.includes('/hashpower/business');
-    let query = { ...opts.query };
-    
-    if (isOrderPath && (nhOrderClient === 'VN' || !query.client)) {
-      query.client = 'BT';
-    }
-
-    return callApi(path, { ...opts, query, section: 'hashpower' });
-  }, [callApi, nhOrderClient]);
 
   const handleOpenMrrPools = useCallback(async (rig) => {
     if (!rig || !mrrClient) return;
@@ -338,7 +331,7 @@ export default function App() {
             minHeight: '200px'
           }}
         >
-          <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhPoolClient} setNhClient={setNhPoolClient} />
+          <Pools niceHashData={niceHashData} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhPoolClient} setNhClient={setNhPoolClient} />
         </section>
         <main className="dashboard">
           <section className="quick-actions">
@@ -347,7 +340,7 @@ export default function App() {
                 <NiceHash
                   key={nhOrderClient}
                   onCall={handleMiningCall}
-                  output={output}
+                  output={niceHashData}
                   algorithm={algorithm}
                   market={market}
                   nhClient={nhOrderClient}
@@ -367,22 +360,14 @@ export default function App() {
             <article className="panel">
                 <MiningRigSection
                   onCall={handleMiningCall}
+                  rigsData={rigsData}
                   mrrClient={mrrClient}
                   setMrrClient={setMrrClient}
                   onOpenMrrPools={handleOpenMrrPools}
                 />
               </article>
             <article className="panel">
-              <HeroMinersCard onCall={handleMiningCall} mrrClient={mrrClient} />
-              <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h4 style={{ margin: 0, fontSize: '0.9rem' }}>Mining-Dutch</h4>
-                  <a href="https://www.mining-dutch.nl/" target="_blank" rel="noopener noreferrer" className="btn-pro secondary" style={{ fontSize: '10px', textDecoration: 'none', padding: '4px 8px' }}>
-                    Open Dashboard
-                  </a>
-                </div>
-                <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--muted)' }}>Multi-pool for various algorithms and auto-exchange.</p>
-              </div>
+              <HeroMinersCard mrrClient={mrrClient} />
             </article>
           </section>
         </main>

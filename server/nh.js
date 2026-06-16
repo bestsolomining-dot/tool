@@ -11,6 +11,15 @@ const NH_CACHE_TTL_DEFAULT = 30000; // 30 seconds
 const NH_CACHE_TTL_STABLE = 300000; // 5 minutes
 const nhInflight = new Map();
 
+/** Normalizes market strings (USA/EU) to NiceHash numeric IDs (1/0) */
+export function normalizeMarket(market) {
+  if (typeof market === 'number' || !isNaN(Number(market))) return String(market);
+  const m = String(market || '0').toUpperCase().trim();
+  if (m === 'USA' || m === 'AMERICA' || m === 'US') return '1';
+  if (m === 'EU' || m === 'EUROPE') return '0';
+  return m;
+}
+
 export { mapNiceHashToMRR, normalizeAlgoForNiceHash }; // Keep these exports
 
 export let nhConfigs = {}; // Declare as mutable
@@ -268,7 +277,7 @@ export const getNiceHashApp = (client) => ({
         path: '/main/api/v2/hashpower/order/calculate',
         query: {
           algorithm: normalizeAlgoForNiceHash(algorithm),
-          market,
+          market: normalizeMarket(market),
           type: query.type || 'STANDARD',
           price: query.price || '0.001',
           limit: query.limit || '0.01',
@@ -284,7 +293,7 @@ export const getNiceHashApp = (client) => ({
         path: '/main/api/v2/hashpower/order/calculate',
         query: {
           algorithm: normalizeAlgoForNiceHash(algorithm),
-          market,
+          market: normalizeMarket(market),
           type: query.type || 'STANDARD',
           price: query.price || '0.001',
           limit: query.limit || '0.01',
@@ -294,11 +303,15 @@ export const getNiceHashApp = (client) => ({
       });
     },
     getOrderBook: (query) => {
-      const { client: _c, ts: _t, ...rest } = query || {};
+      const { algorithm, market, client: _c, ts: _t, ...rest } = query || {};
       return client.call({
         method: 'GET',
         path: '/main/api/v2/hashpower/orderBook',
-        query: { ...rest }
+        query: { 
+          ...rest,
+          algorithm: normalizeAlgoForNiceHash(algorithm),
+          market: normalizeMarket(market)
+        }
       });
     },
     getGlobalStats24h: () => client.call({ method: 'GET', path: '/main/api/v2/public/stats/global/24h' }),

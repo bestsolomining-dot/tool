@@ -34,6 +34,10 @@ cp .env.example .env
 - `NICEHASH_API_SECRET`
 - `NICEHASH_ORG_ID`
 - `NICEHASH_ENVIRONMENT` (optional, default: `production`)
+- `JWT_SECRET` (Required: A long random string to sign tokens)
+- `ADMIN_USER` (Required: Your login username)
+- `ADMIN_PASS` (Required: Your login password or bcrypt hash)
+
 
 4. Start the backend server:
 

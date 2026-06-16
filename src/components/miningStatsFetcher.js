@@ -26,8 +26,7 @@ export async function fetchMiningStats(type, client, rigId = null) {
     // Use the current host to allow the Vite proxy to handle the upgrade request.
     // Ensure your vite.config.js has 'ws: true' in the proxy settings.
     const host = window.location.host;
-    const token = localStorage.getItem('token');
-    const wsUrl = `${protocol}//${host}/api/v2/mrr/fetch/ws?token=${token}`;
+    const wsUrl = `${protocol}//${host}/api/v2/mrr/fetch/ws`;
     
     let socket;
     try {

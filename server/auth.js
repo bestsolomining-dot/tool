@@ -1,18 +1,14 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import express from 'express';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 // ---------- Configuration ----------
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS, 10) || 10;
 
-if (!JWT_SECRET) {
+if (!process.env.JWT_SECRET) {
   console.error('❌ FATAL: JWT_SECRET is not defined.');
-  process.exit(1);
 }
 
 // ---------- Utility exports ----------
@@ -26,11 +22,26 @@ export const verifyToken = (token) => {
 };
 
 export const authMiddleware = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  let token = '';
+  const authHeader = req.headers?.authorization;
+
+  // 1. Check Authorization Header (Bearer Token)
+  if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7).trim();
+  }
+
+  // 2. Fallback to Query Parameter (essential for WebSocket handshakes)
+  if (!token && req.query?.token) {
+    token = String(req.query.token);
+  } else if (!token && req.url && req.url.includes('token=')) {
+    // Robust manual extraction if req.query isn't populated yet during upgrade
+    const match = req.url.match(/[?&]token=([^&]+)/);
+    if (match) token = match[1];
+  }
+
+  if (!token) {
     return res.status(401).json({ success: false, error: 'No token provided.' });
   }
-  const token = authHeader.split(' ')[1];
   const decoded = verifyToken(token);
   if (!decoded) {
     return res.status(403).json({ success: false, error: 'Invalid or expired token.' });
@@ -47,36 +58,48 @@ const router = express.Router();
 
 // Login route (using the utilities above)
 router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+  try {
+    const { username, password } = req.body;
 
-  // Basic validation
-  if (!username || !password) {
-    return res.status(400).json({ success: false, error: 'Username and password required.' });
+    // Basic validation
+    if (!username || !password) {
+      return res.status(400).json({ success: false, error: 'Username and password required.' });
+    }
+
+    const expectedUser = process.env.ADMIN_USER;
+    const adminPass = process.env.ADMIN_PASS;
+
+    if (!expectedUser || !adminPass) {
+      console.error('❌ Login Failed: ADMIN_USER or ADMIN_PASS is undefined in process.env');
+      return res.status(500).json({ success: false, error: 'Server configuration error: Authentication credentials are not set.' });
+    }
+
+    if (username !== expectedUser) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials.' });
+    }
+
+    // Support both plain text and bcrypt hashes for convenience
+    let isValid = false;
+    if (adminPass.startsWith('$2')) {
+      isValid = await verifyPassword(password, adminPass);
+    } else {
+      isValid = (password === adminPass);
+    }
+
+    if (!isValid) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials.' });
+    }
+
+    const token = generateToken({ username });
+    res.json({ success: true, token });
+  } catch (error) {
+    console.error('❌ Login Error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error during login.' });
   }
-
-  const expectedUser = process.env.APP_USER;
-  const storedHash = process.env.APP_PASSWORD_HASH;
-
-  if (!expectedUser || !storedHash) {
-    console.error('Missing APP_USER or APP_PASSWORD_HASH in env.');
-    return res.status(500).json({ success: false, error: 'Server config error.' });
-  }
-
-  if (username !== expectedUser) {
-    return res.status(401).json({ success: false, error: 'Invalid credentials.' });
-  }
-
-  const isValid = await verifyPassword(password, storedHash);
-  if (!isValid) {
-    return res.status(401).json({ success: false, error: 'Invalid credentials.' });
-  }
-
-  const token = generateToken({ username });
-  res.json({ success: true, token });
 });
 
 // Example protected route – you can also mount it separately
-router.get('/profile', authMiddleware, (req, res) => {
+router.get('/profile', (req, res) => {
   res.json({ user: req.user });
 });
 

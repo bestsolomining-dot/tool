@@ -309,7 +309,14 @@ export default function App() {
           minHeight: '700px'
         }}
       >
-        <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhClient} setNhClient={setNhClient} />
+        <Pools 
+          onCall={callApi}
+          niceHashData={output} 
+          mrrClient={mrrClient} 
+          setMrrClient={setMrrClient} 
+          nhClient={nhClient} 
+          setNhClient={setNhClient} 
+        />
       </section>
       <main className="dashboard">
         <section className="quick-actions">

@@ -181,15 +181,14 @@ export default function Pools({ onCall, niceHashData, mrrClient, setMrrClient, n
     setMrrRigs(null);
     setError('');
     try {
-      const result = await poolApi.mrrRigs(clientName);
-      if (result.ok) {
-        setMrrRigs(result.data);
+      const response = await onCall('/api/v2/mrr/rigs', { query: { client: clientName }, silent: true });
+      if (response && response.success) {
+        setMrrRigs(response.data);
       } else {
-        // Specifically handle Unauthorized errors for better user guidance
-        if (result.status === 401) {
+        if (response?.status === 401) {
           throw new Error('Unauthorized: MRR API Key/Secret is invalid or missing for this client.');
         }
-        const message = result.data?.error || result.data?.message || `Request failed with status ${result.status}`;
+        const message = response?.error || response?.message || 'Request failed';
         throw new Error(message);
       }
     } catch (err) {

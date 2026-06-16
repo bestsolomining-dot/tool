@@ -7,6 +7,7 @@ import MiningRigRental from './src/components/MiningRigRental';
 import MiningRigSection from './src/components/MiningRigSection';
 import HashrateCalculator from './src/components/HashrateCalculator';
 import MrrPoolsManager from './src/components/MrrManager';
+import Login from './src/components/Login';
 import HeroMinersCard from './src/components/HeroMinersCard';
 import { RentedRigProvider } from './src/components/RentedRigContext';
 import CryptoRatePage from './src/components/CryptoRatePage';
@@ -18,6 +19,9 @@ export default function App() {
   const [poolData, setPoolData] = useState(null);
   const [niceHashData, setNiceHashData] = useState(null);
   const [rigsData, setRigsData] = useState(null);
+
+  // State for authentication token, initialized from localStorage
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem('token'));
 
   const [lastCall, setLastCall] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
@@ -49,14 +53,36 @@ export default function App() {
   const apiCache = useRef(new Map());
   const inFlightRequests = useRef(new Map());
 
+  // Function to handle successful login (stores token)
+  const handleLoginSuccess = useCallback((token) => {
+    localStorage.setItem('token', token);
+    setAuthToken(token);
+    addDebugLog('Login successful, token stored.', 'success');
+    // Optionally, trigger a refresh of data after login
+    // forceCheckStatus(); // This will be called implicitly by effects if needed
+  }, [addDebugLog]);
+
+  // Function to handle logout (clears token)
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('token');
+    setAuthToken(null);
+    addDebugLog('Logged out, token cleared.', 'info');
+    // Clear all sensitive data and potentially redirect to login page
+    setNiceHashData(null);
+    setPoolData(null);
+    setRigsData(null);
+    setError('');
+    // window.history.pushState({}, '', '/login'); // Example: navigate to login page
+  }, [addDebugLog]);
+
   const callApi = useCallback(async (path, options = {}) => {
     const startedAt = performance.now();
     const method = options.method || 'GET';
     const { query, section, ...fetchOptions } = options;
     const isSilent = !!options.silent || !!options.background;
 
-    // Normalize headers and body early for consistent cache key
-    const token = localStorage.getItem('token');
+    // Use the authToken state variable for consistent token handling
+    const token = authToken;
     const headers = { 
       ...fetchOptions.headers,
       ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -76,7 +102,8 @@ export default function App() {
     // Generate Cache Key (excluding dynamic 'ts' which changes every call)
     const queryEntriesForCache = Object.entries(enrichedQuery).filter(([k]) => k !== 'ts').sort();
     const cacheQueryPart = queryEntriesForCache.map(([k, v]) => `${k}=${v}`).join('&');
-    const cacheKey = `${method}:${path}:${cacheQueryPart}:${body || ''}`;
+    // Include token in cache key to differentiate cached responses for different users
+    const cacheKey = `${method}:${path}:${cacheQueryPart}:${body || ''}:${token || ''}`;
 
     // 1. Deduplication: If an identical request is already in flight, return its existing promise
     if (inFlightRequests.current.has(cacheKey)) {
@@ -152,10 +179,21 @@ export default function App() {
           });
         }
 
+        // Check for 401 Unauthorized globally
+        if (res.status === 401) {
+          // Only logout if it's a session failure (no token or invalid token)
+          // Avoid logging out if the backend failed to talk to a provider (like LUCKY account)
+          const isProxyFailure = data?.msg?.includes('Invalid Key') || data?.message?.includes('Invalid Key');
+          if (!isProxyFailure) {
+            addDebugLog('Session expired or invalid (401). Clearing token.', 'error');
+            handleLogout();
+          }
+        }
+
         const isAppError = !res.ok || (data && typeof data === 'object' && (data.success === false || data.error || data.errors));
         addDebugLog(`Response ${res.status} from ${path}`, isAppError ? 'error' : 'success');
 
-        if (!isAppError && (res.status === 304 || res.ok)) {
+        if (!isAppError && (res.status === 304 || res.ok) && res.status !== 401) {
           setError('');
           if (options.showModal) {
             setModalContent(data || { success: true });
@@ -210,7 +248,7 @@ export default function App() {
 
     inFlightRequests.current.set(cacheKey, requestPromise);
     return requestPromise;
-  }, [nhOrderClient, addDebugLog]);
+  }, [nhOrderClient, authToken, addDebugLog, handleLogout]); // Added authToken and handleLogout to dependencies
 
   const updateSectionState = (section, data) => {
     if (section === 'pools') setPoolData(data);
@@ -229,7 +267,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [callApi, addDebugLog]);
+  }, [callApi, addDebugLog]); // No change here, callApi now implicitly uses authToken
 
   // Clear output when switching accounts to prevent showing stale data
   useEffect(() => {
@@ -237,10 +275,12 @@ export default function App() {
     setPoolData(null);
     setRigsData(null);
     setError('');
-    addDebugLog(`Account switch detected. nhOrderClient: ${nhOrderClient}, mrrClient: ${mrrClient}`);
-    // Background silent fetch to populate main dashboard data for new account
-    callApi('/api/v2/mining/address', { silent: true, background: true, section: 'mining' });
-  }, [nhOrderClient, mrrClient, callApi, addDebugLog]);
+    if (authToken) {
+      addDebugLog(`Account switch detected. nhOrderClient: ${nhOrderClient}, mrrClient: ${mrrClient}`);
+      // Background silent fetch to populate main dashboard data for new account
+      callApi('/api/v2/mining/address', { silent: true, background: true, section: 'mining' });
+    }
+  }, [nhOrderClient, mrrClient, callApi, addDebugLog, authToken]);
 
   useEffect(() => {
     addDebugLog('App initialized. Current origin: ' + (window.location.origin || 'local'));
@@ -248,13 +288,13 @@ export default function App() {
 
   // Setup periodic silent background updates for dashboard data (Balance, etc)
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      if (nhOrderClient) {
+    const intervalId = setInterval(() => { // Only fetch if authenticated
+      if (nhOrderClient && authToken) {
         callApi('/api/v2/mining/address', { silent: true, background: true, section: 'mining' });
       }
     }, 60000); // 60 seconds
-    return () => clearInterval(intervalId);
-  }, [nhOrderClient, callApi]);
+    return () => clearInterval(intervalId); // Added authToken to dependencies
+  }, [nhOrderClient, authToken, callApi]);
 
   const handleMiningCall = useCallback((path, opts = {}) => {
     return callApi(path, { ...opts, section: 'mining' });
@@ -301,7 +341,12 @@ export default function App() {
     } else {
       setMrrPoolRentalId('');
     }
-  }, [handleMiningCall, mrrClient]);
+  }, [handleMiningCall, mrrClient, addDebugLog]); // Added addDebugLog to dependencies
+
+  // Guard: Show login screen if not authenticated to prevent background 401s
+  if (!authToken) {
+    return <Login onLoginSuccess={handleLoginSuccess} onCall={callApi} />;
+  }
 
   // Simple path routing
   if (view === 'cryptorate') {
@@ -340,6 +385,10 @@ export default function App() {
               <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                 <button className="text-button" onClick={forceCheckStatus} style={{ fontSize: '10px' }}>Force Check</button>
                 <button className="text-button" onClick={() => setDebugModalOpen(true)} style={{ fontSize: '10px' }}>Debug Logs</button>
+                {/* Added temporary Login/Logout buttons for demonstration */}
+                {authToken && (
+                  <button className="text-button" onClick={handleLogout} style={{ fontSize: '10px' }}>Logout</button>
+                )}
               </div>
             </div>
           </div>

@@ -69,7 +69,8 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
       if (!wsEnabled) return;
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/api/v2/prices/ws`;
+      const token = localStorage.getItem('token');
+      const wsUrl = `${protocol}//${window.location.host}/api/v2/prices/ws${token ? `?token=${token}` : ''}`;
 
       socket = new WebSocket(wsUrl);
       setWsStatus('connecting');

@@ -20,9 +20,6 @@ export function createApp({ distPath }) {
   // Authentication routes
   app.use('/api/auth', authRoutes);
 
-  // Protect all other /api routes
-  app.use('/api', authMiddleware);
-
   registerRoutes(app);
 
   if (distPath) {
@@ -43,6 +40,20 @@ export async function initializeApp(env) {
     console.log('🚀 Initializing system...');
     initNhConfigs(env); // Initialize NiceHash configurations
     initMrrConfigs(env); // Initialize MiningRigRentals configurations
+
+    // Validate Authentication Configuration
+    const requiredAuth = ['JWT_SECRET', 'ADMIN_USER', 'ADMIN_PASS'];
+    const missing = requiredAuth.filter(key => !env[key]);
+
+    if (missing.length > 0) {
+      console.warn(`⚠️  WARNING: Missing authentication variables: ${missing.join(', ')}. Login will fail.`);
+    } else {
+      console.log('✅ Auth Configuration Loaded:');
+      console.log(`   - ADMIN_USER: ${env.ADMIN_USER}`);
+      console.log(`   - JWT_SECRET: ${env.JWT_SECRET ? '******** (Set)' : 'MISSING'}`);
+      console.log(`   - ADMIN_PASS: ${env.ADMIN_PASS ? '******** (Set)' : 'MISSING'}`);
+    }
+
     await initDatabase();
     await cleanAllCache();
     await initNonces();

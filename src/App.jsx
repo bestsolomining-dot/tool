@@ -197,7 +197,7 @@ export default function App() {
             />
           </article>
           <section className="pools-section">
-            <Pools niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
+            <Pools onCall={callApi} niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
           </section>
         </section>
       </main>

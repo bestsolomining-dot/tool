@@ -123,16 +123,16 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         else if (effNum < 50) perfEmoji = '🔴';
 
         return TelegramTemplates.activeRentalLine(
-          perfEmoji, 
-          algo, 
-          rig.name || rig.id, 
-          remaining, 
-          efficiency, 
-          roi, 
-          avg, 
-          ads, 
-          cur, 
-          target, 
+          perfEmoji,
+          algo,
+          rig.name || rig.id,
+          remaining,
+          efficiency,
+          roi,
+          avg,
+          ads,
+          cur,
+          target,
           account
         );
       })
@@ -446,8 +446,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       if (isSubscribed) syncRentedDetails();
     }, 1500);
 
-    return () => { 
-      isSubscribed = false; 
+    return () => {
+      isSubscribed = false;
       if (syncTimer) clearTimeout(syncTimer);
     };
   }, [filteredRigs, enrichedInfo, loading, loadingInfoIds, onCall]);
@@ -509,38 +509,32 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   return (
     <div className="mrr-rigs-dashboard">
       <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '15px' }}>
-        <div>
-          <h2 style={{ margin: 3 }}>{endpoint === '/rig' ? 'MRR Marketplace' : 'RIGS'} ({mrrClient})
+          <h2 style={{ margin: 5 }}>{endpoint === '/rig' ? 'MRR Marketplace' : 'RIGS  '} ({mrrClient})
+            <small style={{ opacity: 0.3 }}>
+            : {filteredRigs.length} / {totalFetchedCount} rigs {algo && `for ${algo}`}
+          </small>
             <select
               className="select-pro"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ fontSize: '11px', padding: '5px 5px 1px 8px', height: '30px', minWidth: '130px' }}
+              style={{ fontSize: '11px', padding: '5px 5px 3px 6px', height: '30px', minWidth: '100px', marginTop: '5px' }}
             >
               <option value="all">All Statuses</option>
               <option value="available">Available</option>
-              {/* <option value="online">Online</option> */}
               <option value="offline">Offline</option>
               <option value="rented">Rented</option>
               <option value="disabled">Disabled</option>
             </select>
           </h2>
-
-        </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <small style={{ opacity: 0.3 }}>
-            Showing {filteredRigs.length} of {totalFetchedCount} rigs {algo && `for ${algo}`}
-          </small>
-          <button className="btn-pro secondary" onClick={fetchRigs} disabled={loading}>
+          <button className="btn-pro secondary" onClick={fetchRigs} disabled={loading} style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '6px 12px', fontSize: '11px', height: '30px', color: loading ? '#9ca3af' : '#f87171', borderColor: loading ? '#9ca3af' : '#f87171', background: 'transparent', transition: 'all 0.2s ease', borderRadius: '6px', opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
-        </div>
       </div>
 
       {error && <div className="error-message" style={{ margin: '15px 0', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '6px', color: '#f87171' }}><strong>Error:</strong> {error}</div>}
 
       {/* Status Dashboard */}
-      <div className="rigs-summary-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+      <div className="rigs-summary-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20px, 1fr))', gap: '10px', marginBottom: '3px' }}>
         <div className="stat-card-mini" style={{ maxWidth: '120px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ fontSize: '10px', opacity: 0.5, textTransform: 'uppercase' }}>Total</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold' }}>{stats.total}</div>
@@ -563,7 +557,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         </div>
       </div>
 
-      <div className="rig-list" style={{ marginTop: '15px', position: 'relative', flexGrow: 1, display: 'flex', flexDirection: 'column', maxHeight: '800px', overflowY: 'auto', paddingRight: '2px', scrollbarWidth: 'thin', scrollbarColor: 'rgba(143, 64, 64, 0.59) transparent', overscrollBehavior: 'contain' }}>
+      <div className="rig-list" style={{ marginTop: '5px', position: 'relative', flexGrow: 1, display: 'flex', flexDirection: 'column', maxHeight: '800px', overflowY: 'auto', paddingRight: '2px', scrollbarWidth: 'thin', scrollbarColor: 'rgba(143, 64, 64, 0.59) transparent', overscrollBehavior: 'contain' }}>
         {filteredRigs.length === 0 && !loading && !error && (
           <div style={{ opacity: 0.5, textAlign: 'center', padding: '20px' }}>No rigs found for this account.</div>
         )}

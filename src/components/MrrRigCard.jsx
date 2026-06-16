@@ -153,16 +153,16 @@ const MrrRigCard = ({
             {String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toUpperCase()}
           </span>
         </div>
-        <strong 
-          style={{ 
-            fontSize: '13px', 
-            lineHeight: '1.3', 
+        <strong
+          style={{
+            fontSize: '13px',
+            lineHeight: '1.3',
             color: '#f8fafc',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             display: 'block'
-          }} 
+          }}
           title={rig.name}
         >
           {rig.name}
@@ -200,7 +200,7 @@ const MrrRigCard = ({
                     <span>Value (Effect):</span>
                     <strong>{realizedPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
                   </div>
-                    {/* <div style={{ fontSize: '9px', color: '#60a5fa', display: 'flex', justifyContent: 'space-between' }}>
+                  {/* <div style={{ fontSize: '9px', color: '#60a5fa', display: 'flex', justifyContent: 'space-between' }}>
                       <span>Worth (NH):</span>
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                         {nhPriceRatio > 0 && (
@@ -229,7 +229,6 @@ const MrrRigCard = ({
 
       {isRented && (
         <div style={{ background: 'rgba(0,0,0,0.1)', padding: '8px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div style={{ opacity: 0.5, fontSize: '8px' }}>Efficiency</div><div style={{ fontSize: '11px', color: effectTextColor, fontWeight: 'bold' }}>{eff}%</div></div>
             <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ width: `${Math.min(100, effNum)}%`, height: '100%', background: effectTextColor }} /></div>
@@ -237,7 +236,6 @@ const MrrRigCard = ({
           <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
             <div style={{ width: `${timeProgress}%`, height: '100%', background: timeProgress > 90 ? '#f87171' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }} />
           </div>
-
           <div style={{ background: 'rgba(0,0,0,0.15)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>Target:
@@ -306,6 +304,7 @@ const MrrRigCard = ({
         {isRented && info && onOpenCompletionCalculator && (
           <button className="btn-pro secondary" style={{ flex: 1, fontSize: '10px' }} onClick={() => onOpenCompletionCalculator(rig, info)}>Calc</button>
         )}
+        
         <div style={{ display: 'flex', flex: 1, gap: '4px' }}>
           <button
             className="btn-pro"
@@ -314,22 +313,22 @@ const MrrRigCard = ({
             disabled={loadingInfoIds.has(rig.id)}>
             {loadingInfoIds.has(rig.id) ? '...' : 'More'}
           </button>
-          <button
-            className="btn-pro secondary"
-            style={{ width: '32px', fontSize: '10px', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onClick={() => {
-              setEnrichedInfo(prev => {
-                const next = { ...prev };
-                delete next[rig.id];
-                return next;
-              });
-              fetchRigDetailInfo(rig);
-            }}
-            disabled={loadingInfoIds.has(rig.id)}
-            title="Reload Rig Details">
-            {loadingInfoIds.has(rig.id) ? '...' : '♻️'}
-          </button>
         </div>
+        <button
+          className="btn-pro secondary"
+          style={{ width: '32px', fontSize: '12px', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => {
+            setEnrichedInfo(prev => {
+              const next = { ...prev };
+              delete next[rig.id];
+              return next;
+            });
+            fetchRigDetailInfo(rig);
+          }}
+          disabled={loadingInfoIds.has(rig.id)}
+          title="Reload Rig Details">
+          {loadingInfoIds.has(rig.id) ? '...' : '♻️'}
+        </button>
       </div>
     </div>
   );

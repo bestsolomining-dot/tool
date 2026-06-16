@@ -61,7 +61,7 @@ export async function fetchMiningStats(type, client, rigId = null) {
 
     socket.onerror = () => {
       clearTimeout(timeout);
-      reject(new Error(`Connection failed for ${type} at ${wsUrl}. Check if the backend is running on port ${host.split(':')[1] || 'default'}.`));
+      reject(new Error(`Connection failed for ${type} at ${wsUrl}. Check if the backend is running on port 3000 (or your configured PORT environment variable).`));
       socket.close();
     };
   });

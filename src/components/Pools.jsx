@@ -764,7 +764,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                   </label>
                 </div>
               </div>
-              <div style={{ fontSize: '10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '8px' }}>
+              <div style={{ fontSize: '8px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(60px, 1fr))', gap: '6px' }}>
                 <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()}>Import XLSX</button>
                 <button className="btn-pro secondary" onClick={() => setInventoryModalOpen(true)}>Inventory</button>
                 <button className="btn-pro secondary" onClick={() => setConnectionModalOpen(true)}>Connect Manager</button>

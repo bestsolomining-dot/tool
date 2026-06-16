@@ -10,9 +10,6 @@ export const UNIT_TO_POWER = {
 /** Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH') */
 export const clean = (u) => {
   const str = String(u || '').toUpperCase().trim();
-  if (str.includes('SHA256')) return 'EH';
-  if (str.includes('SCRYPT')) return 'TH';
-  if (str.includes('RANDOMX')) return 'MH';
 
   const m = str.match(/(EHS|PHS|THS|GHS|MHS|EH|PH|TH|GH|MH|KH)/) || str.match(/\b(E|P|T|G|M|K|H)\b/);
   if (!m) return 'TH';

@@ -155,24 +155,35 @@ export function getMarketName(market) {
 }
 
 /** Standardized hashrate pricing formatter. */
-export function formatHashratePrice(price, currency = 'BTC', unit = 'TH') { // Keep this
+export function formatHashratePrice(price, currency = 'BTC', unit = 'TH') {
   const cleanUnit = String(unit || 'TH').toUpperCase().replace('S', '');
   return `${parseFloat(price || 0).toFixed(6)} ${currency} / ${cleanUnit} / Day`;
 }
 
+/** Extracts base unit prefix (e.g., 'BTC/TH/Day' -> 'TH') */
+const normalizeUnit = (u) => {
+  const match = String(u || '').toUpperCase().match(/(EH|PH|TH|GH|MH|KH|H)/);
+  return match ? match[0] : 'TH';
+};
+
 /** Calculates the price difference ROI percentage. */
 export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit, isMrrVsNh = true) {
   const nhPriceNum = Number.parseFloat(nhPrice || 0);
-  const mrrPriceNum = Number.parseFloat(mrrPrice || 0);
+  let mrrPriceNum = Number.parseFloat(mrrPrice || 0);
   if (nhPriceNum <= 0 || mrrPriceNum <= 0) return null;
 
-  // Normalize prices to BTC/TH/Day
-  const mrrPricePerTh = mrrPriceNum / (UNIT_FACTORS[String(mrrUnit).toUpperCase()] || 1);
-  const nhPricePerTh = nhPriceNum / (UNIT_FACTORS[String(nhUnit).toUpperCase()] || 1);
+  const mClean = normalizeUnit(mrrUnit);
+  const nClean = normalizeUnit(nhUnit);
 
-  // Calculate percentage difference.
-  // If isMrrVsNh is true (for MRR card ROI), positive means MRR is more expensive than NH.
-  // If isMrrVsNh is false (for NH card orderDiff), positive means NH market is more expensive than your order.
+  // Magnitude Guard: If ASIC algorithm and price > 0.01, it's likely a PH price labeled as TH
+  const isAsic = mrrUnit?.toUpperCase().includes('SHA256') || mrrUnit?.toUpperCase().includes('SCRYPT') || nhUnit?.toUpperCase().includes('SHA256');
+  let effectiveMrrUnit = mClean;
+  if (isAsic && mrrPriceNum > 0.01 && mClean === 'TH') effectiveMrrUnit = 'PH';
+
+  // Normalize prices to BTC/TH/Day
+  const mrrPricePerTh = mrrPriceNum / (UNIT_FACTORS[effectiveMrrUnit] || 1);
+  const nhPricePerTh = nhPriceNum / (UNIT_FACTORS[nClean] || 1);
+
   const diff = isMrrVsNh
     ? ((mrrPricePerTh - nhPricePerTh) / nhPricePerTh * 100) // (MRR - NH) / NH * 100
     : ((nhPricePerTh - mrrPricePerTh) / nhPricePerTh * 100); // (NH - MRR) / NH * 100

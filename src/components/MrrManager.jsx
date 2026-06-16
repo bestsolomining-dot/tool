@@ -13,6 +13,7 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [heroMinersStats, setHeroMinersStats] = useState(null); // New state for HeroMiners statistics
+  const [miningPoolDutchStats, setMiningPoolDutchStats] = useState(null); // New state for Mining Pool Dutch statistics
   const [activeRigId, setActiveRigId] = useState(null);
   const [draggedItemIndex, setDraggedItemIndex] = useState(null);
 
@@ -187,8 +188,9 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
           // "Paste" the fetched pools directly into the rig's live configuration
           await updatePools(rig, data.pools);
         }
-        if (data.success && data.stats) { // Handle HeroMiners statistics
-          setHeroMinersStats(data.stats);
+        if (data.success && data.stats) {
+          if (type === 'herominers') setHeroMinersStats(data.stats);
+          if (type === 'miningpooldutch') setMiningPoolDutchStats(data.stats);
         } else if (data.error) {
           setError(data.error);
         }
@@ -402,6 +404,65 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
               <div style={{ opacity: 0.5, fontSize: '12px', textAlign: 'center', padding: '10px' }}>
                 No HeroMiners statistics available.
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Mining Pool Dutch Statistics Display */}
+        {miningPoolDutchStats && (
+          <div style={{ marginTop: '2rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', color: '#60a5fa' }}>Mining Pool Dutch Statistics</h3>
+              <button className="text-button" style={{ fontSize: '10px' }} onClick={() => setMiningPoolDutchStats(null)}>Clear</button>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '1.5rem' }}>
+              {Object.entries(miningPoolDutchStats).map(([key, val]) => {
+                if (typeof val === 'object') return null; // Skip arrays/objects for top summary
+                return (
+                  <div key={key} style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
+                    <div style={{ fontSize: '9px', opacity: 0.5, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+                    <div style={{ fontWeight: 'bold', fontSize: '11px', color: '#f8fafc' }}>{String(val)}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Workers Table */}
+            {miningPoolDutchStats.workers && Array.isArray(miningPoolDutchStats.workers) && (
+              <div style={{ overflowX: 'auto' }}>
+                <h4 style={{ fontSize: '0.9rem', color: '#fbbf24', marginBottom: '10px' }}>Active Workers</h4>
+                <table className="pro-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ fontSize: '10px', opacity: 0.7, textTransform: 'uppercase', textAlign: 'left' }}>
+                      <th style={{ padding: '8px' }}>Worker Name</th>
+                      <th style={{ padding: '8px' }}>Hashrate</th>
+                      <th style={{ padding: '8px' }}>24h Avg</th>
+                      <th style={{ padding: '8px' }}>Difficulty</th>
+                      <th style={{ padding: '8px' }}>Last Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {miningPoolDutchStats.workers.map((w, idx) => (
+                      <tr key={idx} style={{ fontSize: '11px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                        <td style={{ padding: '8px', fontWeight: 'bold', color: '#f8fafc' }}>{w.worker || w.name || 'N/A'}</td>
+                        <td style={{ padding: '8px', color: '#60a5fa', fontFamily: 'monospace' }}>{w.hashrate || w.hash || '0'}</td>
+                        <td style={{ padding: '8px', fontFamily: 'monospace' }}>{w.hashrate_24h || '0'}</td>
+                        <td style={{ padding: '8px', opacity: 0.7 }}>{w.difficulty || 'N/A'}</td>
+                        <td style={{ padding: '8px', opacity: 0.7 }}>{w.last_share ? new Date(w.last_share * 1000).toLocaleTimeString() : 'N/A'}</td>
+                      </tr>
+                    ))}
+                    {miningPoolDutchStats.workers.length === 0 && (
+                      <tr>
+                        <td colSpan="5" style={{ textAlign: 'center', padding: '20px', opacity: 0.4 }}>No active workers found on pool.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {miningPoolDutchStats.error && (
+              <div style={{ color: '#f87171', fontSize: '11px', marginTop: '10px' }}>{miningPoolDutchStats.error}</div>
             )}
           </div>
         )}

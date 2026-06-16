@@ -191,7 +191,7 @@ const MrrRigCard = ({
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {isRented && paidLabel && (
-            <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '4px', borderRadius: '4px' }}>
+            <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '4px', borderRadius: '5px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Paid: <strong>{paidLabel}</strong></span>
               </div>
@@ -199,11 +199,11 @@ const MrrRigCard = ({
                 <div style={{ marginTop: '3px', paddingTop: '3px', borderTop: '1px solid rgba(16, 185, 129, 0.1)' }}>
                   <div style={{ fontSize: '9px', opacity: 0.8, display: 'flex', justifyContent: 'space-between' }}>
                     <span>Spent (Time):</span>
-                    <strong>{currentPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
+                    <strong style={{ fontSize: '12px'}}>{currentPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
                   </div>
                   <div style={{ fontSize: '9px', color: effNum < 100 ? '#f87171' : '#34d399', display: 'flex', justifyContent: 'space-between' }}>
                     <span>Value (Effect):</span>
-                    <strong>{realizedPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
+                    <strong style={{ fontSize: '11px'}}>{realizedPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
                   </div>
                 </div>
               )}
@@ -219,14 +219,16 @@ const MrrRigCard = ({
             </div>
           )}
         </div>
+        
       </div>
+                  {/* <div class:"timeremain_bar" style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ width: `${Math.min(100, effNum)}%`, height: '100%', background: effectTextColor }} /></div> */}
+
 
       {isRented && (
         <div style={{ background: 'rgba(0,0,0,0.1)', padding: '8px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
 
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div style={{ opacity: 0.5, fontSize: '8px' }}>Efficiency</div><div style={{ fontSize: '11px', color: effectTextColor, fontWeight: 'bold' }}>{eff}%</div></div>
-            <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ width: `${Math.min(100, effNum)}%`, height: '100%', background: effectTextColor }} /></div>
           </div>
           <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
             <div style={{ width: `${timeProgress}%`, height: '100%', background: timeProgress > 90 ? '#f87171' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }} />

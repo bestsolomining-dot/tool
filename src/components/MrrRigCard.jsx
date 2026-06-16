@@ -157,16 +157,16 @@ const MrrRigCard = ({
             {String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toUpperCase()}
           </span>
         </div>
-        <strong 
-          style={{ 
-            fontSize: '13px', 
-            lineHeight: '1.3', 
+        <strong
+          style={{
+            fontSize: '13px',
+            lineHeight: '1.3',
             color: '#f8fafc',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             display: 'block'
-          }} 
+          }}
           title={rig.name}
         >
           {rig.name}
@@ -176,19 +176,18 @@ const MrrRigCard = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', borderRight: '1px solid rgba(255,255,255,0.05)', paddingRight: '4px' }}>
           <div>
             <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Algorithm</div>
-            <div style={{ color: '#fc7324', fontWeight: 'bold', fontSize: '12px'}}>{getAlgoDisplayName(info?.algo || rig.algo || rig.algorithm || rig.type)}</div>
+            <div style={{ color: '#fc7324', fontWeight: 'bold', fontSize: '12px' }}>{getAlgoDisplayName(info?.algo || rig.algo || rig.algorithm || rig.type)}</div>
           </div>
           <div>
             <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price:</div>
             <div style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold' }}>{displayPrice.toFixed(8)} <small style={{ opacity: 0.5 }}>{displayPriceCurrency}</small></div>
             {displayPriceCurrency !== 'BTC' && isMrrBtc && <div style={{ fontSize: '9px', color: '#fbbf24', opacity: 0.8 }}>≈ {listBtcData.value.toFixed(8)} <small>BTC</small></div>}
-            
           </div>
           {info?.isRental && <span style={{ opacity: 0.8 }}>Adv: <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', fontSize: '11px' }}>{info.advertised}</span></span>}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', opacity: 0.8, marginTop: '4px' }}>
-              <span title={rentalStartTime}><span style={{ opacity: 0.8 }}>Started: </span>{formatRentalStartTime(rentalStartTime)}</span>
-              <span><span style={{ opacity: 0.8 }}>Remain: </span><CountdownTimer endTime={info?.endTime || rig.end} /></span>
-            </div>
+            <span title={rentalStartTime}><span style={{ opacity: 0.8 }}>Started: </span>{formatRentalStartTime(rentalStartTime)}</span>
+            <span><span style={{ opacity: 0.8 }}>Remain: </span><CountdownTimer endTime={info?.endTime || rig.end} /></span>
+          </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {isRented && paidLabel && (
@@ -238,16 +237,16 @@ const MrrRigCard = ({
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>Target:
                 <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', marginLeft: 'auto', fontSize: '11px' }}>{Math.max(0, targetHashrate).toFixed(2)} <small style={{ opacity: 0.5 }}>{hSuffix.toUpperCase()}</small></span></div>
             </div>
-            
+
             {info?.isRental ? (
               <div style={{ background: 'rgba(0,0,0,0.15)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-              <span style={{ opacity: 0.8 }}>Hashrate:</span>
-              
-            </div>
+                  <span style={{ opacity: 0.8 }}>Hashrate:</span>
+
+                </div>
                 <div style={{ fontWeight: 'bold', fontSize: '10px', color: '#f1f5f9', display: 'flex', justifyContent: 'space-between' }}>
                   <span>{info.average || '0 N/A'} <small style={{ fontSize: '8px', opacity: 0.5 }}>(AVG)</small></span>
-                  
+
                 </div>
                 <div style={{ fontSize: '10px', opacity: 0.8, marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
                   <span><span style={{ color: '#60a5fa' }}>5m:</span> {info.last5m?.split(' ')[0] || '0'}</span>

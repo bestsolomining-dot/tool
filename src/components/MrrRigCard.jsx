@@ -7,7 +7,7 @@ import {
   getPriceDataLocal,
   parsePriceValueLocal,
   getNiceHashPriceValue,
-  formatRentalStartTime,
+  formatRentalStartTime, // Keep this, it's used
   getRentalAlgorithm,
   getRentalEfficiency,
   getRentalAdvertisedHashrate,
@@ -15,8 +15,8 @@ import {
   getStatusClass,
   getRoiColor
 } from '../core/mrrUtils.js';
-import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils.js';
-import { getAlgoDisplayName, normalizeAlgoForNiceHash, calculatePriceComparison } from '../core/mapping.js';
+import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils.js'; // Keep this, it's used
+import { getAlgoDisplayName, normalizeAlgoForNiceHash, calculatePriceComparison, UNIT_FACTORS } from '../core/mapping.js';
 
 const MrrRigCard = ({
   rig,
@@ -76,10 +76,8 @@ const MrrRigCard = ({
   // Prioritize the daily rate from the original 'rig' object over the 'info' object.
   // When a rig is rented, info.price usually contains the total paid amount for the duration,
   // which breaks the daily-rate comparison logic for ROI.
-  const listPriceSource = rig.price_converted || rig?.price?.BTC || rig.price || info?.price_converted || info?.price?.BTC || info?.price || rig.min_price;
-
-  const listBtcData = getBtcPriceDataUtils(listPriceSource);
-
+  const listPriceSource = rig.price_converted || rig?.price?.BTC || rig.price || info?.price_converted || info?.price?.BTC || info?.price || rig.min_price; // Keep this
+  const listBtcData = getBtcPriceDataUtils(listPriceSource); // Keep this
   // Simplified ROI Logic: Use List Rate and adjust by Efficiency (Effect)
   const mrrPriceNum = (() => {
     const listRate = listBtcData.value;
@@ -93,13 +91,12 @@ const MrrRigCard = ({
   const mrrComparePriceValue = listBtcData.value;
   const isMrrBtc = listBtcData.currency === 'BTC' && listBtcData.value > 0;
   const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid);
-  const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || '';
+  const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || ''; // Keep this
   const paidLabel = paidAmount > 0 && paidCurrency ? `${paidAmount.toFixed(8)} ${paidCurrency}` : null;
-
-  // Critical for ROI magnitude: prioritize the unit associated with the Price (Daily Rate).
-  // rig.hashrate_unit refers to capacity (e.g. 100 MH), but the price is usually per GH or TH.
-  // Falling back to capacity unit causes 1000x scaling errors (e.g. -99.8% ROI).
-  const mrrUnit = clean(listBtcData.unit || rig.price_unit || rig.hashrate_unit || 'TH');
+  const isSha256 = algoName.toUpperCase().includes('SHA256') || algoName.toUpperCase().includes('BTC');
+  const isScrypt = algoName.toUpperCase().includes('SCRYPT') || algoName.toUpperCase().includes('LTC');
+  // For SHA256/Scrypt, MRR prices are effectively per PH, even if the unit string says TH.
+  const mrrUnit = (isSha256 || isScrypt) ? 'PH' : (listBtcData.unit || rig.price_unit || rig.hashrate_unit || 'TH');
 
   const nhOrder = nhOrders?.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
 
@@ -107,31 +104,30 @@ const MrrRigCard = ({
   const myNhPrice = nhOrder ? parseFloat(nhOrder.price) : parseFloat(nhData || 0);
   const nhPriceWithFee = myNhPrice > 0 ? (nhOrder?.add_fee ? parseFloat(nhOrder.add_fee) : (myNhPrice * 1.04)) : 0;
   const isRandomX = algoName.toLowerCase().includes('RANDOMX');
-  const isSha256 = algoName.toUpperCase().includes('SHA256');
   const isKawPow = algoName.toUpperCase().includes('KAWPOW');
-  // NiceHash KawPow is priced per TH. Catch-all GH fallback caused magnitude errors.
-  const myNhUnit = nhOrder?.marketUnit || (isSha256 ? 'EH' : (isRandomX ? 'MH' : (isKawPow ? 'TH' : 'GH')));
+  // NiceHash standard market units: SHA256 and Scrypt are PH. RandomX is MH. KawPow is TH. Others GH.
+  const myNhUnit = nhOrder?.marketUnit || (isSha256 || isScrypt ? 'PH' : (isRandomX ? 'MH' : (isKawPow ? 'TH' : 'GH')));
 
   // ROI Logic: Only show price-based ROI if we have valid price data from NiceHash
-  const myOrderDiffRaw = (myNhPrice > 0 && mrrPriceNum > 0) ? calculatePriceComparison(
-    mrrPriceNum,
+  const myOrderDiffRaw = (myNhPrice > 0 && mrrComparePriceValue > 0) ? calculatePriceComparison(
+    mrrComparePriceValue, // Use the raw list price for ROI comparison, not efficiency adjusted
     mrrUnit, // Pass mrrUnit directly; calculatePriceComparison should handle conversion
     nhPriceWithFee,
-    myNhUnit
+    myNhUnit,
+    true // isMrrVsNh = true, for MRR card ROI
   ) : null;
-  const myOrderDiff = myOrderDiffRaw !== null ? (parseFloat(myOrderDiffRaw) * -1 / 10000).toFixed(1) : null;
+  const myOrderDiff = myOrderDiffRaw; // myOrderDiffRaw now directly gives the desired percentage
+
+  // For Worth (NH) calculation, use efficiency-adjusted MRR price
+  const mrrPricePerThForWorth = mrrPriceNum / (UNIT_FACTORS[String(mrrUnit).toUpperCase()] || 1);
+  const nhPricePerThForWorth = nhPriceWithFee / (UNIT_FACTORS[String(myNhUnit).toUpperCase()] || 1);
+  const nhPriceRatio = mrrPricePerThForWorth > 0 ? (nhPricePerThForWorth / mrrPricePerThForWorth) : 0;
 
   // 3. Time and Consumption tracking
   const rentalStartTime = info?.startTime || rig.start;
-  const startT = new Date(rentalStartTime + (String(rentalStartTime).endsWith('UTC') ? '' : ' UTC')).getTime();
-  const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end).endsWith('UTC') ? '' : ' UTC')).getTime();
-  const totalMs = endT - startT;
-
-  // Unit normalization for price comparison ratio
-  const unitFactors = { EH: 1e6, PH: 1000, TH: 1, GH: 0.001, MH: 0.000001 };
-  const mrrBtcTh = listBtcData.value / (unitFactors[mrrUnit] || 1);
-  const nhBtcTh = nhPriceWithFee / (unitFactors[myNhUnit] || 1);
-  const nhPriceRatio = mrrBtcTh > 0 ? (nhBtcTh / mrrBtcTh) : 0;
+  const startT = new Date(rentalStartTime + (String(rentalStartTime || '').endsWith('UTC') ? '' : ' UTC')).getTime();
+  const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end || '').endsWith('UTC') ? '' : ' UTC')).getTime();
+  const totalMs = (isNaN(startT) || isNaN(endT)) ? 0 : endT - startT;
 
   const elapsedMs = Math.max(0, Math.min(Date.now() - startT, totalMs));
   const timeProgress = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
@@ -157,16 +153,16 @@ const MrrRigCard = ({
             {String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toUpperCase()}
           </span>
         </div>
-        <strong
-          style={{
-            fontSize: '13px',
-            lineHeight: '1.3',
+        <strong 
+          style={{ 
+            fontSize: '13px', 
+            lineHeight: '1.3', 
             color: '#f8fafc',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             display: 'block'
-          }}
+          }} 
           title={rig.name}
         >
           {rig.name}
@@ -176,17 +172,16 @@ const MrrRigCard = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', borderRight: '1px solid rgba(255,255,255,0.05)', paddingRight: '4px' }}>
           <div>
             <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Algorithm</div>
-            <div style={{ color: '#fc7324', fontWeight: 'bold', fontSize: '12px' }}>{getAlgoDisplayName(info?.algo || rig.algo || rig.algorithm || rig.type)}</div>
+            <div style={{ color: '#fc7324', fontWeight: 'bold' }}>{getAlgoDisplayName(info?.algo || rig.algo || rig.algorithm || rig.type)}</div>
           </div>
           <div>
             <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price:</div>
             <div style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold' }}>{displayPrice.toFixed(8)} <small style={{ opacity: 0.5 }}>{displayPriceCurrency}</small></div>
             {displayPriceCurrency !== 'BTC' && isMrrBtc && <div style={{ fontSize: '9px', color: '#fbbf24', opacity: 0.8 }}>≈ {listBtcData.value.toFixed(8)} <small>BTC</small></div>}
-          </div>
-          {info?.isRental && <span style={{ opacity: 0.8 }}>Adv: <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', fontSize: '11px' }}>{info.advertised}</span></span>}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', opacity: 0.8, marginTop: '4px' }}>
-            <span title={rentalStartTime}><span style={{ opacity: 0.8 }}>Started: </span>{formatRentalStartTime(rentalStartTime)}</span>
-            <span><span style={{ opacity: 0.8 }}>Remain: </span><CountdownTimer endTime={info?.endTime || rig.end} /></span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', opacity: 0.8, marginTop: '4px' }}>
+              <span title={rentalStartTime}><span style={{ opacity: 0.8 }}>Started: </span>{formatRentalStartTime(rentalStartTime)}</span>
+              <span><span style={{ opacity: 0.8 }}>Remain: </span><CountdownTimer endTime={info?.endTime || rig.end} /></span>
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -205,6 +200,17 @@ const MrrRigCard = ({
                     <span>Value (Effect):</span>
                     <strong>{realizedPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
                   </div>
+                    <div style={{ fontSize: '9px', color: '#60a5fa', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Worth (NH):</span>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        {nhPriceRatio > 0 && (
+                          <span style={{ color: worthDiff >= 0 ? '#10b981' : '#f87171', fontWeight: 'bold', fontSize: '8px' }}>
+                            ({worthDiff >= 0 ? '+' : ''}{worthDiff.toFixed(1)}%)
+                          </span>
+                        )}
+                        <strong>{nhValueEquivalent.toFixed(8)} <small>{paidCurrency}</small></strong>
+                      </div>
+                    </div>
                 </div>
               )}
               {myNhPrice > 0 && myOrderDiff !== null && (
@@ -237,16 +243,14 @@ const MrrRigCard = ({
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>Target:
                 <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', marginLeft: 'auto', fontSize: '11px' }}>{Math.max(0, targetHashrate).toFixed(2)} <small style={{ opacity: 0.5 }}>{hSuffix.toUpperCase()}</small></span></div>
             </div>
-
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
+              <span style={{ opacity: 0.8 }}>Hashrate:</span>
+            </div>
             {info?.isRental ? (
               <div style={{ background: 'rgba(0,0,0,0.15)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                  <span style={{ opacity: 0.8 }}>Hashrate:</span>
-
-                </div>
                 <div style={{ fontWeight: 'bold', fontSize: '10px', color: '#f1f5f9', display: 'flex', justifyContent: 'space-between' }}>
                   <span>{info.average || '0 N/A'} <small style={{ fontSize: '8px', opacity: 0.5 }}>(AVG)</small></span>
-
+                  <span style={{ opacity: 0.8 }}>Adv: <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', fontSize: '11px' }}>{info.advertised}</span></span>
                 </div>
                 <div style={{ fontSize: '10px', opacity: 0.8, marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
                   <span><span style={{ color: '#60a5fa' }}>5m:</span> {info.last5m?.split(' ')[0] || '0'}</span>

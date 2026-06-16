@@ -79,13 +79,17 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
           const mktData = marketPrices[`${p.algo}:${p.market}`] || { value: 0, unit: isSha2 ? 'EH' : (isRx ? 'MH' : 'GH') };
           const mkt = mktData.value;
           const cur = parseFloat(p.price);
+          // Determine the correct unit for the user's order price
+          const curUnit = isSha2 ? 'PH' : (isRx ? 'MH' : 'TH'); // Assuming NH orders for SHA256 are PH, RandomX are MH, others TH
+
           const diffRaw = (mkt > 0 && cur > 0) ? calculatePriceComparison(
-            cur,
-            'TH', // Your rental price unit (BTC/TH/Day)
+            cur, // Your order price
+            curUnit, // Your order price unit
             mkt,  // Market benchmark price
-            mktData.unit // Market benchmark unit (e.g., EH for SHA256)
+            mktData.unit, // Market benchmark unit (e.g., PH for SHA256)
+            false // isMrrVsNh = false, as this is NH order vs NH market
           ) : null;
-          const diff = diffRaw !== null ? (parseFloat(diffRaw) * -1).toFixed(1) : null;
+          const diff = diffRaw; // diffRaw now directly gives the desired percentage
           return { ...p, marketPrice: mkt, marketUnit: mktData.unit, orderDiff: diff };
         }).sort((a, b) => parseFloat(b.speed || 0) - parseFloat(a.speed || 0));
 

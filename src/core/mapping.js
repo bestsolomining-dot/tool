@@ -1,8 +1,8 @@
-/** Power factor mapping for normalization (EH/s base) */
-export const UNIT_TO_POWER = {
-  'EH': 0, 'PH': -3, 'TH': -6, 'GH': -9, 'MH': -12, 'KH': -15, 'H': -18,
-  'E': 0, 'P': -3, 'T': -6, 'G': -9, 'M': -12,
-  'EHS': 0, 'PHS': -3, 'THS': -6, 'GHS': -9, 'MHS': -12
+// Unit factors relative to TH/s (1 TH = 1 TH, 1 PH = 1000 TH, 1 EH = 1,000,000 TH)
+export const UNIT_FACTORS = {
+  EH: 1e6, PH: 1000, TH: 1, GH: 1e-3, MH: 1e-6, KH: 1e-9, H: 1e-12,
+  EHS: 1e6, PHS: 1000, THS: 1, GHS: 1e-3, MHS: 1e-6,
+  E: 1e6, P: 1000, T: 1, G: 1e-3, M: 1e-6, K: 1e-9
 };
 
 /**
@@ -155,29 +155,27 @@ export function getMarketName(market) {
 }
 
 /** Standardized hashrate pricing formatter. */
-export function formatHashratePrice(price, currency = 'BTC', unit = 'TH') {
+export function formatHashratePrice(price, currency = 'BTC', unit = 'TH') { // Keep this
   const cleanUnit = String(unit || 'TH').toUpperCase().replace('S', '');
   return `${parseFloat(price || 0).toFixed(6)} ${currency} / ${cleanUnit} / Day`;
 }
 
-/** Calculates the price difference ROI percentage (Positive = Market is more expensive). */
-export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit) {
+/** Calculates the price difference ROI percentage. */
+export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit, isMrrVsNh = true) {
   const nhPriceNum = Number.parseFloat(nhPrice || 0);
   const mrrPriceNum = Number.parseFloat(mrrPrice || 0);
   if (nhPriceNum <= 0 || mrrPriceNum <= 0) return null;
-  const getBaseUnit = (u) => {
-    const str = String(u || '').toUpperCase();
-    if (str.includes('SHA256')) return 'EH';
-    if (str.includes('SCRYPT')) return 'MH';
-    if (str.includes('RANDOMX')) return 'KH';
-    const m = str.match(/(EH|PH|TH|GH|MH|KH|EHS|PHS|THS|GHS|MHS|E|P|T|G|M|K|H)/);
-    if (!m) return 'TH';
-    const singleMap = { 'E': 'EH', 'P': 'PH', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };
-    return singleMap[m[0]] || m[0];
-  };
-  const mrrP = UNIT_TO_POWER[getBaseUnit(mrrUnit)] ?? -6;
-  const nhP = UNIT_TO_POWER[getBaseUnit(nhUnit)] ?? -6;
-  const mrrPriceNorm = mrrPriceNum / Math.pow(10, mrrP);
-  const nhPriceNorm = nhPriceNum / Math.pow(10, nhP);
-  return ((nhPriceNorm - mrrPriceNorm) / nhPriceNorm * 100).toFixed(1);
+
+  // Normalize prices to BTC/TH/Day
+  const mrrPricePerTh = mrrPriceNum / (UNIT_FACTORS[String(mrrUnit).toUpperCase()] || 1);
+  const nhPricePerTh = nhPriceNum / (UNIT_FACTORS[String(nhUnit).toUpperCase()] || 1);
+
+  // Calculate percentage difference.
+  // If isMrrVsNh is true (for MRR card ROI), positive means MRR is more expensive than NH.
+  // If isMrrVsNh is false (for NH card orderDiff), positive means NH market is more expensive than your order.
+  const diff = isMrrVsNh
+    ? ((mrrPricePerTh - nhPricePerTh) / nhPricePerTh * 100) // (MRR - NH) / NH * 100
+    : ((nhPricePerTh - mrrPricePerTh) / nhPricePerTh * 100); // (NH - MRR) / NH * 100
+
+  return diff.toFixed(1);
 }

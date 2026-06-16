@@ -157,62 +157,74 @@ const MrrRigCard = ({
             {String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toUpperCase()}
           </span>
         </div>
-        <strong style={{ fontSize: '13px', lineHeight: '1.3', color: '#f8fafc' }}>{rig.name}</strong>
+        <strong 
+          style={{ 
+            fontSize: '13px', 
+            lineHeight: '1.3', 
+            color: '#f8fafc',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: 'block'
+          }} 
+          title={rig.name}
+        >
+          {rig.name}
+        </strong>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '8px', fontSize: '10px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', borderRight: '1px solid rgba(255,255,255,0.05)', paddingRight: '4px' }}>
           <div>
             <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Algorithm</div>
-            <div style={{ color: '#fc7324', fontWeight: 'bold' }}>{getAlgoDisplayName(info?.algo || rig.algo || rig.algorithm || rig.type)}</div>
+            <div style={{ color: '#fc7324', fontWeight: 'bold', fontSize: '12px'}}>{getAlgoDisplayName(info?.algo || rig.algo || rig.algorithm || rig.type)}</div>
           </div>
           <div>
             <div style={{ opacity: 0.5, fontSize: '8px', textTransform: 'uppercase' }}>Rental Price:</div>
             <div style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 'bold' }}>{displayPrice.toFixed(8)} <small style={{ opacity: 0.5 }}>{displayPriceCurrency}</small></div>
             {displayPriceCurrency !== 'BTC' && isMrrBtc && <div style={{ fontSize: '9px', color: '#fbbf24', opacity: 0.8 }}>≈ {listBtcData.value.toFixed(8)} <small>BTC</small></div>}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', opacity: 0.8, marginTop: '4px' }}>
-            <span title={rentalStartTime}><span style={{ opacity: 0.8 }}>Started: </span>{formatRentalStartTime(rentalStartTime)}</span>
-            <span><span style={{ opacity: 0.8 }}>Remain: </span><CountdownTimer endTime={info?.endTime || rig.end} /></span>
+            
           </div>
-
-          </div>
+          {info?.isRental && <span style={{ opacity: 0.8 }}>Adv: <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', fontSize: '11px' }}>{info.advertised}</span></span>}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', opacity: 0.8, marginTop: '4px' }}>
+              <span title={rentalStartTime}><span style={{ opacity: 0.8 }}>Started: </span>{formatRentalStartTime(rentalStartTime)}</span>
+              <span><span style={{ opacity: 0.8 }}>Remain: </span><CountdownTimer endTime={info?.endTime || rig.end} /></span>
+            </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {isRented && paidLabel && (
-              <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '4px', borderRadius: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Paid: <strong>{paidLabel}</strong></span>
-                </div>
-                {currentPayValue > 0 && (
-                  <div style={{ marginTop: '3px', paddingTop: '3px', borderTop: '1px solid rgba(16, 185, 129, 0.1)' }}>
-                    <div style={{ fontSize: '9px', opacity: 0.8, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Spent (Time):</span>
-                      <strong>{currentPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
-                    </div>
-                    <div style={{ fontSize: '9px', color: effNum < 100 ? '#f87171' : '#34d399', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Value (Effect):</span>
-                      <strong>{realizedPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
-                    </div>
-                    
-                  </div>
-                )}
-                {myNhPrice > 0 && myOrderDiff !== null && (
-                  <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ opacity: 0.7, fontSize: '8px' }}>{nhOrder ? 'Order' : 'Market'}: </span>
-                      <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhPrice.toFixed(8)}</span>
-                    </div>
-                    <div><span style={{ opacity: 0.7, fontSize: '10px' }}>{nhOrder ? 'ROI' : 'VS Market'}: </span><span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>{parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%</span></div>
-                  </div>
-                )}
+            <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '4px', borderRadius: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Paid: <strong>{paidLabel}</strong></span>
               </div>
-            )}
-          
+              {currentPayValue > 0 && (
+                <div style={{ marginTop: '3px', paddingTop: '3px', borderTop: '1px solid rgba(16, 185, 129, 0.1)' }}>
+                  <div style={{ fontSize: '9px', opacity: 0.8, display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Spent (Time):</span>
+                    <strong>{currentPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
+                  </div>
+                  <div style={{ fontSize: '9px', color: effNum < 100 ? '#f87171' : '#34d399', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Value (Effect):</span>
+                    <strong>{realizedPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
+                  </div>
+                </div>
+              )}
+              {myNhPrice > 0 && myOrderDiff !== null && (
+                <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ opacity: 0.7, fontSize: '8px' }}>{nhOrder ? 'Order' : 'Market'}: </span>
+                    <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhPrice.toFixed(8)}</span>
+                  </div>
+                  <div><span style={{ opacity: 0.7, fontSize: '10px' }}>{nhOrder ? 'ROI' : 'VS Market'}: </span><span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>{parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%</span></div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {isRented && (
         <div style={{ background: 'rgba(0,0,0,0.1)', padding: '8px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          
+
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div style={{ opacity: 0.5, fontSize: '8px' }}>Efficiency</div><div style={{ fontSize: '11px', color: effectTextColor, fontWeight: 'bold' }}>{eff}%</div></div>
             <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ width: `${Math.min(100, effNum)}%`, height: '100%', background: effectTextColor }} /></div>
@@ -220,18 +232,23 @@ const MrrRigCard = ({
           <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
             <div style={{ width: `${timeProgress}%`, height: '100%', background: timeProgress > 90 ? '#f87171' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }} />
           </div>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>Target: 
-            <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', marginLeft: 'auto', fontSize: '11px' }}>{Math.max(0, targetHashrate).toFixed(2)} <small style={{ opacity: 0.5 }}>{hSuffix}</small></span></div>
-          </div>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-              <span style={{ opacity: 0.8 }}>Hashrate:</span>
-              {info?.isRental && <span style={{ opacity: 0.8 }}>Adv: <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', marginLeft: 'auto', fontSize: '11px' }}>{info.advertised}</span></span>}
+
+          <div style={{ background: 'rgba(0,0,0,0.15)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>Target:
+                <span style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 'bold', marginLeft: 'auto', fontSize: '11px' }}>{Math.max(0, targetHashrate).toFixed(2)} <small style={{ opacity: 0.5 }}>{hSuffix.toUpperCase()}</small></span></div>
             </div>
+            
             {info?.isRental ? (
               <div style={{ background: 'rgba(0,0,0,0.15)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ fontWeight: 'bold', fontSize: '10px', color: '#f1f5f9' }}>{info.average || '0 N/A'} <small style={{ fontSize: '8px', opacity: 0.5 }}>(AVG)</small></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
+              <span style={{ opacity: 0.8 }}>Hashrate:</span>
+              
+            </div>
+                <div style={{ fontWeight: 'bold', fontSize: '10px', color: '#f1f5f9', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{info.average || '0 N/A'} <small style={{ fontSize: '8px', opacity: 0.5 }}>(AVG)</small></span>
+                  
+                </div>
                 <div style={{ fontSize: '10px', opacity: 0.8, marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
                   <span><span style={{ color: '#60a5fa' }}>5m:</span> {info.last5m?.split(' ')[0] || '0'}</span>
                   <span><span style={{ color: '#a78bfa' }}>15m:</span> {info.last15m?.split(' ')[0] || '0'}</span>

@@ -373,7 +373,7 @@ export default function App() {
                 />
               </article>
             <article className="panel">
-              <HeroMinersCard onCall={handleMiningCall} />
+              <HeroMinersCard onCall={handleMiningCall} mrrClient={mrrClient} />
               <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h4 style={{ margin: 0, fontSize: '0.9rem' }}>Mining-Dutch</h4>

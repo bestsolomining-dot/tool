@@ -7,6 +7,8 @@ import { initMrrConfigs, mrrConfigs, initNonces, syncMrrClock, mrrApiCall } from
 import { registerRoutes } from './routes.js';
 import { corsMiddleware, logRequestMiddleware } from './utils.js';
 import { runRentalMonitor } from './monitor.js';
+import { authMiddleware, generateToken } from './auth.js';
+import authRoutes from './auth.js';
 
 export function createApp({ distPath }) {
   const app = express();
@@ -14,6 +16,13 @@ export function createApp({ distPath }) {
   app.use(express.json());
   app.use(corsMiddleware);
   app.use(logRequestMiddleware);
+
+  // Authentication routes
+  app.use('/api/auth', authRoutes);
+
+  // Protect all other /api routes
+  app.use('/api', authMiddleware);
+
   registerRoutes(app);
 
   if (distPath) {

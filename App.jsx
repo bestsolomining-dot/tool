@@ -9,6 +9,7 @@ import HashrateCalculator from './src/components/HashrateCalculator';
 import MrrPoolsManager from './src/components/MrrManager';
 import HeroMinersCard from './src/components/HeroMinersCard';
 import { RentedRigProvider } from './src/components/RentedRigContext';
+import CryptoRatePage from './src/components/CryptoRatePage';
 import './src/App.css';
 
 export default function App() {
@@ -37,6 +38,13 @@ export default function App() {
   const [mrrPoolData, setMrrPoolData] = useState(null);
   const [mrrPoolRigId, setMrrPoolRigId] = useState('');
   const [mrrPoolRentalId, setMrrPoolRentalId] = useState('');
+  const [view, setView] = useState(window.location.pathname === '/cryptorate' ? 'cryptorate' : 'dashboard');
+
+  useEffect(() => {
+    const handlePath = () => setView(window.location.pathname === '/cryptorate' ? 'cryptorate' : 'dashboard');
+    window.addEventListener('popstate', handlePath);
+    return () => window.removeEventListener('popstate', handlePath);
+  }, []);
 
   const apiCache = useRef(new Map());
   const inFlightRequests = useRef(new Map());
@@ -48,7 +56,11 @@ export default function App() {
     const isSilent = !!options.silent || !!options.background;
 
     // Normalize headers and body early for consistent cache key
-    const headers = { ...fetchOptions.headers };
+    const token = localStorage.getItem('token');
+    const headers = { 
+      ...fetchOptions.headers,
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
     let body = fetchOptions.body;
     if (body && typeof body === 'object' && !(body instanceof FormData)) {
       body = JSON.stringify(body);
@@ -291,6 +303,20 @@ export default function App() {
     }
   }, [handleMiningCall, mrrClient]);
 
+  // Simple path routing
+  if (view === 'cryptorate') {
+    return (
+      <div className="app-shell" style={{ background: '#0f172a', minHeight: '100vh' }}>
+        <div style={{ padding: '20px' }}>
+          <button className="btn-pro secondary" onClick={() => { window.history.pushState({}, '', '/'); setView('dashboard'); }}>
+            ← Back to Dashboard
+          </button>
+        </div>
+        <CryptoRatePage onCall={callApi} />
+      </div>
+    );
+  }
+
   return (
     <RentedRigProvider nhClient={nhOrderClient} callApi={callApi}>
       <div className="app-shell" style={{ padding: '0 20px 40px', maxWidth: '1600px', margin: '0 auto' }}>
@@ -331,7 +357,14 @@ export default function App() {
             minHeight: '200px'
           }}
         >
-          <Pools niceHashData={niceHashData} mrrClient={mrrClient} setMrrClient={setMrrClient} nhClient={nhPoolClient} setNhClient={setNhPoolClient} />
+          <Pools 
+            onCall={callApi}
+            niceHashData={niceHashData} 
+            mrrClient={mrrClient} 
+            setMrrClient={setMrrClient} 
+            nhClient={nhPoolClient} 
+            setNhClient={setNhPoolClient} 
+          />
         </section>
         <main className="dashboard">
           <section className="quick-actions">
@@ -354,6 +387,9 @@ export default function App() {
                 </div>
                 <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
                   Open Calculator
+                </button>
+                <button className="btn-pro secondary" onClick={() => { window.history.pushState({}, '', '/cryptorate'); setView('cryptorate'); }}>
+                  Live Rates
                 </button>
               </div>
             </div>

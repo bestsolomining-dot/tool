@@ -130,7 +130,11 @@ export default function App() {
     // Use relative API paths so development proxy and production same-origin routing both work.
     const apiBase = '';
 
-    const headers = { ...fetchOptions.headers };
+    const token = localStorage.getItem('token');
+    const headers = { 
+      ...fetchOptions.headers,
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
     let body = fetchOptions.body;
 
     // Automatically stringify object bodies and set the default Content-Type

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
-import CrytoRatePage from './CryptoRatePage';
+import CryptoRatePage from './CryptoRatePage';
 
 import { fetchMiningStats } from './miningStatsFetcher';
 
@@ -389,7 +389,7 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
         )}
 
       </div>
-              <CrytoRatePage onCall={onCall} />
+              <CryptoRatePage onCall={onCall} />
 
     </div>
   );

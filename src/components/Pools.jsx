@@ -3,7 +3,7 @@ import Modal from './Modal' // Import the new Modal component
 import { poolHelpers as ph, poolApi, apiFetch } from '../core/poolUtils'
 import { getAlgoDisplayName } from '../core/mapping'
 
-export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient, setNhClient }) {
+export default function Pools({ onCall, niceHashData, mrrClient, setMrrClient, nhClient, setNhClient }) {
   const [pools, setPools] = useState([])
   const [selected, setSelected] = useState(null)
   const [selectedId, setSelectedId] = useState('')
@@ -74,7 +74,10 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     setLoading(true);
     setError('');
     try {
-      const result = await apiFetch('/api/v2/extracted-pools');
+      // Use onCall to ensure authentication token is sent
+      const data = await onCall('/api/v2/extracted-pools', { silent: true });
+      const result = { ok: !!data, data };
+
       if (result.ok && Array.isArray(result.data)) {
         const mapped = result.data.map(p => {
           // Re-map handles to ensure they target correct NiceHash accounts (BT, PH, KIMLOAN, NHATLINH)
@@ -117,7 +120,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   const loadPools = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await poolApi.list(nhClient); // Pass nhClient to the API call
+      // Use onCall instead of direct poolApi which may lack credentials
+      const result = await onCall('/api/v2/pools', { query: { client: nhClient }, silent: true });
       const normalized = ph.normalizeList(result.data);
       setPools(normalized);
       return normalized;

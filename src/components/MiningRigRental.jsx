@@ -357,8 +357,8 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           }
 
           // RULE: Notice if newly rented (< 1h completed) and efficiency < 70%
-          const startupKey = `${rentalId}_startup_70`;
-          if (elapsedMs > 0 && elapsedMs < 3600000 && efficiency < 70 && efficiency > 0) {
+          const startupKey = `${rentalId}_startup_50`;
+          if (elapsedMs > 0 && elapsedMs < 3600000 && efficiency < 50 && efficiency > 0) {
             if (!notifiedAlerts.current.has(startupKey)) {
               tg.notifyStartupEfficiencyAlert(r, efficiency).then(() => {
                 notifiedAlerts.current.add(startupKey);

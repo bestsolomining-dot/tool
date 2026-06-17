@@ -96,10 +96,12 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       .map(rig => {
         const info = enrichedInfo[rig.id];
         // Provide fallbacks if enriched info is still loading
-        const algo = info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A';
-        const effNum = parseFloat(info?.percent || rig.hashrate?.average?.percent || rig.percent || 0);
+        const algo = info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A';        const rawEffNum = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
+        const effNum = Number.isFinite(parseFloat(rawEffNum)) ? parseFloat(rawEffNum) : 0; // Ensure effNum is a finite number
+
         const efficiency = effNum; // Pass as number to avoid .toFixed errors in template
-        const roi = 100 - effNum;   // Calculate as work deficit/surplus to match summary example
+        const rawRoi = 100 - effNum;   // Calculate as work deficit/surplus to match summary example
+        const roi = Number.isFinite(rawRoi) ? rawRoi : 0; // Ensure roi is a finite number
         const avg = parseFloat(info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash) || 0);
         const ads = parseFloat(info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0);
         const cur = parseFloat(info?.rawCur || rig.hashrate?.current || 0);

@@ -247,7 +247,7 @@ export default function HashCompletionCalculator({
                 {results.savingsBtc >= 0 ? 'Potential Savings' : 'Cost Overage'}
               </div>
               <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                {Math.abs(results.savingsPercent).toFixed(1)}%
+                {Math.abs(results.savingsPercent).toFixed(2)}%
               </div>
               <div style={{ fontSize: '9px', opacity: 0.7 }}>
                 {results.savingsBtc >= 0 ? 'Cheaper than NiceHash' : 'More expensive than NH'}

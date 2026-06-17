@@ -23,7 +23,7 @@ app.use(cors());
 async function scrapeHeroMinersGlobal() {
   // HeroMiners homepage uses JS to render tables. Scraping HTML with Cheerio often fails
   // because it only sees the initial placeholder row. The JSON API is much more reliable.
-  const res = await fetch('https://herominers.com/api/stats', { 
+  const res = await fetch('https://stats.herominers.com/api/stats', { 
     headers: { 'User-Agent': 'MiningTool/2.0' } 
   });
   
@@ -98,7 +98,7 @@ wss.on('connection', (ws, request) => {
   ws.on('message', async (data) => {
     try {
       const payload = JSON.parse(data.toString());
-      const { action, client, rigid, coin: payloadCoin } = payload;
+      const { action, client, rigid, coin: payloadCoin, requestId } = payload;
       let responseData = {};
 
       // Fetch global statistics for all HeroMiners pools
@@ -169,20 +169,48 @@ wss.on('connection', (ws, request) => {
 
       if (action === 'miningpooldutch' || action === 'all') {
         try {
-          const url = 'https://www.mining-dutch.nl/api.php?info=stats';
-          const mdRes = await fetch(url, { headers: { 'User-Agent': 'MiningTool/2.0' } });
-          if (mdRes.ok) {
-            const rawData = await mdRes.json();
-            // Transform Mining-Dutch nested dictionary into a list of algorithms
-            const algoStats = Object.entries(rawData || {}).map(([name, d]) => ({
-              algo: name,
-              hashrate: d.hashrate || '0 H/s',
-              miners: d.miners || 0,
-              workers: d.workers || 0,
-              difficulty: d.difficulty || '0'
-            }));
-            responseData.miningpooldutch = { success: true, algoStats, totalAlgos: algoStats.length };
+          // Proxy combined Mining-Dutch data to avoid frontend CORS
+          const [psRes, nmRes, apRes] = await Promise.all([
+            fetch('https://www.mining-dutch.nl/api/v1/public/poolstatus'),
+            fetch('https://www.mining-dutch.nl/api/v1/public/multiport/?method=nowmining'),
+            fetch('https://www.mining-dutch.nl/api/v1/public/multiport/?method=avgprofitability')
+          ]);
+
+          const poolStatus = psRes.ok ? await psRes.json() : {};
+          const nowMining = nmRes.ok ? await nmRes.json() : { success: false };
+          const avgProfit = apRes.ok ? await apRes.json() : { success: 0 };
+
+          const nowMap = {};
+          if (nowMining.success && Array.isArray(nowMining.result)) {
+            nowMining.result.forEach(item => { nowMap[item.algorithm] = parseFloat(item.profitability) || 0; });
           }
+
+          const avgMap = {};
+          if (avgProfit.success === 1 && avgProfit.result) {
+            Object.keys(avgProfit.result).forEach(algo => {
+              avgMap[algo] = parseFloat(avgProfit.result[algo]?.average) || 0;
+            });
+          }
+
+          const coinStats = Object.keys(poolStatus).map((algo) => {
+            const info = poolStatus[algo];
+            const btcPerDay = nowMap[algo] || avgMap[algo] || 0;
+            return {
+              algorithm: algo,
+              miners: parseInt(info.workers || 0, 10),
+              hashrate: parseFloat(info.hashrate || 0),
+              btcPerDay: btcPerDay,
+              usdPerDay: btcPerDay * 65000, // Fallback price
+            };
+          });
+
+          responseData.miningpooldutch = { 
+            success: true, 
+            coinStats, 
+            totalAlgos: coinStats.length,
+            // Backward compatibility for old UI if needed
+            algoStats: coinStats.map(c => ({ algo: c.algorithm, hashrate: c.hashrate, miners: c.miners }))
+          };
         } catch (err) {
           console.error(`[ws:miningdutch] ${err.message}`);
           responseData.miningpooldutch = { success: false, error: err.message };
@@ -205,6 +233,7 @@ wss.on('connection', (ws, request) => {
         success: isSuccess,
         error: errorMsg,
         action,
+        requestId, // Trả lại ID để frontend match request
         client,
         data: responseData
       }));

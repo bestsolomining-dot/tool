@@ -1,77 +1,129 @@
 // miningStatsFetcher.js
-/**
- *
- * @param {string} type - The type of stats to fetch ('herominers', 'miningpooldutch', 'all').
- * @param {string} client - The MRR client identifier (e.g., 'VN', 'BT').
- * @param {string|null} [rigId=null] - Optional rig ID for rig-specific fetches.
- * @returns {Promise<object>} A promise that resolves with the full successful response data
- *                            (e.g., { success: true, stats: {...}, pools: [...] })
- *                            or rejects with an error.
- */
 
+const MAX_ATTEMPTS = 5;
+const REQUEST_TIMEOUT = 20000;
+const BASE_DELAY = 1000;
 
-export async function fetchMiningStats(type, client, rigId = null, coin = null) {
-  const maxAttempts = 5;
-  const baseDelay = 1000;
+let sharedSocket = null;
+const pendingRequests = new Map(); // requestId -> { resolve, reject, timeoutId }
 
-  // We default to 'BT' for stats and pool config operations if the context is currently 'VN'.
+function getWsUrl() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = window.location.host;
+  const token = localStorage.getItem('token');
+  return `${protocol}//${host}/api/v2/mrr/fetch/ws${token ? `?token=${token}` : ''}`;
+}
+
+function generateRequestId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function initSocket() {
+  if (sharedSocket && (sharedSocket.readyState === WebSocket.OPEN || sharedSocket.readyState === WebSocket.CONNECTING)) {
+    return sharedSocket;
+  }
+
+  sharedSocket = new WebSocket(getWsUrl());
+
+  sharedSocket.onmessage = (event) => {
+    try {
+      const response = JSON.parse(event.data);
+      const { requestId, success, data, error, action } = response;
+
+      const pending = pendingRequests.get(requestId);
+      if (!pending) return;
+
+      clearTimeout(pending.timeoutId);
+      pendingRequests.delete(requestId);
+
+      if (success) {
+        // Trả về nhánh data cụ thể hoặc toàn bộ data tùy theo logic frontend
+        resolve(pending.resolve(data[action] || data));
+      } else {
+        pending.reject(new Error(error || `Request "${action}" failed`));
+      }
+    } catch (err) {
+      console.error('[MiningStats:WS] Parse error:', err);
+    }
+  };
+
+  sharedSocket.onerror = (err) => console.error('[MiningStats:WS] Socket error:', err);
+  
+  sharedSocket.onclose = () => {
+    // Reject tất cả request đang đợi khi socket đóng bất ngờ
+    pendingRequests.forEach((req, id) => {
+      clearTimeout(req.timeoutId);
+      req.reject(new Error('WebSocket connection closed'));
+    });
+    pendingRequests.clear();
+    sharedSocket = null;
+  };
+
+  return sharedSocket;
+}
+
+async function waitForSocket(socket) {
+  if (socket.readyState === WebSocket.OPEN) return;
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Socket connection timeout')), 10000);
+    socket.addEventListener('open', () => {
+      clearTimeout(timeout);
+      resolve();
+    }, { once: true });
+    socket.addEventListener('error', (e) => {
+      clearTimeout(timeout);
+      reject(e);
+    }, { once: true });
+  });
+}
+
+export async function fetchMiningStats(type, client, rigId = null, coin = null, customTimeout = REQUEST_TIMEOUT) {
   let targetClient = client;
-  if (targetClient === 'VN' && (type === 'miningpooldutch' || type === 'herominers' || type === 'herominers_global' || type === 'miningdutch_global' || type === 'all')) {
+  const globalActions = ['miningpooldutch', 'herominers', 'herominers_global', 'miningdutch_global', 'all'];
+  
+  if (targetClient === 'VN' && globalActions.includes(type)) {
     targetClient = 'BT';
   }
 
-  const attemptFetch = () => new Promise((resolve, reject) => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/v2/mrr/fetch/ws`;
-    
-    let socket;
+  const attempt = async (retryIndex) => {
+    const socket = initSocket();
+    await waitForSocket(socket);
+
+    return new Promise((resolve, reject) => {
+      const requestId = generateRequestId();
+      
+      const timeoutId = setTimeout(() => {
+        pendingRequests.delete(requestId);
+        reject(new Error(`[${type}] Timeout after ${customTimeout}ms`));
+      }, customTimeout);
+
+      pendingRequests.set(requestId, { resolve, reject, timeoutId });
+
+      socket.send(JSON.stringify({ 
+        requestId,
+        action: type, 
+        client: targetClient, 
+        rigid: rigId, 
+        coin 
+      }));
+    });
+  };
+
+  let lastError;
+  for (let i = 0; i < MAX_ATTEMPTS; i++) {
     try {
-      socket = new WebSocket(wsUrl);
+      if (i > 0) console.debug(`[MiningStats] Retry ${i}/${MAX_ATTEMPTS} for ${type}`);
+      return await attempt(i);
     } catch (err) {
-      return reject(new Error(`WebSocket error: ${err.message}`));
-    }
-
-    const timeout = setTimeout(() => {
-      if (socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
-        socket.close();
-      }
-      reject(new Error(`Fetch timed out for ${type} at ${wsUrl} after 15s`));
-    }, 15000);
-
-    socket.onopen = () => {
-      socket.send(JSON.stringify({ action: type, client: targetClient, rigid: rigId, coin }));
-    };
-
-    socket.onmessage = (event) => {
-      clearTimeout(timeout);
-      try {
-        const data = JSON.parse(event.data);
-        // The backend now returns a flatter 'data' object.
-        // We resolve the internal 'data' field if successful, otherwise the whole response (which contains error).
-        if (data.success) resolve(data.data);
-        else reject(new Error(data.error || "Mining stats request failed"));
-      } catch (err) {
-        reject(new Error("Parse error: " + err.message));
-      } finally {
-        socket.close();
-      }
-    };
-
-    socket.onerror = () => {
-      clearTimeout(timeout);
-      reject(new Error(`Connection failed for ${type} at ${wsUrl}. Check if the backend is running on port 3000 (or your configured PORT environment variable).`));
-      socket.close();
-    };
-  });
-
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      return await attemptFetch();
-    } catch (err) {
-      if (i === maxAttempts - 1) throw err;
-      await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, i)));
+      lastError = err;
+      // Nếu là lỗi logic (404, 401) từ backend, không cần retry
+      if (err.message.includes('not found') || err.message.includes('Unauthorized')) throw err;
+      
+      const jitter = Math.random() * 500;
+      const delay = BASE_DELAY * Math.pow(2, i) + jitter;
+      await new Promise(r => setTimeout(r, delay));
     }
   }
+
+  throw new Error(`Failed to fetch ${type} after ${MAX_ATTEMPTS} attempts. Last error: ${lastError.message}`);
 }

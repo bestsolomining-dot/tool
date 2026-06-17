@@ -139,9 +139,18 @@ export default function App() {
       }
     }
 
+    // Ensure body is stringified before key calculation to prevent [object Object] collisions
+    let body = fetchOptions.body;
+    if (body && typeof body === 'object' && !(body instanceof FormData)) {
+      body = JSON.stringify(body);
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    }
+
     // Deduplication check
-    const cacheKey = `${method}:${path}:${JSON.stringify(enrichedQuery)}:${fetchOptions.body || ''}`;
-    if (inFlightRequests.current.has(cacheKey)) return inFlightRequests.current.get(cacheKey);
+    const cacheKey = `${method}:${path}:${JSON.stringify(enrichedQuery)}:${body || ''}:${authToken || ''}`;
+    if (method === 'GET' && inFlightRequests.current.has(cacheKey)) {
+      return inFlightRequests.current.get(cacheKey);
+    }
 
     if (Object.keys(enrichedQuery).length > 0) {
       const params = new URLSearchParams();
@@ -161,12 +170,6 @@ export default function App() {
 
     const requestPromise = (async () => {
       try {
-        let body = fetchOptions.body;
-        if (body && typeof body === 'object' && !(body instanceof FormData)) {
-          body = JSON.stringify(body);
-          headers['Content-Type'] = headers['Content-Type'] || 'application/json';
-        }
-
         const res = await fetch(finalPath, {
           ...fetchOptions,
           method,

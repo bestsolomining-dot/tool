@@ -2,6 +2,7 @@ import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
+import * as cheerio from 'cheerio';
 import { createApp, initializeApp } from './server/app.js';
 import { verifyToken } from './server/auth.js';
 import { resolveNhClient, getNiceHashApp } from './server/nh.js';
@@ -13,6 +14,44 @@ const distPath = path.join(__dirname, 'dist', 'client');
 
 const app = createApp({ distPath });
 const PORT = process.env.PORT || 3000;
+
+// GET /api/v2/mining/herominers/global – scrape HeroMiners
+app.get('/api/v2/mining/herominers/global', async (req, res) => {
+  try {
+    const html = await fetch('https://herominers.com/', { headers: { 'User-Agent': 'MiningTool/2.0' } }).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    });
+
+    const $ = cheerio.load(html);
+    const coinStats = [];
+
+    $('table tbody tr').each((_, row) => {
+      const cols = $(row).find('td');
+      if (cols.length < 9) return; // safety
+
+      coinStats.push({
+        algorithm: $(cols[1]).text().trim(),
+        miners: parseInt($(cols[6]).text().trim().replace(/,/g, '')) || 0,
+        usdPerDay: 0, // not provided – you could add a price feed
+        btcPerDay: 0,  // not provided – you could add a price feed
+        coin: $(cols[0]).text().trim(),
+        networkHashrate: $(cols[2]).text().trim(),
+        poolHashrate: $(cols[3]).text().trim(),
+        blockHeight: $(cols[4]).text().trim(),
+        blocksFound: $(cols[5]).text().trim(),
+        workers: $(cols[7]).text().trim(),
+        totalPayments: $(cols[8]).text().trim(),
+      });
+    });
+
+    res.json({ success: true, data: { coinStats } });
+  } catch (err) {
+    console.error('HeroMiners scrape error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 const server = app.listen(PORT, (err) => {
   if (err) {
     console.error('[api] Failed to bind port ' + PORT + ':', err.message);

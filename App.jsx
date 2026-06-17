@@ -105,8 +105,8 @@ export default function App() {
     // Include token in cache key to differentiate cached responses for different users
     const cacheKey = `${method}:${path}:${cacheQueryPart}:${body || ''}:${token || ''}`;
 
-    // 1. Deduplication: If an identical request is already in flight, return its existing promise
-    if (inFlightRequests.current.has(cacheKey)) {
+    // 1. Deduplication: Only apply to GET requests to avoid swallowing mutations (POST/PUT/DELETE)
+    if (method === 'GET' && inFlightRequests.current.has(cacheKey)) {
       addDebugLog(`Deduplicating overlapping call: ${path}`, 'api');
       return inFlightRequests.current.get(cacheKey);
     }

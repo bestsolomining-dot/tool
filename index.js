@@ -15,37 +15,45 @@ const distPath = path.join(__dirname, 'dist', 'client');
 const app = createApp({ distPath });
 const PORT = process.env.PORT || 3000;
 
+async function scrapeHeroMinersGlobal() {
+  const html = await fetch('https://herominers.com/', { headers: { 'User-Agent': 'MiningTool/2.0' } }).then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.text();
+  });
+
+  const $ = cheerio.load(html);
+  const coinStats = [];
+
+  $('table tbody tr').each((_, row) => {
+    const cols = $(row).find('td');
+    if (cols.length < 9) return; 
+
+    coinStats.push({
+      algorithm: $(cols[1]).text().trim(),
+      miners: parseInt($(cols[6]).text().trim().replace(/,/g, '')) || 0,
+      usdPerDay: 0, 
+      btcPerDay: 0,  
+      coin: $(cols[0]).text().trim(),
+      networkHashrate: $(cols[2]).text().trim(),
+      poolHashrate: $(cols[3]).text().trim(),
+      blockHeight: $(cols[4]).text().trim(),
+      blocksFound: $(cols[5]).text().trim(),
+      workers: $(cols[7]).text().trim(),
+      totalPayments: $(cols[8]).text().trim(),
+    });
+  });
+
+  return { 
+    coinStats,
+    miners: coinStats.reduce((acc, c) => acc + (c.miners || 0), 0)
+  };
+}
+
 // GET /api/v2/mining/herominers/global – scrape HeroMiners
 app.get('/api/v2/mining/herominers/global', async (req, res) => {
   try {
-    const html = await fetch('https://herominers.com/', { headers: { 'User-Agent': 'MiningTool/2.0' } }).then(r => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.text();
-    });
-
-    const $ = cheerio.load(html);
-    const coinStats = [];
-
-    $('table tbody tr').each((_, row) => {
-      const cols = $(row).find('td');
-      if (cols.length < 9) return; // safety
-
-      coinStats.push({
-        algorithm: $(cols[1]).text().trim(),
-        miners: parseInt($(cols[6]).text().trim().replace(/,/g, '')) || 0,
-        usdPerDay: 0, // not provided – you could add a price feed
-        btcPerDay: 0,  // not provided – you could add a price feed
-        coin: $(cols[0]).text().trim(),
-        networkHashrate: $(cols[2]).text().trim(),
-        poolHashrate: $(cols[3]).text().trim(),
-        blockHeight: $(cols[4]).text().trim(),
-        blocksFound: $(cols[5]).text().trim(),
-        workers: $(cols[7]).text().trim(),
-        totalPayments: $(cols[8]).text().trim(),
-      });
-    });
-
-    res.json({ success: true, data: { coinStats } });
+    const data = await scrapeHeroMinersGlobal();
+    res.json({ success: true, data });
   } catch (err) {
     console.error('HeroMiners scrape error:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -85,61 +93,8 @@ wss.on('connection', (ws, request) => {
       // Fetch global statistics for all HeroMiners pools
       if (action === 'herominers_global' || action === 'all') {
         try {
-          const url = 'https://herominers.com/api/stats';
-          const hmRes = await fetch(url, { headers: { 'User-Agent': 'MiningTool/2.0' } });
-          if (hmRes.ok) {
-            const rawData = await hmRes.json();
-            
-            // Isolate metadata keys from the coin list
-            const { 
-              hashrates, 
-              miners, 
-              workers, 
-              payments, 
-              avgDifficulty, 
-              avgDifficulty24h, 
-              ...coinsOnly 
-            } = rawData;
-            
-            // Transform the raw dictionary into a normalized array for the frontend table
-            const coinStats = Object.entries(coinsOnly)
-              .filter(([id, details]) => details && typeof details === 'object' && (details.algorithm || details.algo))
-              .map(([id, details]) => {
-                const netHash = parseFloat(String(details.network_hashrate || details.networkHashrate || 0).replace(/[^0-9.]/g, ''));
-                const poolHash = parseFloat(String(details.pool_hashrate || details.poolHashrate || 0).replace(/[^0-9.]/g, ''));
-                const share = (netHash > 0) ? ((poolHash / netHash) * 100).toFixed(2) : '0.00';
-
-                return {
-                  id,
-                  name: details.name || id,
-                  coin: (details.coin || id).toUpperCase(),
-                  algorithm: details.algorithm || details.algo || details.miningAlgorithm || 'N/A',
-                  networkHashrate: details.network_hashrate || details.networkHashrate || '0',
-                  poolHashrate: details.pool_hashrate || details.poolHashrate || '0',
-                  poolShare: share,
-                  blockHeight: details.height || details.blockHeight || 0,
-                  blocksFound: details.blocks_found || details.blocksFound || details.blocksFound24h || 0,
-                  miners: details.miners || 0,
-                  workers: details.workers || 0,
-                  usdPerDay: details.profit_usd || details.usdPerDay || '0.00',
-                  btcPerDay: details.profit_btc || details.btcPerDay || '0.00000000',
-                  coinsPerDay: details.profit_coins || details.coinsPerDay || '0.00',
-                  totalPayments: details.payments || details.total_payments || details.totalPayments || 0
-                };
-              });
-
-            responseData.herominers_global = {
-              success: true,
-              coinStats,
-              miners: miners || coinStats.reduce((acc, c) => acc + (Number(c.miners) || 0), 0),
-              workers: workers || coinStats.reduce((acc, c) => acc + (Number(c.workers) || 0), 0),
-              globalHashrates: hashrates || {},
-              avgDifficulty: avgDifficulty || '0',
-              avgDifficulty24h: avgDifficulty24h || '0'
-            };
-          } else {
-            throw new Error(`HeroMiners API returned ${hmRes.status}`);
-          }
+          const scraped = await scrapeHeroMinersGlobal();
+          responseData.herominers_global = { success: true, ...scraped };
         } catch (err) {
           console.error(`[ws:herominers_global] ${err.message}`);
           responseData.herominers_global = { success: false, error: err.message };

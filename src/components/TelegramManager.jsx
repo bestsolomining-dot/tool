@@ -145,6 +145,7 @@ export default function TelegramManager({ onCall, mrrClient }) {
   const { sendTelegram } = useTelegram(onCall, mrrClient);
   const [isMonitorDbOpen, setIsMonitorDbOpen] = useState(false);
   const [isTelegramOn, setIsTelegramOn] = useState(true);
+  const [isToggling, setIsToggling] = useState(false);
   const [health, setHealth] = useState(null);
 
   const previewTestMessage = `⚡️ Test Connection\nTime: ${new Date().toLocaleTimeString()}\nClient: ${mrrClient}`;
@@ -173,14 +174,23 @@ export default function TelegramManager({ onCall, mrrClient }) {
   }, [onCall]);
 
   const handleToggle = async () => {
+    if (isToggling) return;
+    setIsToggling(true);
+
     const target = !isTelegramOn;
-    const res = await onCall('/api/v2/notify/telegram/status', {
-      method: 'POST',
-      body: { enabled: target },
-      silent: true
-    });
-    if (res && typeof res.enabled === 'boolean') {
-      setIsTelegramOn(res.enabled);
+    try {
+      const res = await onCall('/api/v2/notify/telegram/status', {
+        method: 'POST',
+        body: { enabled: target },
+        silent: true
+      });
+      if (res && typeof res.enabled === 'boolean') {
+        setIsTelegramOn(res.enabled);
+      }
+    } catch (err) {
+      console.error('Telegram toggle failed:', err);
+    } finally {
+      setIsToggling(false);
     }
   };
 
@@ -204,15 +214,15 @@ export default function TelegramManager({ onCall, mrrClient }) {
           onClick={handleToggle}
           title={health?.configured === false ? 'Telegram not configured in .env' : (isTelegramOn ? 'Notifications are ON' : 'Notifications are OFF')}
           style={{
-            background: !isConfigured ? 'rgba(100, 116, 139, 0.1)' : (isTelegramOn ? 'rgba(16, 185, 129, 0.14)' : 'rgba(239, 68, 68, 0.12)'),
-            borderColor: !isConfigured ? '#64748b' : (isTelegramOn ? '#10b981' : '#f87171'),
-            color: !isConfigured ? '#64748b' : (isTelegramOn ? '#10b981' : '#f87171'),
+            background: !isConfigured || isToggling ? 'rgba(100, 116, 139, 0.1)' : (isTelegramOn ? 'rgba(16, 185, 129, 0.14)' : 'rgba(239, 68, 68, 0.12)'),
+            borderColor: !isConfigured || isToggling ? '#64748b' : (isTelegramOn ? '#10b981' : '#f87171'),
+            color: !isConfigured || isToggling ? '#64748b' : (isTelegramOn ? '#10b981' : '#f87171'),
             minWidth: '95px',
-            opacity: !isConfigured ? 0.55 : 1,
+            opacity: !isConfigured || isToggling ? 0.55 : 1,
           }}
-          disabled={!isConfigured}
+          disabled={!isConfigured || isToggling}
         >
-          {isTelegramOn ? '🔔 ON' : '🔕 OFF'}
+          {isToggling ? '⏳ ...' : (isTelegramOn ? '🔔 ON' : '🔕 OFF')}
         </button>
       </div>
       <div style={{ display: 'grid', gap: '6px', fontSize: '12px', opacity: 0.8 }}>

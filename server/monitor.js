@@ -561,8 +561,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         }
 
         // Startup alert (first hour, efficiency <70%)
-        if (elapsedMs > 0 && elapsedMs < 3600000 && efficiency < 70) {
-          const startupKey = `${r.id}_startup_70`;
+        if (elapsedMs > 0 && elapsedMs < 3600000 && efficiency < 50) {
+          const startupKey = `${r.id}_startup_50`;
           const lastAlert = lastAlertTimes.get(startupKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
             const msg = TelegramTemplates.startup(acct, r, info, efficiency, displayTarget, resolveRentalAlgo(r, info));

@@ -40,116 +40,116 @@ export const TelegramTemplates = {
 
   activeRentalLine: (perfEmoji, algo, name, remaining, efficiency, roi, avg, ads, cur, target, extra, client, paid) => {
     return `${perfEmoji} <b>${escapeHtml(algo)}</b>` + ` 🔀 ` + `<b>${escapeHtml(client)}</b> | ${escapeHtml(name)}\n` +
-           `⏱ Remaining: ${remaining}\n\n` +
-       
-           `⚡ Cur: <b>${cur}</b> | ` +
-           `📊 Eff: <code>${typeof efficiency === 'number' ? efficiency.toFixed(2) : efficiency}%</code>\n` +
-           `📈 Avg: <code>${avg}</code> | Ads: <code>${ads}</code>\n\n` +
-           
-           `💰 Paid: <b>${paid}</b>\n` +
-           `${extra}${divider}\n`;
+      `⏱ Remaining: ${remaining}\n\n` +
+      `⚡ Cur: <b>${cur}</b> | ` +
+      `📊 Eff: <code>${typeof efficiency === 'number' ? efficiency.toFixed(2) : efficiency}%</code>\n` +
+      `📈 Avg: <code>${avg}</code> | Ads: <code>${ads}</code>\n\n` +
+      `💰 Paid: <b>${paid}</b>\n` +
+      `${extra}${divider}\n`;
   },
 
   rentedNotice: (type, r, info, acct, diff, rem, algo = 'N/A') => {
     return `🚀 <b>[${type}]</b>\n` +
-           `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
-           `${divider}\n` +
-           `<b>Rig:</b> ${formatRig(r)}\n` +
-           `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
-           `<b>Time:</b> ${formatTimeRange(info.startTime, info.endTime)}\n` +
-           `${divider}\n` +
-           `<b>Paid:</b> <code>${info.price.paid} ${info.price.currency}</code>\n` +
-           `<b>Efficiency:</b> <b>${info.percent}%</b> (Diff: ${diff}%)\n` +
-           `<b>Remaining:</b> ${rem}\n` +
-           `<b>Target to 100%:</b> ${info.targetHashrate || 'N/A'}`;
+      `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
+      `${divider}\n` +
+      `<b>Rig:</b> ${formatRig(r)}\n` +
+      `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
+      `<b>Time:</b> ${formatTimeRange(info.startTime, info.endTime)}\n` +
+      `${divider}\n` +
+      `<b>Paid:</b> <code>${info.price.paid} ${info.price.currency}</code>\n` +
+      `<b>Efficiency:</b> <b>${info.percent}%</b> (Diff: ${diff}%)\n` +
+      `<b>Remaining:</b> ${rem}\n` +
+      `<b>Target to 100%:</b> ${info.targetHashrate || 'N/A'}`;
   },
 
   zeroHashrate: (acct, r, info, algo = 'N/A') => {
     return `⚠️ <b>[ZERO HASHRATE]</b>\n` +
-           `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
-           `${divider}\n` +
-           `<b>Rig:</b> ${formatRig(r)}\n` +
-           `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
-           `<b>Status:</b> 0 H/s (Target: ${info.targetHashrate})\n` +
-           `<b>Rental:</b> <code>${r.id}</code>`;
+      `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
+      `${divider}\n` +
+      `<b>Rig:</b> ${formatRig(r)}\n` +
+      `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
+      `<b>Status:</b> 0 H/s (Target: ${info.targetHashrate})\n` +
+      `<b>Rental:</b> <code>${r.id}</code>`;
   },
 
   efficiency: (acct, r, info, eff, target, algo = 'N/A') => {
     return `📉 <b>[LOW EFFICIENCY]</b>\n` +
-           `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
-           `${divider}\n` +
-           `<b>Rig:</b> ${formatRig(r)}\n` +
-           `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
-           `<b>Efficiency:</b> <b>${eff}%</b>\n` +
-           `<b>Average:</b> ${info.niceAverageHashrate}\n` +
-           `<b>Target to 100%:</b> ${target.toFixed(2)} ${info.hashrate.suffix || ''}`;
+      `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
+      `${divider}\n` +
+      `<b>Rig:</b> ${formatRig(r)}\n` +
+      `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
+      `<b>Efficiency:</b> <b>${eff}%</b>\n` +
+      `<b>Average:</b> ${info.niceAverageHashrate}\n` +
+      `<b>Target to 100%:</b> ${target.toFixed(2)} ${info.hashrate.suffix || ''}`;
   },
 
   startup: (acct, r, info, eff, target, algo = 'N/A') => {
     return `⏱ <b>[STARTUP ALERT]</b>\n` +
-           `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
-           `${divider}\n` +
-           `<b>Rig:</b> ${formatRig(r)}\n` +
-           `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
-           `<b>Initial Eff:</b> ${eff}%\n` +
-           `<b>Target:</b> ${target.toFixed(2)} ${info.hashrate.suffix || ''}`;
+      `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
+      `${divider}\n` +
+      `<b>Rig:</b> ${formatRig(r)}\n` +
+      `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
+      `<b>Initial Eff:</b> ${eff}%\n` +
+      `<b>Time:</b> ${formatTimeRange(info.startTime)}\n` +
+      `<b>Target:</b> ${target.toFixed(2)} ${info.hashrate.suffix || ''}`;
   },
 
   completionAlert: (acct, r, info, eff, target, algo = 'N/A') => {
     return `🏁 <b>[ALMOST COMPLETE]</b>\n` +
-           `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
-           `${divider}\n` +
-           `<b>Rig:</b> ${formatRig(r)}\n` +
-           `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
-           `<b>Final Eff:</b> ${eff}%\n` +
-           `<b>Target:</b> ${target.toFixed(2)}`;
+      `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
+      `<b>Rig:</b> ${formatRig(r)}\n` +
+      `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
+      `${divider}\n` +
+      `<b>Time:</b> ${formatTimeRange(info.startTime)}\n` +
+      `<b>Final Eff:</b> ${eff}%\n` +
+      `<b>Target:</b> ${target.toFixed(2)}`;
   },
 
   completionSuccess: (acct, r, avg, suffix, eff, paid, algo = 'N/A') => {
     return `✅ <b>[RENTAL SUCCESS]</b>\n` +
-           `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
-           `${divider}\n` +
-           `<b>Rig:</b> ${formatRig(r)}\n` +
-           `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
-           `<b>Avg Speed:</b> ${avg} ${suffix}\n` +
-           `<b>Final Efficiency:</b> <b>${eff}%</b>\n` +
-           `<b>Paid:</b> ${paid}`;
+      `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
+      `${divider}\n` +
+      `<b>Rig:</b> ${formatRig(r)}\n` +
+      `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
+      `<b>Avg Speed:</b> ${avg} ${suffix}\n` +
+      `<b>Final Efficiency:</b> <b>${eff}%</b>\n` +
+      `<b>Paid:</b> ${paid}`;
   },
 
   perfectEfficiency: (acct, r, eff, paid, remainingMs, algo = 'N/A') => {
     const remH = Math.floor(remainingMs / 3600000);
     return `💯 <b>[PERFECT 100%]</b>\n` +
-           `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
-           `${divider}\n` +
-           `<b>Rig:</b> ${formatRig(r)}\n` +
-           `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
-           `<b>Status:</b> Running perfectly at ${eff}%\n` +
-           `<b>Remaining:</b> ~${remH}h\n` +
-           `<b>Cost:</b> ${paid}`;
+      `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
+      `${divider}\n` +
+      `<b>Rig:</b> ${formatRig(r)}\n` +
+      `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
+      `<b>Status:</b> Running perfectly at ${eff}%\n` +
+      `<b>Remaining:</b> ~${remH}h\n` +
+      `<b>Cost:</b> ${paid}`;
   },
 
   finished: (r, info, algo = 'N/A') => {
     return `🏁 <b>[RENTAL FINISHED]</b>\n` +
-           `<b>Account:</b> <code>${formatAccount(r.client)}</code>\n` +
-           `${divider}\n` +
-           `<b>Rig:</b> ${formatRig(r)}\n` +
-           `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
-           `<b>Final Avg:</b> ${info.niceAverageHashrate}\n` +
-           `<b>Final Eff:</b> <b>${info.percent}%</b>\n` +
-           `<b>Total Paid:</b> ${info.price.paid} ${info.price.currency}`;
+      `<b>Account:</b> <code>${formatAccount(r.client)}</code>\n` +
+      `${divider}\n` +
+      `<b>Rig:</b> ${formatRig(r)}\n` +
+      `<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n` +
+      `<b>Final Avg:</b> ${info.niceAverageHashrate}\n` +
+      `<b>Final Eff:</b> <b>${info.percent}%</b>\n` +
+      `<b>Total Paid:</b> ${info.price.paid} ${info.price.currency}`;
   },
 
   heartbeatSummary: (barChart, online, rented, offline, disabled, total, lines, time, rented24h, algos) => {
     return `📊 <b>SUMMARY</b> [${time}]\n` +
-           `${divider}\n` +
-           `🟢 Online: <b>${online}</b> / Renting: <b>${rented}</b>\n` +
-           `🔴 Offline: <b>${offline}</b> / Disabled: <b>${disabled}</b>\n` +
-           `📦 Total Rigs: <b>${total}</b>\n` +
-           `🆕 Rented (24h): <b>${rented24h}</b>\n` +
-           `${divider}\n` +
-           `<b>Algorithms Online:</b>\n${algos.join('\n')}\n` +
-           `${divider}\n` +
-           `<b>Active Rentals Detail:</b>\n\n<code>${lines.join('')}</code>`;
+      `${divider}\n` +
+      `🟢 Online: <b>${online}</b> / Renting: <b>${rented}</b>\n` +
+      `🔴 Offline: <b>${offline}</b> / Disabled: <b>${disabled}</b>\n` +
+      `📦 Total Rigs: <b>${total}</b>\n` +
+      `🆕 Rented (24h): <b>${rented24h}</b>\n` +
+      `${divider}\n` +
+      `<b>Algorithms Online:</b>\n${algos.join('\n')}\n` +
+      `${divider}\n` +
+      `<b>Active Rentals Detail:</b>\n\n<code>${lines.join('')}</code>`;
   },
 
   rigStatusWarning: (acct, rig, algo = 'N/A') => `⚠️ <b>[RIG WARNING]</b>\n<b>MRR:</b> ${formatAccount(acct)}\n<b>Rig:</b> ${formatRig(rig)}\n<b>Algo:</b> <code>${escapeHtml(algo)}</code>\n<b>Status:</b> <code>${rig.status?.status || rig.status}</code>`,

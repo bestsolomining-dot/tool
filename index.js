@@ -43,8 +43,8 @@ wss.on('connection', (ws, request) => {
       const { action, client, rigid, coin: payloadCoin } = payload;
       let responseData = {};
 
-      // New action to fetch global statistics for all HeroMiners pools
-      if (action === 'herominers_global') {
+      // Fetch global statistics for all HeroMiners pools
+      if (action === 'herominers_global' || action === 'all') {
         try {
           const url = 'https://herominers.com/api/stats';
           const hmRes = await fetch(url, { headers: { 'User-Agent': 'MiningTool/2.0' } });
@@ -74,18 +74,18 @@ wss.on('connection', (ws, request) => {
                   id,
                   name: details.name || id,
                   coin: (details.coin || id).toUpperCase(),
-                  algorithm: details.algorithm || details.algo || 'N/A',
+                  algorithm: details.algorithm || details.algo || details.miningAlgorithm || 'N/A',
                   networkHashrate: details.network_hashrate || details.networkHashrate || '0',
                   poolHashrate: details.pool_hashrate || details.poolHashrate || '0',
                   poolShare: share,
                   blockHeight: details.height || details.blockHeight || 0,
-                  blocksFound: details.blocks_found || details.blocksFound || 0,
+                  blocksFound: details.blocks_found || details.blocksFound || details.blocksFound24h || 0,
                   miners: details.miners || 0,
                   workers: details.workers || 0,
                   usdPerDay: details.profit_usd || details.usdPerDay || '0.00',
                   btcPerDay: details.profit_btc || details.btcPerDay || '0.00000000',
                   coinsPerDay: details.profit_coins || details.coinsPerDay || '0.00',
-                  totalPayments: details.payments || details.total_payments || 0
+                  totalPayments: details.payments || details.total_payments || details.totalPayments || 0
                 };
               });
 
@@ -163,20 +163,35 @@ wss.on('connection', (ws, request) => {
       }
 
       if (action === 'miningpooldutch' || action === 'all') {
-        responseData.miningpooldutch = {
-          success: true,
-          stats: { hashrate: 0, balance: 0 },
-          workers: []
-        };
+        try {
+          const url = 'https://www.mining-dutch.nl/api.php?info=stats';
+          const mdRes = await fetch(url, { headers: { 'User-Agent': 'MiningTool/2.0' } });
+          if (mdRes.ok) {
+            const rawData = await mdRes.json();
+            // Transform Mining-Dutch nested dictionary into a list of algorithms
+            const algoStats = Object.entries(rawData || {}).map(([name, d]) => ({
+              algo: name,
+              hashrate: d.hashrate || '0 H/s',
+              miners: d.miners || 0,
+              workers: d.workers || 0,
+              difficulty: d.difficulty || '0'
+            }));
+            responseData.miningpooldutch = { success: true, algoStats, totalAlgos: algoStats.length };
+          }
+        } catch (err) {
+          console.error(`[ws:miningdutch] ${err.message}`);
+          responseData.miningpooldutch = { success: false, error: err.message };
+        }
       }
 
       // Determine overall success. If "all", we succeed if at least one part exists.
       // If specific action, we succeed only if that specific action succeeded.
-      const isSuccess = action === 'all' 
+      const isSuccess = action === 'all'
         ? (Object.keys(responseData).length > 0) 
-        : (responseData[action] && responseData[action].success !== false && (responseData[action].coinStats || responseData[action].stats));
+        : (responseData[action] && responseData[action].success !== false &&
+           (responseData[action].coinStats?.length > 0 || responseData[action].stats || responseData[action].algoStats?.length > 0));
       
-      const errorMsg = !isSuccess ? (responseData[action]?.error || `No data found for "${action}". Check if mining is active.`) : null;
+      const errorMsg = !isSuccess ? (responseData[action]?.error || `No data found for "${action}". Check if mining is active or API is reachable.`) : null;
 
       // IMPORTANT: We always send the full responseData object.
       // This ensures the frontend always finds data.herominers or data.miningpooldutch

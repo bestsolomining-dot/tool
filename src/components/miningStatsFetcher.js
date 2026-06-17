@@ -1,6 +1,4 @@
 /**
- * Fetches live statistics from mining pools (HeroMiners, MiningPoolDutch)
- * using a WebSocket connection to the backend API.
  *
  * @param {string} type - The type of stats to fetch ('herominers', 'miningpooldutch', 'all').
  * @param {string} client - The MRR client identifier (e.g., 'VN', 'BT').
@@ -13,18 +11,15 @@ export async function fetchMiningStats(type, client, rigId = null, coin = null) 
   const maxAttempts = 5;
   const baseDelay = 1000;
 
-  // Sanitize client: 'VN' is an aggregate identifier and lacks direct API keys on the backend.
   // We default to 'BT' for stats and pool config operations if the context is currently 'VN'.
   let targetClient = client;
-  if (targetClient === 'VN' && (type === 'miningpooldutch' || type === 'herominers' || type === 'herominers_global' || type === 'all')) {
+  if (targetClient === 'VN' && (type === 'miningpooldutch' || type === 'herominers' || type === 'herominers_global' || type === 'miningdutch_global' || type === 'all')) {
     targetClient = 'BT';
   }
 
   const attemptFetch = () => new Promise((resolve, reject) => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
-    // Use the current host to allow the Vite proxy to handle the upgrade request.
-    // Ensure your vite.config.js has 'ws: true' in the proxy settings.
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/api/v2/mrr/fetch/ws`;
     
@@ -51,8 +46,8 @@ export async function fetchMiningStats(type, client, rigId = null, coin = null) 
       try {
         const data = JSON.parse(event.data);
         // The backend now returns a flatter 'data' object.
-        // We resolve the internal data to make it easier for components to consume.
-        if (data.success) resolve(data.data || data);
+        // We resolve the internal 'data' field if successful, otherwise the whole response (which contains error).
+        if (data.success) resolve(data.data);
         else reject(new Error(data.error || "Mining stats request failed"));
       } catch (err) {
         reject(new Error("Parse error: " + err.message));

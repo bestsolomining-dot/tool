@@ -93,8 +93,9 @@ const MrrRigCard = ({
   const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid);
   const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || ''; // Keep this
   const paidLabel = paidAmount > 0 && paidCurrency ? `${paidAmount.toFixed(8)} ${paidCurrency}` : null;
-  const isSha256 = algoName.toUpperCase().includes('SHA256') || algoName.toUpperCase().includes('BTC');
-  const isScrypt = algoName.toUpperCase().includes('SCRYPT') || algoName.toUpperCase().includes('LTC');
+  const isSha256 = algoName.toUpperCase().includes('SHA256');
+  const isScrypt = algoName.toUpperCase().includes('SCRYPT');
+  const isSha256ab = algoName.toUpperCase().includes('SHA256AB');
   // For SHA256/Scrypt, MRR prices are effectively per PH, even if the unit string says TH.
   const mrrUnit = (isSha256 || isScrypt) ? 'PH' : (listBtcData.unit || rig.price_unit || rig.hashrate_unit || 'TH');
 
@@ -103,10 +104,10 @@ const MrrRigCard = ({
   // Fallback to market price (nhData) if no active user order is found
   const myNhPrice = nhOrder ? parseFloat(nhOrder.price) : parseFloat(nhData || 0);
   const nhPriceWithFee = myNhPrice > 0 ? (nhOrder?.add_fee ? parseFloat(nhOrder.add_fee) : (myNhPrice * 1.04)) : 0;
-  const isRandomX = algoName.toLowerCase().includes('RANDOMX');
+  const isRandomX = algoName.toUpperCase().includes('RANDOMX');
   const isKawPow = algoName.toUpperCase().includes('KAWPOW');
   // NiceHash standard market units: SHA256 and Scrypt are PH. RandomX is MH. KawPow is TH. Others GH.
-  const myNhUnit = nhOrder?.marketUnit || (isSha256 || isScrypt ? 'PH' : (isRandomX ? 'MH' : (isKawPow ? 'TH' : 'GH')));
+  const myNhUnit = nhOrder?.marketUnit || (isSha256 || isSha256ab ? 'PH' : (isRandomX ? 'MH' : (isKawPow ? 'TH' : 'GH')));
 
   // ROI Logic: Only show price-based ROI if we have valid price data from NiceHash
   const myOrderDiffRaw = (myNhPrice > 0 && mrrComparePriceValue > 0) ? calculatePriceComparison(

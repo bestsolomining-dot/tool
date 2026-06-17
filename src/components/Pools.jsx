@@ -3,8 +3,8 @@ import Modal from './Modal' // Import the new Modal component
 import { poolHelpers as ph, poolApi, apiFetch } from '../core/poolUtils'
 import { getAlgoDisplayName } from '../core/mapping'
 
-export default function Pools({ onCall, niceHashData, mrrClient, setMrrClient, nhClient, setNhClient }) {
-  const [pools, setPools] = useState([])
+export default function Pools({ onCall, poolData, niceHashData, mrrClient, setMrrClient, nhClient, setNhClient }) {
+  const [pools, setPools] = useState(() => ph.normalizeList(poolData || []))
   const [selected, setSelected] = useState(null)
   const [selectedId, setSelectedId] = useState('')
   const [response, setResponse] = useState(null)
@@ -119,10 +119,19 @@ export default function Pools({ onCall, niceHashData, mrrClient, setMrrClient, n
   // Function to load NiceHash pools for the selected client
   const loadPools = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       // Use onCall instead of direct poolApi which may lack credentials
-      const result = await onCall('/api/v2/pools', { query: { client: nhClient }, silent: true });
-      const normalized = ph.normalizeList(result.data);
+      const result = await onCall('/api/v2/pools', { 
+        query: { client: nhClient }, 
+        silent: true,
+        section: 'pools' 
+      });
+      
+      // Robustly extract the pool list from the result envelope or direct array
+      const rawData = result?.data || (Array.isArray(result) ? result : (result?.list || []));
+      const normalized = ph.normalizeList(rawData);
+      
       setPools(normalized);
       return normalized;
     } catch (err) {
@@ -132,12 +141,19 @@ export default function Pools({ onCall, niceHashData, mrrClient, setMrrClient, n
     } finally {
       setLoading(false);
     }
-  }, [nhClient]);
+  }, [nhClient, onCall]);
 
   // Initialize pools on mount
   useEffect(() => {
     loadPools();
   }, [loadPools]); // Re-fetch pools when loadPools (or nhClient) changes
+
+  // Keep local pools state in sync with parent poolData prop
+  useEffect(() => {
+    if (poolData) {
+      setPools(ph.normalizeList(poolData));
+    }
+  }, [poolData]);
 
   // Update the elapsed time counter every second while automation is running
   useEffect(() => {

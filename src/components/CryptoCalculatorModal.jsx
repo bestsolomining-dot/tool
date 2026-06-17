@@ -34,7 +34,14 @@ export function CryptoCalculatorModal({ isOpen, onClose, onCall }) {
 
       const data = res?.data || (res && typeof res === 'object' && !res.error ? res : null);
 
-      if (data && (data.bitcoin || data.BTC || data.btc)) {
+      // Check if the data contains any of our tracked coins
+      const hasValidPriceData = data && COINS.some(coin => 
+        data[coin.id] || 
+        data[coin.symbol] || 
+        data[coin.symbol.toLowerCase()]
+      );
+
+      if (data && hasValidPriceData) {
         setPrices(data);
       } else {
         const isSystemConfig = data && data.environments && data.default_client;

@@ -148,7 +148,6 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-    console.log(`[NiceHash] Sorted orders (memo):`, sortedOrders);
   }, [orders, sortConfig]);
 
   // Find the selected order in the list to access client info
@@ -166,6 +165,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     // We check if we are currently mounted and have a client before fetching
     if (nhClient && typeof onCall === 'function') {
       fetchOrders();
+      fetchAccounting();
       refreshSummary(); // Ensure the active orders summary is also fetched
     }
   }, [nhClient, fetchOrders, fetchAccounting, onCall, refreshSummary]);

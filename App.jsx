@@ -215,7 +215,12 @@ export default function App() {
             setResponseModalOpen(true);
           }
           // Always attempt to update state based on path if section is missing
-          updateSectionState(section || ((path.includes('/mining') || path.includes('/hashpower')) ? 'mining' : ''), data);
+          const detectedSection = section || (
+            path.includes('/pools') ? 'pools' :
+            (path.includes('/mining') || path.includes('/hashpower')) ? 'mining' :
+            path.includes('/rigs') ? 'rigs' : ''
+          );
+          updateSectionState(detectedSection, data);
         } else if (!isSilent) {
           const errorMsg =
             typeof data === 'string' && data.length > 0
@@ -422,6 +427,7 @@ export default function App() {
         >
           <Pools 
             onCall={callApi}
+            poolData={poolData}
             niceHashData={niceHashData} 
             mrrClient={mrrClient} 
             setMrrClient={setMrrClient} 

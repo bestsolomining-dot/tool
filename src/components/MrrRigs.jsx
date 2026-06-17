@@ -97,12 +97,19 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         const info = enrichedInfo[rig.id];
         // Provide fallbacks if enriched info is still loading
         const algo = info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A';
-        const effNum = parseFloat(info?.percent || rig.hashrate?.average?.percent || rig.percent || 0);
+        const rawEffNum = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
+        const effNum = Number.isFinite(parseFloat(rawEffNum)) ? parseFloat(rawEffNum) : 0;
+
         const efficiency = effNum; // Pass as number to avoid .toFixed errors in template
-        const roi = 100 - effNum;   // Calculate as work deficit/surplus to match summary example
-        const avg = parseFloat(info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash) || 0);
-        const ads = parseFloat(info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0);
-        const cur = parseFloat(info?.rawCur || rig.hashrate?.current || 0);
+        const rawRoi = 100 - effNum;
+        const roi = Number.isFinite(rawRoi) ? rawRoi : 0;
+
+        const rawAvg = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash) || 0;
+        const avg = Number.isFinite(parseFloat(rawAvg)) ? parseFloat(rawAvg) : 0;
+        const rawAds = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0;
+        const ads = Number.isFinite(parseFloat(rawAds)) ? parseFloat(rawAds) : 0;
+        const rawCur = info?.rawCur || rig.hashrate?.current || 0;
+        const cur = Number.isFinite(parseFloat(rawCur)) ? parseFloat(rawCur) : 0;
 
         // Improved target hashrate calculation with manual fallback for summary accuracy
         const startT = rig.start ? new Date(rig.start + (String(rig.start).endsWith('UTC') ? '' : ' UTC')).getTime() : 0;
@@ -110,8 +117,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         const totalMs = endT - startT;
         const remainingMs = Math.max(0, endT - Date.now());
         const elapsedMs = Math.max(0, Math.min(Date.now() - startT, totalMs));
-        const calcTarget = (remainingMs > 0 && totalMs > 0) ? ((ads * (totalMs / 1000) - avg * (elapsedMs / 1000)) / (remainingMs / 1000)) : 0;
-        const target = parseFloat(info?.targetHashrate || calcTarget || 0);
+        const rawCalcTarget = (remainingMs > 0 && totalMs > 0) ? ((ads * (totalMs / 1000) - avg * (elapsedMs / 1000)) / (remainingMs / 1000)) : 0;
+        const rawTarget = info?.targetHashrate || rawCalcTarget || 0;
+        const target = Number.isFinite(parseFloat(rawTarget)) ? parseFloat(rawTarget) : 0;
 
         const remaining = info?.remainingTimeStr || (info?.endTime ? calculateRemainingTime(info.endTime) : (rig.end ? calculateRemainingTime(rig.end) : ''));
         const account = rig.mrrClient || rig.client || mrrClient || 'ALL';

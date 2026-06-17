@@ -39,11 +39,11 @@ export const TelegramTemplates = {
   divider,
 
   activeRentalLine: (perfEmoji, algo, name, remaining, efficiency, roi, avg, ads, cur, target, extra, client, paid) => {
-    return `${perfEmoji} <b>${escapeHtml(algo)}</b>` + ` 🔀 ` + `<b>${escapeHtml(client)}</b> | ${escapeHtml(name)}\n` +
-      `⏱ Remaining: ${remaining}\n\n` +
+    return `${perfEmoji} <b>${escapeHtml(algo)}</b> 🔀 <b>${escapeHtml(client)}</b> | ${escapeHtml(name)}\n` +
+      `⏱ Remaining: ${remaining}\n` +
       `⚡ Cur: <b>${cur}</b> | ` +
       `📊 Eff: <code>${typeof efficiency === 'number' ? efficiency.toFixed(2) : efficiency}%</code>\n` +
-      `📈 Avg: <code>${avg}</code> | Ads: <code>${ads}</code>\n\n` +
+      `📈 Avg: <code>${avg}</code> | Ads: <code>${ads}</code>\n` +
       `💰 Paid: <b>${paid}</b>\n` +
       `${extra}${divider}\n`;
   },

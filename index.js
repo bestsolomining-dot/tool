@@ -43,6 +43,10 @@ async function scrapeHeroMinersGlobal() {
     });
   });
 
+  if (coinStats.length === 0) {
+    console.warn('[scrapeHeroMinersGlobal] No coin stats found. HTML structure might have changed or table is empty.');
+  }
+
   return { 
     coinStats,
     miners: coinStats.reduce((acc, c) => acc + (c.miners || 0), 0)

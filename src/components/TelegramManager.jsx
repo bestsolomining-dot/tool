@@ -45,7 +45,8 @@ export function useTelegram(onCall, mrrClient) {
 
   const notifyLowEfficiency = useCallback((r, remainingMs, efficiency) => {
     const account = getTelegramAccount(r, mrrClient);
-    const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0).toFixed(2);
+    const rawAvg = r.hashrate?.average?.hash || r.hashrate?.average || 0;
+    const avg = Number.isFinite(parseFloat(rawAvg)) ? parseFloat(rawAvg).toFixed(2) : '0.00';
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
     const paid = getPaidAmount(r);
     const msg = TelegramTemplates.lowEfficiency(account, r, avg, suffix, efficiency, remainingMs, paid);
@@ -54,7 +55,8 @@ export function useTelegram(onCall, mrrClient) {
 
   const notifyPerfectEfficiency = useCallback((r, efficiency) => {
     const account = getTelegramAccount(r, mrrClient);
-    const efficiencyVal = parseFloat(efficiency || 0);
+    const rawEfficiency = efficiency || 0;
+    const efficiencyVal = Number.isFinite(parseFloat(rawEfficiency)) ? parseFloat(rawEfficiency) : 0;
     const paid = getPaidAmount(r);
     const remainingMs = r.end ? (new Date(r.end + (String(r.end).endsWith('UTC') ? '' : ' UTC')).getTime() - Date.now()) : 0;
     const msg = TelegramTemplates.perfectEfficiency(account, r, efficiencyVal, paid, remainingMs);
@@ -63,7 +65,8 @@ export function useTelegram(onCall, mrrClient) {
 
   const notifyStartupEfficiencyAlert = useCallback((r, efficiency) => {
     const account = getTelegramAccount(r, mrrClient);
-    const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0).toFixed(2);
+    const rawAvg = r.hashrate?.average?.hash || r.hashrate?.average || 0;
+    const avg = Number.isFinite(parseFloat(rawAvg)) ? parseFloat(rawAvg).toFixed(2) : '0.00';
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
     const paid = getPaidAmount(r);
     const msg = TelegramTemplates.startup(account, r, avg, suffix, efficiency, paid);
@@ -72,7 +75,8 @@ export function useTelegram(onCall, mrrClient) {
 
   const notifyCompletionEfficiencyAlert = useCallback((r, efficiency) => {
     const account = getTelegramAccount(r, mrrClient);
-    const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0).toFixed(2);
+    const rawAvg = r.hashrate?.average?.hash || r.hashrate?.average || 0;
+    const avg = Number.isFinite(parseFloat(rawAvg)) ? parseFloat(rawAvg).toFixed(2) : '0.00';
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
     const paid = getPaidAmount(r);
     const msg = TelegramTemplates.completion(account, r, avg, suffix, efficiency, paid);
@@ -81,7 +85,8 @@ export function useTelegram(onCall, mrrClient) {
 
   const notifyCompletionSuccess = useCallback((r, efficiency) => {
     const account = getTelegramAccount(r, mrrClient);
-    const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0).toFixed(2);
+    const rawAvg = r.hashrate?.average?.hash || r.hashrate?.average || 0;
+    const avg = Number.isFinite(parseFloat(rawAvg)) ? parseFloat(rawAvg).toFixed(2) : '0.00';
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
     const paid = getPaidAmount(r);
     const msg = TelegramTemplates.completionSuccess(account, r, avg, suffix, efficiency, paid);
@@ -105,11 +110,14 @@ export function useTelegram(onCall, mrrClient) {
     const remH = Math.floor((remainingMs % 86400000) / 3600000);
     const remStr = remD > 0 ? `${remD}d ${remH}h` : `${remH}h`;
 
+    const rawEfficiency = r.hashrate?.average?.percent || r.percent || 0;
+    const efficiency = Number.isFinite(parseFloat(rawEfficiency)) ? parseFloat(rawEfficiency) : 0;
+
     const account = getTelegramAccount(r, mrrClient);
-    const efficiency = parseFloat(r.hashrate?.average?.percent || r.percent || 0);
-    const roi = (efficiency - 100).toFixed(1);
+    const rawRoi = efficiency - 100;
+    const roi = Number.isFinite(rawRoi) ? rawRoi.toFixed(1) : '0.0';
     const progress = totalMs > 0 ? Math.floor((elapsedMs / totalMs) * 100) : 0;
-    const avg = parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0);
+    const avg = Number.isFinite(parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0)) ? parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0) : 0;
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
     const paid = getPaidAmount(r);
 

@@ -17,6 +17,7 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
         query: { op: 'LE', limit: 1000, client: nhClient },
         silent: true
       });
+      console.log(`[RentedRigContext] Fetched orders for client ${nhClient}:`, data);
 
       if (data && !data.error) {
         const list = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
@@ -49,10 +50,15 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
         // Use a real client for price lookups if the current context is aggregate (VN)
         const priceLookupClient = (nhClient === 'VN' || !nhClient) ? 'BT' : nhClient;
 
-        for (const key of priceKeys) {
+        // Fetch prices in parallel with a staggered delay to prevent overlapping calls from overwhelming the proxy
+        await Promise.all(priceKeys.map(async (key, index) => {
           const [algoName, marketName] = key.split(':');
-          if (!algoName) continue;
+          if (!algoName) return;
+          
           try {
+            // Stagger requests slightly
+            await new Promise(r => setTimeout(r, index * 100));
+            
             const nhAlgo = normalizeAlgoForNiceHash(algoName);
             const priceData = await callApi('/api/v2/hashpower/order/price', {
               query: { 
@@ -64,14 +70,17 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
             });
             
             const rawPrice = priceData?.price || priceData;
-            const priceValue = parseFloat(rawPrice?.fixedPrice || rawPrice?.standardPrice?.fast || rawPrice?.standardPrice || rawPrice?.price || 0);
-            const priceUnit = rawPrice?.speedUnit || rawPrice?.unit || (algoName.toUpperCase().includes('SHA256') ? 'EH' : 'TH');
-            marketPrices[key] = { value: priceValue, unit: priceUnit };
-
-            // Sequential fetch gap
-            await new Promise(r => setTimeout(r, 150));
-          } catch (e) { marketPrices[key] = { value: 0, unit: 'TH' }; }
-        }
+            if (rawPrice && !rawPrice.error) {
+              const priceValue = parseFloat(rawPrice.fixedPrice || rawPrice.standardPrice?.fast || rawPrice.standardPrice || rawPrice.price || 0);
+              const priceUnit = rawPrice.speedUnit || rawPrice.unit || (algoName.toUpperCase().includes('SHA256') ? 'EH' : 'TH');
+              marketPrices[key] = { value: priceValue, unit: priceUnit };
+            } else {
+              marketPrices[key] = { value: 0, unit: 'TH' };
+            }
+          } catch (e) {
+            marketPrices[key] = { value: 0, unit: 'TH' };
+          }
+        }));
 
         const processed = tempProcessed.map(p => {
           const isSha2 = p.algo.includes('SHA256');

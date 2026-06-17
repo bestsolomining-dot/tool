@@ -16,35 +16,37 @@ const app = createApp({ distPath });
 const PORT = process.env.PORT || 3000;
 
 async function scrapeHeroMinersGlobal() {
-  const html = await fetch('https://herominers.com/', { headers: { 'User-Agent': 'MiningTool/2.0' } }).then(r => {
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.text();
+  // HeroMiners homepage uses JS to render tables. Scraping HTML with Cheerio often fails
+  // because it only sees the initial placeholder row. The JSON API is much more reliable.
+  const res = await fetch('https://herominers.com/api/stats', { 
+    headers: { 'User-Agent': 'MiningTool/2.0' } 
   });
-
-  const $ = cheerio.load(html);
+  
+  if (!res.ok) throw new Error(`HeroMiners API HTTP ${res.status}`);
+  
+  const data = await res.json();
   const coinStats = [];
 
-  $('table tbody tr').each((_, row) => {
-    const cols = $(row).find('td');
-    if (cols.length < 9) return; 
-
-    coinStats.push({
-      algorithm: $(cols[1]).text().trim(),
-      miners: parseInt($(cols[6]).text().trim().replace(/,/g, '')) || 0,
-      usdPerDay: 0, 
-      btcPerDay: 0,  
-      coin: $(cols[0]).text().trim(),
-      networkHashrate: $(cols[2]).text().trim(),
-      poolHashrate: $(cols[3]).text().trim(),
-      blockHeight: $(cols[4]).text().trim(),
-      blocksFound: $(cols[5]).text().trim(),
-      workers: $(cols[7]).text().trim(),
-      totalPayments: $(cols[8]).text().trim(),
+  if (data && data.coins) {
+    Object.entries(data.coins).forEach(([coinId, stats]) => {
+      coinStats.push({
+        coin: coinId.toUpperCase(),
+        algorithm: stats.algorithm || 'N/A',
+        networkHashrate: stats.network_hashrate || '0',
+        poolHashrate: stats.pool_hashrate || '0',
+        blockHeight: stats.block_height || '0',
+        blocksFound: stats.blocks_found || '0',
+        miners: parseInt(stats.miners) || 0,
+        workers: parseInt(stats.workers) || 0,
+        totalPayments: stats.total_payments || '0',
+        usdPerDay: 0,
+        btcPerDay: 0
+      });
     });
-  });
+  }
 
   if (coinStats.length === 0) {
-    console.warn('[scrapeHeroMinersGlobal] No coin stats found. HTML structure might have changed or table is empty.');
+    console.warn('[scrapeHeroMinersGlobal] No coin stats found in API response.');
   }
 
   return { 

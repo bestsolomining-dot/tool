@@ -95,8 +95,17 @@ export default function App() {
 
     // Prepare base query parameters
     const enrichedQuery = { ...query };
+    const isPriceReq = path.includes('/order/price');
+
     if (path.startsWith('/api/v2/') && !enrichedQuery.client) {
-      enrichedQuery.client = nhOrderClient;
+      // Logic: 
+      // 1. If it's a Pool request, use the Pool client (usually BT)
+      // 2. If it's a generic request and we are in VN (Aggregate) mode, 
+      //    send 'VN' so the backend knows to aggregate, but handle specific
+      //    order prices via the order client.
+      const isPoolReq = path.includes('/pools') || section === 'pools';
+      // Don't add default client for price lookups to improve caching and avoid NiceHash parameter rejection
+      if (!isPriceReq) enrichedQuery.client = isPoolReq ? nhPoolClient : nhOrderClient;
     }
 
     // Generate Cache Key (excluding dynamic 'ts' which changes every call)
@@ -123,7 +132,8 @@ export default function App() {
 
     // Final Path construction for the network request (adding cache-busting 'ts')
     let finalPath = path;
-    if (path.startsWith('/api/v2/') && !enrichedQuery.ts) {
+    // Skip automatic ts for price requests as some NiceHash endpoints are strict about query params
+    if (path.startsWith('/api/v2/') && !enrichedQuery.ts && !isPriceReq) {
       enrichedQuery.ts = Date.now();
     }
 
@@ -191,7 +201,12 @@ export default function App() {
         }
 
         const isAppError = !res.ok || (data && typeof data === 'object' && (data.success === false || data.error || data.errors));
-        addDebugLog(`Response ${res.status} from ${path}`, isAppError ? 'error' : 'success');
+        
+        if (isAppError) {
+          addDebugLog(`API Error ${res.status}: ${JSON.stringify(data)}`, 'error');
+        } else {
+          addDebugLog(`Response ${res.status} from ${path}`, 'success');
+        }
 
         if (!isAppError && (res.status === 304 || res.ok) && res.status !== 401) {
           setError('');
@@ -199,9 +214,8 @@ export default function App() {
             setModalContent(data || { success: true });
             setResponseModalOpen(true);
           }
-          if (data) {
-            updateSectionState(section, data);
-          }
+          // Always attempt to update state based on path if section is missing
+          updateSectionState(section || ((path.includes('/mining') || path.includes('/hashpower')) ? 'mining' : ''), data);
         } else if (!isSilent) {
           const errorMsg =
             typeof data === 'string' && data.length > 0

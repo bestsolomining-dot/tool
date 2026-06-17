@@ -80,26 +80,32 @@ export const isAggregate = (c) => {
 export function resolveNhClient(clientNameRaw) {
   const clientName = isAggregate(clientNameRaw) ? AGGREGATE_CLIENT : String(clientNameRaw || 'BT').trim().toUpperCase();
 
+  // 1. Handle Aggregate (VN) resolution
   if (isAggregate(clientName)) {
-    return { client: nhInstances.get('BT'), clientName: AGGREGATE_CLIENT };
+    const btProvider = resolveNhClient('BT');
+    return { client: btProvider.client, clientName: AGGREGATE_CLIENT };
   }
 
-  const targetName = nhConfigs[clientName] ? clientName : 'BT';
-  if (!nhInstances.has(targetName)) {
-    const cfg = nhConfigs[targetName];
-    if (cfg?.apiKey && cfg?.apiSecret && cfg?.orgId) {
-      const newClient = new NiceHashClient({ ...cfg, name: targetName });
-      nhInstances.set(targetName, newClient);
-      return { client: newClient, clientName: targetName };
-    }
-
-    const btClient = nhInstances.get('BT');
-    if (targetName !== 'BT') {
-      console.warn(`[api:warn] Client "${targetName}" is not fully configured in .env. Falling back to BT.`);
-    }
-    return { client: btClient, clientName: 'BT' };
+  // 2. Return cached instance
+  if (nhInstances.has(clientName)) {
+    return { client: nhInstances.get(clientName), clientName };
   }
-  return { client: nhInstances.get(targetName) || nhInstances.get('BT'), clientName: targetName };
+
+  // 3. Initialize from config
+  const cfg = nhConfigs[clientName];
+  if (cfg?.apiKey && cfg?.apiSecret && cfg?.orgId) {
+    const newClient = new NiceHashClient({ ...cfg, name: clientName });
+    nhInstances.set(clientName, newClient);
+    return { client: newClient, clientName };
+  }
+
+  // 4. Recursive fallback to BT if client is unconfigured
+  if (clientName !== 'BT') {
+    console.warn(`[nh:resolve] Client "${clientName}" not found or unconfigured. Falling back to BT.`);
+    return resolveNhClient('BT');
+  }
+
+  return { client: undefined, clientName: 'BT' };
 }
 
 /**
@@ -273,26 +279,34 @@ export const getNiceHashApp = (client) => ({
     updatePriceLimit: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/updatePriceAndLimit`, body, query: { orgId: client.orgId } }),
     getVmmOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/vmm/orders' }),
     getOrderPrice: (query) => {
-      const { algorithm, market, client: _c, ts: _t, ...rest } = query || {};
+      const { algorithm, market, amount, ...rest } = query || {};
+      // Ensure all required fields for /order/calculate are present
+      const finalAmount = amount || rest.limit || '0.001';
+      const finalAlgo = normalizeAlgoForNiceHash(algorithm || 'KAWPOW');
+      const finalMarket = normalizeMarket(market || 'USA');
+
       return client.call({
         method: 'GET',
         path: '/main/api/v2/hashpower/order/calculate',
         query: {
-          algorithm: normalizeAlgoForNiceHash(algorithm),
-          market: normalizeMarket(market),
-          ...rest
+          ...rest,
+          algorithm: finalAlgo,
+          market: finalMarket,
+          amount: finalAmount
         }
       });
     },
     getBusinessOrder: (query) => {
       const { algorithm, market, client: _c, ts: _t, ...rest } = query || {};
+      const amount = rest.amount || '0.001';
       return client.call({
         method: 'GET',
         path: '/main/api/v2/hashpower/order/calculate',
         query: {
+          ...rest,
           algorithm: normalizeAlgoForNiceHash(algorithm),
           market: normalizeMarket(market),
-          ...rest
+          amount
         }
       });
     },

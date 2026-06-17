@@ -24,11 +24,12 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
   };
 
   const orders = useMemo(() => {
-    return localOrders.filter(o => {
+    const filtered = localOrders.filter(o => {
       const status = (o.status?.code || o.status || '').toUpperCase();
       return status !== 'CANCELED' && status !== 'CANCELLED' && status !== 'COMPLETED' && status !== 'EXPIRED';
     });
-  }, [output, localOrders]);
+    return filtered;
+  }, [localOrders]);
 
   const fetchOrders = useCallback(async () => {
     setLoadingLocal(true);
@@ -39,6 +40,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     const list = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
 
     setLocalOrders(list);
+    console.log(`[NiceHash] Raw orders from API (fetchOrders):`, list);
     setOrderDetail(null);
     setLoadingLocal(false);
   }, [onCall, nhClient]);
@@ -146,6 +148,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
+    console.log(`[NiceHash] Sorted orders (memo):`, sortedOrders);
   }, [orders, sortConfig]);
 
   // Find the selected order in the list to access client info

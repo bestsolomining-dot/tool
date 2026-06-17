@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import * as cheerio from 'cheerio';
 import { createApp, initializeApp } from './server/app.js';
+import cors from 'cors'; // Import cors middleware
 import { verifyToken } from './server/auth.js';
 import { resolveNhClient, getNiceHashApp } from './server/nh.js';
 import { mrrApiCall } from './server/mrr.js';
@@ -14,6 +15,10 @@ const distPath = path.join(__dirname, 'dist', 'client');
 
 const app = createApp({ distPath });
 const PORT = process.env.PORT || 3000;
+
+// Enable CORS for all origins during development.
+// In production, configure this more restrictively based on your frontend's origin(s).
+app.use(cors());
 
 async function scrapeHeroMinersGlobal() {
   // HeroMiners homepage uses JS to render tables. Scraping HTML with Cheerio often fails

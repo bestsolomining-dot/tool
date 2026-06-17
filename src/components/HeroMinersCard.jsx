@@ -91,52 +91,66 @@ export default function HeroMinersCard({ pollInterval = 30000 }) {
 
   // ---------- Data fetching ----------
   const fetchAllData = useCallback(async () => {
-    setError(null);
     setLoading(true);
+    let fetchError = null;
+
     try {
       // 1. HeroMiners global – via WebSocket (fetchMiningStats)
-      const heroData = await fetchMiningStats('herominers_global', 'BT');
-      setHeroGlobalStats(heroData);
+      try {
+        const heroData = await fetchMiningStats('herominers_global', 'BT');
+        setHeroGlobalStats(heroData);
+      } catch (err) {
+        console.error('HeroMiners fetch failed:', err.message);
+        fetchError = `HeroMiners: ${err.message}`;
+      }
 
       // 2. Mining-Dutch global – combine three endpoints (direct HTTP)
-      const [poolStatus, nowMining, avgProfit] = await Promise.all([
-        fetchPoolStatus(),
-        fetchNowMining(),
-        fetchAvgProfitability(),
-      ]);
+      try {
+        const [poolStatus, nowMining, avgProfit] = await Promise.all([
+          fetchPoolStatus(),
+          fetchNowMining(),
+          fetchAvgProfitability(),
+        ]);
 
-      const nowMap = {};
-      nowMining.forEach(item => {
-        nowMap[item.algorithm] = parseFloat(item.profitability) || 0;
-      });
+        const nowMap = {};
+        nowMining.forEach(item => {
+          nowMap[item.algorithm] = parseFloat(item.profitability) || 0;
+        });
 
-      const avgMap = {};
-      Object.keys(avgProfit).forEach(algo => {
-        avgMap[algo] = parseFloat(avgProfit[algo]?.average) || 0;
-      });
+        const avgMap = {};
+        Object.keys(avgProfit).forEach(algo => {
+          avgMap[algo] = parseFloat(avgProfit[algo]?.average) || 0;
+        });
 
-      const dutchCoinStats = Object.keys(poolStatus).map((algo) => {
-        const info = poolStatus[algo];
-        const currentBtc = nowMap[algo] || 0;
-        const avgBtc = avgMap[algo] || 0;
-        const btcPerDay = currentBtc || avgBtc;
-        return {
-          algorithm: algo,
-          miners: parseInt(info.workers || 0, 10),
-          hashrate: parseFloat(info.hashrate || 0),
-          btcPerDay: btcPerDay,
-          usdPerDay: btcPerDay * 1000, // placeholder – replace with real BTC/USD if available
-        };
-      });
-      setDutchStats({ coinStats: dutchCoinStats });
+        const dutchCoinStats = Object.keys(poolStatus).map((algo) => {
+          const info = poolStatus[algo];
+          const currentBtc = nowMap[algo] || 0;
+          const avgBtc = avgMap[algo] || 0;
+          const btcPerDay = currentBtc || avgBtc;
+          return {
+            algorithm: algo,
+            miners: parseInt(info.workers || 0, 10),
+            hashrate: parseFloat(info.hashrate || 0),
+            btcPerDay: btcPerDay,
+            usdPerDay: btcPerDay * 1000, // placeholder – replace with real BTC/USD if available
+          };
+        });
+        setDutchStats({ coinStats: dutchCoinStats });
 
-      // 3. Mining-Dutch user stats (if coin selected)
-      if (selectedCoin) {
-        const user = await fetchDutchUserStatus(selectedCoin);
-        setDutchUserStats(user);
-      } else {
-        setDutchUserStats(null);
+        // 3. Mining-Dutch user stats (if coin selected)
+        if (selectedCoin) {
+          const user = await fetchDutchUserStatus(selectedCoin);
+          setDutchUserStats(user);
+        } else {
+          setDutchUserStats(null);
+        }
+      } catch (err) {
+        console.error('Mining-Dutch fetch failed:', err.message);
+        if (!fetchError) fetchError = `Mining-Dutch: ${err.message}`;
       }
+      
+      // Only display the error if we failed to get any data at all, or show partial error
+      setError(fetchError);
     } catch (err) {
       console.error('Fetch error:', err);
       setError(err.message || 'Failed to fetch mining stats');

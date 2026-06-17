@@ -24,16 +24,17 @@ export const algoMap = {
   'CFX': 'OCTOPUS',
   'AUTOLYKOS': 'AUTOLYKOS',
   'AUTOLYKOSV2': 'AUTOLYKOS',
+  'AUTOLYKOSV2_ERGO': 'AUTOLYKOS',
   'ERGO': 'AUTOLYKOS',
   'ERG': 'AUTOLYKOS',
   'FISHHASH': 'FISHHASH',
   'PEARLHASH': 'PEARLHASH',
 
   // Common ASIC Algorithms
-  'SHA256': 'SHA256',
+  'SHA256': 'SHA256', // Map generic SHA256 to the specific NiceHash variant
   'SHA256ASICBOOST': 'SHA256ASICBOOST',
   'SHA256AB': 'SHA256ASICBOOST',
-  'BTC': 'SHA256ASICBOOST',
+  // 'BTC': 'SHA256ASICBOOST',
   'SCRYPT': 'SCRYPT',
   'SCRYPTN': 'SCRYPT',
   'SCRYPT-N': 'SCRYPT',
@@ -46,10 +47,11 @@ export const algoMap = {
   'KECCAK': 'KECCAK',
   'SHA3': 'KECCAK',
   'KECCAKSHA3': 'KECCAK',
-  'RANDOMX': 'RANDOMXMONERO',
-  'MONERO': 'RANDOMXMONERO',
-  'RANDOMXMONERO': 'RANDOMXMONERO',
-  'XMR': 'RANDOMXMONERO',
+  'RANDOMX': 'RANDOMXMONERO', // Map generic RandomX to the specific NiceHash variant
+  'MONERO': 'RANDOMXMONERO', // Map Monero to the specific NiceHash variant
+  'RANDOMXMONERO': 'RANDOMXMONERO', // Keep as is
+  'XMR': 'RANDOMXMONERO', // Map XMR to the specific NiceHash variant
+  'RANDOMX_XMR': 'RANDOMXMONERO',
 
   // Equihash Variants
   'EQUIHASH': 'EQUIHASH',
@@ -59,8 +61,8 @@ export const algoMap = {
   'BEAMV3': 'BEAMV3',
   'EQUIHASH1254': 'BEAMV3',
   'BEAMHASHIII': 'BEAMV3',
-  'BEAM': 'BEAMV3',
   'BEAMIII': 'BEAMV3',
+  'BEAM': 'BEAMV3',
   'XELISHASHV3': 'XELISHASHV3',
 
   // Modern/Newer Algorithms
@@ -68,6 +70,7 @@ export const algoMap = {
   'IRON': 'IRONFISH',
   'ALEPHIUM': 'ALEPHIUM',
   'ALPH': 'ALEPHIUM',
+  'BLAKE3_ALPH': 'ALEPHIUM',
   'KARLSENHASH': 'KARLSENHASH',
   'KLS': 'KARLSENHASH',
   'PYRINHASH': 'PYRINHASH',

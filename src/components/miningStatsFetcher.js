@@ -1,3 +1,4 @@
+// miningStatsFetcher.js
 /**
  *
  * @param {string} type - The type of stats to fetch ('herominers', 'miningpooldutch', 'all').
@@ -7,6 +8,8 @@
  *                            (e.g., { success: true, stats: {...}, pools: [...] })
  *                            or rejects with an error.
  */
+
+
 export async function fetchMiningStats(type, client, rigId = null, coin = null) {
   const maxAttempts = 5;
   const baseDelay = 1000;

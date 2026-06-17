@@ -1,42 +1,34 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRentedRigs } from './RentedRigContext';
-import { fetchMiningStats } from './miningStatsFetcher'; // adjust path
+import { fetchMiningStats } from './miningStatsFetcher'; // your WebSocket wrapper
 
-// ---------- Constants (Mining-Dutch credentials) ----------
+// ---------- Mining-Dutch credentials ----------
 const MININGDUTCH_ID = import.meta.env.VITE_MININGDUTCH_ID;
 const MININGDUTCH_API_KEY = import.meta.env.VITE_MININGDUTCH_API_BT;
 
-// 1) Pool status – gives hashrate & workers per algorithm
+// ---------- Direct Mining-Dutch API calls ----------
 async function fetchPoolStatus() {
-  const url = 'https://www.mining-dutch.nl/api/v1/public/poolstatus';
-  const res = await fetch(url);
+  const res = await fetch('https://www.mining-dutch.nl/api/v1/public/poolstatus');
   if (!res.ok) throw new Error(`Poolstatus HTTP ${res.status}`);
-  return res.json(); // { algorithm: { hashrate, workers, ... } }
+  return res.json();
 }
 
-// 2) Current profitability per algorithm (nowmining)
 async function fetchNowMining() {
-  const url = 'https://www.mining-dutch.nl/api/v1/public/multiport/?method=nowmining';
-  const res = await fetch(url);
+  const res = await fetch('https://www.mining-dutch.nl/api/v1/public/multiport/?method=nowmining');
   if (!res.ok) throw new Error(`Nowmining HTTP ${res.status}`);
   const data = await res.json();
   if (data.success !== true) throw new Error('Nowmining failed');
-  // Returns array: [{ algorithm, profitability, over_average, ... }]
   return data.result;
 }
 
-// 3) 24h average profitability per algorithm
 async function fetchAvgProfitability() {
-  const url = 'https://www.mining-dutch.nl/api/v1/public/multiport/?method=avgprofitability';
-  const res = await fetch(url);
+  const res = await fetch('https://www.mining-dutch.nl/api/v1/public/multiport/?method=avgprofitability');
   if (!res.ok) throw new Error(`Avgprofit HTTP ${res.status}`);
   const data = await res.json();
   if (data.success !== 1) throw new Error('Avgprofit failed');
-  // Returns object: { algorithm: { average, minimum, maximum, expected, ... } }
   return data.result;
 }
 
-// 4) User-specific pool stats (your personal hashrate, shares, efficiency)
 async function fetchDutchUserStatus(coin) {
   if (!coin) return null;
   const url = `https://www.mining-dutch.nl/pools/${coin}.php?page=api&action=getuserstatus&api_key=${MININGDUTCH_API_KEY}&id=${MININGDUTCH_ID}`;
@@ -50,7 +42,6 @@ async function fetchDutchUserStatus(coin) {
 export default function HeroMinersCard({ pollInterval = 30000 }) {
   const { rentedRigs } = useRentedRigs();
   const [heroGlobalStats, setHeroGlobalStats] = useState(null);
-  const [heroPoolStats, setHeroPoolStats] = useState(null);
   const [dutchStats, setDutchStats] = useState(null);
   const [dutchUserStats, setDutchUserStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -103,60 +94,43 @@ export default function HeroMinersCard({ pollInterval = 30000 }) {
     setError(null);
     setLoading(true);
     try {
-      // 1. HeroMiners global (via your backend proxy)
-      const heroGlobal = await fetchMiningStats('herominers_global', 'BT');
-      setHeroGlobalStats(heroGlobal);
+      // 1. HeroMiners global – via WebSocket (fetchMiningStats)
+      const heroData = await fetchMiningStats('herominers_global', 'BT');
+      setHeroGlobalStats(heroData);
 
-      // 2. HeroMiners pool (if a coin is selected)
-      if (selectedCoin) {
-        const pool = await fetchMiningStats('herominers', 'BT', null, selectedCoin);
-        setHeroPoolStats(pool);
-      } else {
-        setHeroPoolStats(null);
-      }
-
-      // 3. Mining-Dutch global stats – combine three endpoints
+      // 2. Mining-Dutch global – combine three endpoints (direct HTTP)
       const [poolStatus, nowMining, avgProfit] = await Promise.all([
         fetchPoolStatus(),
         fetchNowMining(),
         fetchAvgProfitability(),
       ]);
 
-      // Build a map of current profitability per algorithm
       const nowMap = {};
       nowMining.forEach(item => {
         nowMap[item.algorithm] = parseFloat(item.profitability) || 0;
       });
 
-      // Build a map of average profitability per algorithm
       const avgMap = {};
       Object.keys(avgProfit).forEach(algo => {
         avgMap[algo] = parseFloat(avgProfit[algo]?.average) || 0;
       });
 
-      // Merge all data into one coinStats array
       const dutchCoinStats = Object.keys(poolStatus).map((algo) => {
         const info = poolStatus[algo];
         const currentBtc = nowMap[algo] || 0;
         const avgBtc = avgMap[algo] || 0;
-        // Use current profitability as btcPerDay, fallback to avg if zero
         const btcPerDay = currentBtc || avgBtc;
         return {
           algorithm: algo,
           miners: parseInt(info.workers || 0, 10),
           hashrate: parseFloat(info.hashrate || 0),
           btcPerDay: btcPerDay,
-          // USD placeholder – multiply by 1000 (adjust if you have real BTC/USD price)
-          usdPerDay: btcPerDay * 1000,
-          // Extra fields for debugging (optional)
-          currentProfit: currentBtc,
-          avgProfit: avgBtc,
+          usdPerDay: btcPerDay * 1000, // placeholder – replace with real BTC/USD if available
         };
       });
-
       setDutchStats({ coinStats: dutchCoinStats });
 
-      // 4. Mining-Dutch user stats (if a coin is selected)
+      // 3. Mining-Dutch user stats (if coin selected)
       if (selectedCoin) {
         const user = await fetchDutchUserStatus(selectedCoin);
         setDutchUserStats(user);
@@ -171,7 +145,7 @@ export default function HeroMinersCard({ pollInterval = 30000 }) {
     }
   }, [selectedCoin]);
 
-  // Polling & refresh
+  // Polling
   useEffect(() => {
     fetchAllData();
     if (pollInterval > 0) {
@@ -190,7 +164,7 @@ export default function HeroMinersCard({ pollInterval = 30000 }) {
     fetchAllData();
   };
 
-  // ---------- Rendering (unchanged) ----------
+  // ---------- Rendering ----------
   const renderCoinTable = (stats, title) => {
     if (!stats || !Array.isArray(stats) || stats.length === 0) {
       return <div style={{ opacity: 0.6, padding: '10px' }}>No data available</div>;
@@ -252,36 +226,8 @@ export default function HeroMinersCard({ pollInterval = 30000 }) {
       );
     }
 
-    if (!heroPoolStats) return <div style={{ opacity: 0.6, padding: '10px' }}>No pool data available</div>;
-    const stats = heroPoolStats.stats || heroPoolStats;
-    if (typeof stats !== 'object' || Array.isArray(stats)) {
-      return <div style={{ opacity: 0.6, padding: '10px' }}>Pool data format unexpected</div>;
-    }
-    return (
-      <div>
-        <h4 style={{ margin: '0 0 8px 0', color: '#e2e8f0' }}>
-          {selectedCoin ? selectedCoin.toUpperCase() : 'Pool'} Dashboard (HeroMiners)
-        </h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px,1fr))', gap: '10px', fontSize: '12px' }}>
-          <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-            <div style={{ color: '#64748b' }}>Hashrate</div>
-            <div style={{ color: '#e2e8f0' }}>{stats.hashrate || 'N/A'}</div>
-          </div>
-          <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-            <div style={{ color: '#64748b' }}>Workers</div>
-            <div style={{ color: '#e2e8f0' }}>{stats.workers || 0}</div>
-          </div>
-          <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-            <div style={{ color: '#64748b' }}>Last Block</div>
-            <div style={{ color: '#e2e8f0' }}>{stats.lastBlock ? new Date(stats.lastBlock).toLocaleTimeString() : 'N/A'}</div>
-          </div>
-          <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '6px' }}>
-            <div style={{ color: '#64748b' }}>Est. Earnings (24h)</div>
-            <div style={{ color: '#e2e8f0' }}>{stats.estimatedEarnings || 'N/A'}</div>
-          </div>
-        </div>
-      </div>
-    );
+    // No user stats yet – prompt to select a coin
+    return <div style={{ opacity: 0.6, padding: '10px' }}>Select a coin to see your Mining-Dutch pool stats.</div>;
   };
 
   const renderDutchStats = () => {
@@ -339,7 +285,7 @@ export default function HeroMinersCard({ pollInterval = 30000 }) {
     return heroGlobalStats.coinStats.map(c => c.algorithm).filter(Boolean);
   }, [heroGlobalStats]);
 
-  // ---------- UI (unchanged) ----------
+  // ---------- UI ----------
   return (
     <div
       className="hero-miners-live-card"

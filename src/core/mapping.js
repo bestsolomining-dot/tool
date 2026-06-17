@@ -27,6 +27,7 @@ export const algoMap = {
   'ERGO': 'AUTOLYKOS',
   'ERG': 'AUTOLYKOS',
   'FISHHASH': 'FISHHASH',
+  'PEARLHASH': 'PEARLHASH',
 
   // Common ASIC Algorithms
   'SHA256': 'SHA256',
@@ -58,6 +59,8 @@ export const algoMap = {
   'BEAMV3': 'BEAMV3',
   'EQUIHASH1254': 'BEAMV3',
   'BEAM': 'BEAMV3',
+  'BEAMIII': 'BEAMV3',
+  'XELISHASHV3': 'XELISHASHV3',
 
   // Modern/Newer Algorithms
   'IRONFISH': 'IRONFISH',
@@ -75,6 +78,9 @@ export const algoMap = {
   'VERUSHASH': 'VERUSHASH',
   'VRSC': 'VERUSHASH',
   'NEOSCRYPT': 'NEOSCRYPT',
+  'JANUSHASH': 'JANUSHASH',
+  'PROGPOWZ': 'PROGPOWZ',
+  'CUCKAROO30': 'CUCKAROO30',
   'LYRA2REV3': 'LYRA2REV3',
   'X16R': 'X16R',
   'X16RV2': 'X16RV2',

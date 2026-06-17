@@ -9,7 +9,7 @@
  *                            (e.g., { success: true, stats: {...}, pools: [...] })
  *                            or rejects with an error.
  */
-export async function fetchMiningStats(type, client, rigId = null) {
+export async function fetchMiningStats(type, client, rigId = null, coin = null) {
   const maxAttempts = 5;
   const baseDelay = 1000;
 
@@ -43,7 +43,7 @@ export async function fetchMiningStats(type, client, rigId = null) {
     }, 15000);
 
     socket.onopen = () => {
-      socket.send(JSON.stringify({ action: type, client: targetClient, rigid: rigId }));
+      socket.send(JSON.stringify({ action: type, client: targetClient, rigid: rigId, coin }));
     };
 
     socket.onmessage = (event) => {

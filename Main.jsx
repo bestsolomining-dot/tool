@@ -402,7 +402,7 @@ export default function App() {
             />
           </article>
           <article className="panel">
-            <HeroMinersCard mrrClient={mrrClient} />
+            <HeroMinersCard mrrClient={mrrClient} onCall={callApi} />
           </article>
         </section>
       </main>

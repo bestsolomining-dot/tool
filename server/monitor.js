@@ -462,8 +462,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             const { client: nhCl } = resolveNhClient(acct);
             const pData = await getNiceHashApp(nhCl).hashpower.getOrderPrice({ 
               algorithm: nhAlgo, 
-              market: '1', 
-              amount: '0.005' 
+              market: '1', // Strictly use '1' for USA
+              amount: '0.01' // Increased amount to satisfy minimums for all algos
             });
             const rawP = pData;
             nhP = {

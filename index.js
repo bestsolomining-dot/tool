@@ -49,10 +49,61 @@ wss.on('connection', (ws, request) => {
           const url = 'https://herominers.com/api/stats';
           const hmRes = await fetch(url, { headers: { 'User-Agent': 'MiningTool/2.0' } });
           if (hmRes.ok) {
-            responseData.herominers_global = await hmRes.json();
+            const rawData = await hmRes.json();
+            
+            // Isolate metadata keys from the coin list
+            const { 
+              hashrates, 
+              miners, 
+              workers, 
+              payments, 
+              avgDifficulty, 
+              avgDifficulty24h, 
+              ...coinsOnly 
+            } = rawData;
+            
+            // Transform the raw dictionary into a normalized array for the frontend table
+            const coinStats = Object.entries(coinsOnly)
+              .filter(([id, details]) => details && typeof details === 'object' && (details.algorithm || details.algo))
+              .map(([id, details]) => {
+                const netHash = parseFloat(String(details.network_hashrate || details.networkHashrate || 0).replace(/[^0-9.]/g, ''));
+                const poolHash = parseFloat(String(details.pool_hashrate || details.poolHashrate || 0).replace(/[^0-9.]/g, ''));
+                const share = (netHash > 0) ? ((poolHash / netHash) * 100).toFixed(2) : '0.00';
+
+                return {
+                  id,
+                  name: details.name || id,
+                  coin: (details.coin || id).toUpperCase(),
+                  algorithm: details.algorithm || details.algo || 'N/A',
+                  networkHashrate: details.network_hashrate || details.networkHashrate || '0',
+                  poolHashrate: details.pool_hashrate || details.poolHashrate || '0',
+                  poolShare: share,
+                  blockHeight: details.height || details.blockHeight || 0,
+                  blocksFound: details.blocks_found || details.blocksFound || 0,
+                  miners: details.miners || 0,
+                  workers: details.workers || 0,
+                  usdPerDay: details.profit_usd || details.usdPerDay || '0.00',
+                  btcPerDay: details.profit_btc || details.btcPerDay || '0.00000000',
+                  coinsPerDay: details.profit_coins || details.coinsPerDay || '0.00',
+                  totalPayments: details.payments || details.total_payments || 0
+                };
+              });
+
+            responseData.herominers_global = {
+              success: true,
+              coinStats,
+              miners: miners || coinStats.reduce((acc, c) => acc + (Number(c.miners) || 0), 0),
+              workers: workers || coinStats.reduce((acc, c) => acc + (Number(c.workers) || 0), 0),
+              globalHashrates: hashrates || {},
+              avgDifficulty: avgDifficulty || '0',
+              avgDifficulty24h: avgDifficulty24h || '0'
+            };
+          } else {
+            throw new Error(`HeroMiners API returned ${hmRes.status}`);
           }
         } catch (err) {
           console.error(`[ws:herominers_global] ${err.message}`);
+          responseData.herominers_global = { success: false, error: err.message };
         }
       }
 
@@ -98,8 +149,8 @@ wss.on('connection', (ws, request) => {
           const hmRes = await fetch(url, { headers: { 'User-Agent': 'MiningTool/2.0' } });
           
           if (hmRes.ok) {
-            const result = await hmRes.json();
-            responseData.herominers = { success: true, ...result };
+            const stats = await hmRes.json();
+            responseData.herominers = { success: true, ...stats };
           } else if (hmRes.status === 404) {
             responseData.herominers = { success: false, error: `Address not found on HeroMiners ${coin} pool. Make sure the rig is actively mining to this pool.` };
           } else {
@@ -123,9 +174,9 @@ wss.on('connection', (ws, request) => {
       // If specific action, we succeed only if that specific action succeeded.
       const isSuccess = action === 'all' 
         ? (Object.keys(responseData).length > 0) 
-        : (responseData[action]?.success !== false);
+        : (responseData[action] && responseData[action].success !== false && (responseData[action].coinStats || responseData[action].stats));
       
-      const errorMsg = !isSuccess ? (responseData[action]?.error || 'Fetch failed') : null;
+      const errorMsg = !isSuccess ? (responseData[action]?.error || `No data found for "${action}". Check if mining is active.`) : null;
 
       // IMPORTANT: We always send the full responseData object.
       // This ensures the frontend always finds data.herominers or data.miningpooldutch

@@ -198,5 +198,5 @@ export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit, isM
     ? ((mrrPricePerTh - nhPricePerTh) / nhPricePerTh * 100) // (MRR - NH) / NH * 100
     : ((nhPricePerTh - mrrPricePerTh) / nhPricePerTh * 100); // (NH - MRR) / NH * 100
 
-  return diff.toFixed(1);
+  return Number.isFinite(diff) ? diff.toFixed(1) : null;
 }

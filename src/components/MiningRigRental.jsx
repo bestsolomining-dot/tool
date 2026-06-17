@@ -139,7 +139,8 @@ function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
             const actualHashesDone = avg * (elapsedMs / 1000);
             // Allow deficit to be negative (surplus)
             const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
-            const target = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
+            const targetCalc = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
+            const target = Number.isFinite(targetCalc) ? targetCalc : 0;
             const displayTarget = target < 0 ? 0 : target;
 
             return (
@@ -319,8 +320,10 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           const elapsedMs = now - startTime;
           const remainingMs = endTime - now;
 
-          const currentHash = parseFloat(r.hashrate?.average?.hash || r.hashrate?.current || r.hash || 0);
-          const efficiency = parseFloat(r.hashrate?.average?.percent || r.percent || 100);
+          const rawHash = r.hashrate?.average?.hash || r.hashrate?.current || r.hash || 0;
+          const currentHash = Number.isFinite(parseFloat(rawHash)) ? parseFloat(rawHash) : 0;
+          const rawEff = r.hashrate?.average?.percent || r.percent || 100;
+          const efficiency = Number.isFinite(parseFloat(rawEff)) ? parseFloat(rawEff) : 100;
 
           let timers = conditionTimers.current.get(rentalId) || { zeroStart: 0, lowStart: 0 };
 

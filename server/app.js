@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
-import { SyncManager } from '../SyncManager.js';
-import { db, initDatabase, cleanAllCache } from './db.js';
+import { SyncManager } from '../SyncManager.js'; // Assuming SyncManager is in the root
+import { db } from './db.js'; // db is now simpler
 import { initNhConfigs, nhConfigs, getNiceHashApp, resolveNhClient } from './nh.js';
 import { initMrrConfigs, mrrConfigs, initNonces, syncMrrClock, mrrApiCall } from './mrr.js';
 import { registerRoutes } from './routes.js';
@@ -54,8 +54,6 @@ export async function initializeApp(env) {
       console.log(`   - ADMIN_PASS: ${env.ADMIN_PASS ? '******** (Set)' : 'MISSING'}`);
     }
 
-    await initDatabase();
-    await cleanAllCache();
     await initNonces();
     await syncMrrClock();
   } catch (error) {

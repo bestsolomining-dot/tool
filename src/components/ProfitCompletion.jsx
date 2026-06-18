@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { getPriceData, getBtcPriceData, parsePriceValue } from '../core/priceUtils.js';
+import { HASHRATE_SUFFIXES, getAlgorithmUnit } from '../core/mapping.js';
 
 function resolveUnit(value) {
-  const map = { EH: 1e18, PH: 1e15, TH: 1e12, GH: 1e9, MH: 1e6, KH: 1e3, H: 1 };
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (!value) return 1e12;
+  if (typeof value === 'number' && Number.isFinite(value)) return value; // Already a numeric factor
+  if (!value) return HASHRATE_SUFFIXES['TH']; // Default to TH
   const normalized = String(value).toUpperCase().replace(/\s+/g, '').replace(/\/S$/, '');
-  const match = normalized.match(/(EH|PH|TH|GH|MH|KH|H)(?:\/S)?$/) || normalized.match(/(EH|PH|TH|GH|MH|KH|H)/);
-  return match && map[match[1]] ? map[match[1]] : 1e12;
+  const matchedSuffix = Object.keys(HASHRATE_SUFFIXES).find(suffix => normalized.includes(suffix));
+  return matchedSuffix ? HASHRATE_SUFFIXES[matchedSuffix] : HASHRATE_SUFFIXES['TH'];
 }
 
 function normalizeToDateTimeLocal(value) {
@@ -52,11 +52,13 @@ export default function HashCompletionCalculator({
   const [nhPriceData, setNhPriceData] = useState(initialNhPriceData);
 
   const units = [
-    { label: 'EH/s', value: 1e18 },
-    { label: 'PH/s', value: 1e15 },
-    { label: 'TH/s', value: 1e12 },
-    { label: 'GH/s', value: 1e9 },
-    { label: 'MH/s', value: 1e6 },
+    { label: 'EH/s', value: HASHRATE_SUFFIXES['EH'] },
+    { label: 'PH/s', value: HASHRATE_SUFFIXES['PH'] },
+    { label: 'TH/s', value: HASHRATE_SUFFIXES['TH'] },
+    { label: 'GH/s', value: HASHRATE_SUFFIXES['GH'] },
+    { label: 'MH/s', value: HASHRATE_SUFFIXES['MH'] },
+    { label: 'KH/s', value: HASHRATE_SUFFIXES['KH'] },
+    { label: 'H/s', value: HASHRATE_SUFFIXES['H'] },
   ];
 
   useEffect(() => {

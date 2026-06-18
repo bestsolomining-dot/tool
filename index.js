@@ -9,12 +9,13 @@ import cors from 'cors'; // Import cors middleware
 import { verifyToken } from './server/auth.js';
 import { resolveNhClient, getNiceHashApp } from './server/nh.js';
 import { mrrApiCall } from './server/mrr.js';
+import sqlite3 from 'sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, 'dist', 'client');
 
-const STATS_DB_PATH = path.join(__dirname, 'stats_db.json');
+const STATS_DB_PATH = path.join(__dirname, 'stats.db');
 const app = createApp({ distPath });
 const PORT = process.env.PORT || 3000;
 
@@ -36,24 +37,109 @@ const statsCache = new Map();
 const CACHE_TTL = 30000; // 30 seconds
 
 /** Persistence layer: Save stats to disk to act as a database */
-async function persistStats() {
+let db;
+
+function initDatabase() {
+  return new Promise((resolve, reject) => {
+    db = new sqlite3.Database(STATS_DB_PATH, (dbErr) => {
+      if (dbErr) return reject(dbErr);
+
+      db.run(`CREATE TABLE IF NOT EXISTS stats_cache (
+        key TEXT PRIMARY KEY,
+        data TEXT,
+        ts INTEGER
+      )`, (err) => {
+        if (err) reject(err);
+      });
+
+      db.run(`CREATE TABLE IF NOT EXISTS api_errors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        source TEXT,
+        content_type TEXT,
+        content TEXT
+      )`, (err) => {
+        if (err) console.error(`[db] Failed to create api_errors table: ${err.message}`);
+      });
+
+      db.run(`CREATE TABLE IF NOT EXISTS mrr_nonces (
+        client TEXT PRIMARY KEY,
+        last_nonce TEXT
+      )`, (err) => {
+        if (err) reject(err);
+      });
+
+      db.run(`CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      )`, (err) => {
+        if (err) console.error(`[db] Failed to create settings table: ${err.message}`);
+      });
+
+      resolve();
+    });
+  });
+}
+
+async function cleanAllCache() {
+  console.info('[init] Wiping persistent state for fresh start...');
   try {
-    const data = Object.fromEntries(statsCache.entries());
-    await fs.writeFile(STATS_DB_PATH, JSON.stringify(data, null, 2));
+    await new Promise((resolve, reject) => {
+      db.serialize(() => {
+        db.run("DELETE FROM rentals", (err) => {
+          if (err) console.warn(`[db] Failed to clear rentals: ${err.message}`);
+          resolve();
+        });
+      });
+    });
+
+    console.info('✨ System state initialized (Cache & DB cleared).');
   } catch (err) {
-    console.error('[db] Failed to save stats:', err.message);
+    console.error(`[init] Failed to clean cache: ${err.message}`);
   }
 }
 
-async function loadStats() {
-  try {
-    const raw = await fs.readFile(STATS_DB_PATH, 'utf-8');
-    const data = JSON.parse(raw);
-    Object.entries(data).forEach(([k, v]) => statsCache.set(k, v));
-    console.log('[db] Loaded cached stats from disk');
-  } catch (err) {
-    console.log('[db] No existing stats database found, starting fresh.');
-  }
+function persistStats() {
+  return new Promise((resolve) => {
+    const entries = Array.from(statsCache.entries());
+    if (entries.length === 0) return resolve();
+
+    const stmt = db.prepare(`INSERT OR REPLACE INTO stats_cache (key, data, ts) VALUES (?, ?, ?)`);
+    let completed = 0;
+
+    entries.forEach(([key, value]) => {
+      stmt.run(key, JSON.stringify(value.data), value.ts, (err) => {
+        if (err) console.error('[db] Failed to save stats:', err.message);
+        completed++;
+        if (completed === entries.length) {
+          stmt.finalize();
+          resolve();
+        }
+      });
+    });
+  });
+}
+
+function loadStats() {
+  return new Promise((resolve) => {
+    db.all(`SELECT key, data, ts FROM stats_cache`, [], (err, rows) => {
+      if (err) {
+        console.log('[db] No existing stats database found or failed to read, starting fresh.');
+        return resolve();
+      }
+      if (rows) {
+        rows.forEach(row => {
+          try {
+            statsCache.set(row.key, { data: JSON.parse(row.data), ts: row.ts });
+          } catch (e) {
+            console.error(`[db] Failed to parse row ${row.key}:`, e.message);
+          }
+        });
+        console.log('[db] Loaded cached stats from SQLite database');
+      }
+      resolve();
+    });
+  });
 }
 
 async function scrapeHeroMinersGlobal(force = false) {
@@ -65,43 +151,59 @@ async function scrapeHeroMinersGlobal(force = false) {
 
   // Directly target the JSON API endpoint as it is the source of truth and faster.
   // Added a 10s timeout to prevent the request from hanging and triggering frontend timeouts.
-  const url = 'https://herominers.com/api/stats';
+  const url = 'https://herominers.com';
   
   const res = await fetch(url, { 
     headers: COMMON_HEADERS,
     signal: AbortSignal.timeout(10000)
   });
 
-  if (!res.ok) throw new Error(`HeroMiners API failed: ${res.statusText}`);
+  const contentType = res.headers.get('content-type');
+  if (!res.ok || (contentType && contentType.includes('text/html'))) {
+    const htmlContent = await res.text();
+    const $ = cheerio.load(htmlContent);
+    const coinStats = [];
+    $('div.table-responsive > table > tbody > tr').each((i, el) => {
+      const tds = $(el).find('td');
+      if (tds.length < 8) return;
+      coinStats.push({
+        coin: $(tds[0]).find('b').text().trim(),
+        algorithm: $(tds[1]).text().trim(),
+        poolHashrate: $(tds[3]).text().trim(),
+        networkHashrate: $(tds[4]).text().trim(),
+        miners: parseInt($(tds[5]).text().trim(), 10) || 0,
+        workers: parseInt($(tds[6]).text().trim(), 10) || 0,
+        blockHeight: $(tds[2]).text().trim(),
+      });
+    });
+
+    if (coinStats.length === 0) {
+      throw new Error('Failed to parse coin stats from HeroMiners HTML.');
+    }
+
+    const result = { coinStats, miners: coinStats.reduce((acc, c) => acc + c.miners, 0) };
+    statsCache.set(CACHE_KEY, { data: result, ts: Date.now() });
+    await persistStats();
+    return result;
+  }
 
   const data = await res.json();
   if (!data || !data.coins) {
-    throw new Error('Invalid HeroMiners API response format');
+    throw new Error(`Invalid HeroMiners API response format from ${url}`);
   }
 
   const coinStats = [];
-
-  if (data && data.coins) {
-    Object.entries(data.coins).forEach(([coinId, stats]) => {
-      coinStats.push({
-        coin: coinId.toUpperCase(),
-        algorithm: stats.algorithm || 'N/A',
-        networkHashrate: stats.network_hashrate || '0',
-        poolHashrate: stats.pool_hashrate || '0',
-        blockHeight: stats.block_height || '0',
-        blocksFound: stats.blocks_found || '0',
-        miners: parseInt(stats.miners) || 0,
-        workers: parseInt(stats.workers) || 0,
-        totalPayments: stats.total_payments || '0',
-        usdPerDay: 0,
-        btcPerDay: 0
-      });
+  Object.entries(data.coins).forEach(([coinId, stats]) => {
+    coinStats.push({
+      coin: coinId.toUpperCase(),
+      algorithm: stats.algorithm || 'N/A',
+      networkHashrate: stats.network_hashrate || '0',
+      poolHashrate: stats.pool_hashrate || '0',
+      blockHeight: stats.block_height || '0',
+      miners: parseInt(stats.miners) || 0,
+      workers: parseInt(stats.workers) || 0,
     });
-  }
-
-  if (coinStats.length === 0) {
-    console.warn('[scrapeHeroMinersGlobal] No coin stats found in API response.');
-  }
+  });
 
   const result = { 
     coinStats,
@@ -120,44 +222,47 @@ async function scrapeMiningDutchGlobal(force = false) {
     if (cached && (Date.now() - cached.ts < CACHE_TTL)) return cached.data;
   }
 
+  const url = 'https://www.mining-dutch.nl/';
   try {
-    const fetchWithTimeout = (u) => fetch(u, { 
+    const res = await fetch(url, {
       headers: COMMON_HEADERS,
-      signal: AbortSignal.timeout(10000) 
+      signal: AbortSignal.timeout(10000)
     });
 
-    const [psRes, nmRes, apRes] = await Promise.all([
-      fetchWithTimeout('https://www.mining-dutch.nl/api/status/'),
-      fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/multiport/?method=nowmining'),
-      fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/multiport/?method=avgprofitability')
-    ]);
-
-    const poolStatus = psRes.ok ? await psRes.json() : {};
-    const nowMining = nmRes.ok ? await nmRes.json() : { success: false };
-    const avgProfit = apRes.ok ? await apRes.json() : { success: 0 };
-
-    const nowMap = {};
-    if (nowMining.success && Array.isArray(nowMining.result)) {
-      nowMining.result.forEach(item => { nowMap[item.algorithm] = parseFloat(item.profitability) || 0; });
+    if (!res.ok) {
+      throw new Error(`Mining-Dutch page fetch failed with status: ${res.status}`);
     }
 
-    const avgMap = {};
-    if ((avgProfit.success === 1 || avgProfit.success === true) && avgProfit.result) {
-      Object.keys(avgProfit.result).forEach(algo => {
-        avgMap[algo] = parseFloat(avgProfit.result[algo]?.average) || 0;
-      });
-    }
+    const htmlContent = await res.text();
+    const $ = cheerio.load(htmlContent);
+    const coinStats = [];
+    
+    const nowMiningTable = $('h4:contains("Currently Mining")').next('table');
+    nowMiningTable.find('tbody > tr').each((i, el) => {
+      const tds = $(el).find('td');
+      if (tds.length < 5) return;
 
-    const coinStats = Object.keys(poolStatus).map((algo) => {
-      const info = poolStatus[algo];
-      const btcPerDay = nowMap[algo] || avgMap[algo] || 0;
-      return {
-        algorithm: algo,
-        miners: parseInt(info.workers || 0, 10),
-        hashrate: parseFloat(info.hashrate || 0),
-        btcPerDay: btcPerDay,
-        usdPerDay: btcPerDay * 65000, // Fallback price
-      };
+      const algo = $(tds[0]).text().trim();
+      const profitabilityText = $(tds[2]).text().trim();
+      const profitability = parseFloat(profitabilityText.split(' ')[0]);
+
+      const existing = coinStats.find(c => c.algorithm === algo);
+      if (existing) {
+        existing.btcPerDay = profitability || 0;
+      } else {
+        coinStats.push({
+          algorithm: algo,
+          miners: parseInt($(tds[1]).text().trim(), 10) || 0,
+          hashrate: $(tds[4]).text().trim(),
+          btcPerDay: profitability || 0,
+          usdPerDay: 0, // Will be calculated later if needed
+        });
+      }
+    });
+
+    coinStats.forEach(stat => {
+      const btcPrice = coinPrices?.bitcoin?.btc || 1;
+      stat.usdPerDay = (stat.btcPerDay || 0) * (coinPrices?.bitcoin?.usd || 0) / btcPrice;
     });
 
     const result = { 
@@ -230,7 +335,12 @@ const server = app.listen(PORT, async (err) => {
     return;
   }
 
-  await loadStats();
+  try {
+    await initDatabase();
+    await loadStats();
+  } catch (dbErr) {
+    console.error('[db] Database initialization failed:', dbErr.message);
+  }
 
   console.log('--- NiceHash API Toolbox Server Started ---');
   console.log('Environment: ' + (process.env.NICEHASH_ENVIRONMENT ? process.env.NICEHASH_ENVIRONMENT.toUpperCase() : 'production'));
@@ -275,7 +385,8 @@ wss.on('connection', (ws, request) => {
       if (action === 'herominers') {
         try {
           // 0. Determine which HeroMiners coin subdomain to use
-          let coin = payloadCoin || 'kaspa';
+          let algorithm = 'monero';
+          let coinpayloadCoin;
 
           // Automatically map algorithm to the correct HeroMiners subdomain
           const algoMap = {
@@ -316,7 +427,7 @@ wss.on('connection', (ws, request) => {
           if (!address) throw new Error('Could not resolve mining address');
 
           // 2. Fetch from HeroMiners
-          const url = `https://${coin}.herominers.com/api/stats/${address}`;
+          const url = `https://${algorithm}.herominers.com`;
           console.log(`[ws:herominers] Fetching ${coin} stats for ${address}...`);
           const hmRes = await fetch(url, { 
             headers: COMMON_HEADERS,
@@ -327,7 +438,7 @@ wss.on('connection', (ws, request) => {
             const stats = await hmRes.json();
             responseData.herominers = { success: true, ...stats };
           } else if (hmRes.status === 404) {
-            responseData.herominers = { success: false, error: `Address not found on HeroMiners ${coin} pool. Make sure the rig is actively mining to this pool.` };
+            responseData.herominers = { success: false, error: `Address not found on HeroMiners ${algorithm} pool. Make sure the rig is actively mining to this pool.` };
           } else {
             throw new Error(`HeroMiners returned ${hmRes.status}`);
           }

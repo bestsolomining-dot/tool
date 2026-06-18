@@ -1,3 +1,4 @@
+// routes.js
 import fs from 'fs/promises';
 import path from 'path';
 import { Builder, By, until } from 'selenium-webdriver';
@@ -8,20 +9,33 @@ import { resolveNhClient, getNiceHashApp, nhConfigs, isAggregate, normalizeAlgoF
 import { sendTelegramInternal, runRentalMonitor, getTelegramStatus, setTelegramStatus } from './monitor.js';
 import { db } from './db.js';
 
-/** Helper to save JSON data as a CSV "database" file */
-async function exportDatabaseCsv(filename, items) {
+/** Helper to save JSON data to SQLite database */
+async function saveToDatabase(filename, items) {
   if (!items || !Array.isArray(items) || items.length === 0) return;
+  const tableName = filename.replace('.csv', '').replace(/-/g, '_');
+  const columns = Object.keys(items[0]);
+  const quotedColumns = columns.map(c => `"${c}"`);
+  const placeholders = columns.map(() => '?').join(', ');
+  const columnDefs = columns.map(c => {
+    if (c === 'id') return '"id" TEXT PRIMARY KEY';
+    return `"${c}" TEXT`;
+  }).join(', ');
+
   try {
-    const headers = Object.keys(items[0]).join(',');
-    const rows = items.map(item =>
-      Object.values(item).map(v => {
-        const str = typeof v === 'object' ? JSON.stringify(v) : String(v ?? '');
-        return `"${str.replace(/"/g, '""')}"`;
-      }).join(',')
-    ).join('\n');
-    await fs.writeFile(path.join(process.cwd(), filename), `${headers}\n${rows}`, 'utf-8');
+    db.serialize(() => {
+      db.run(`CREATE TABLE IF NOT EXISTS ${tableName} (${columnDefs})`);
+      const stmt = db.prepare(`INSERT OR REPLACE INTO ${tableName} (${quotedColumns.join(', ')}) VALUES (${placeholders})`);
+      items.forEach(item => {
+        const values = columns.map(c => {
+          const v = item[c];
+          return typeof v === 'object' ? JSON.stringify(v) : String(v ?? '');
+        });
+        stmt.run(...values);
+      });
+      stmt.finalize();
+    });
   } catch (err) {
-    console.error(`[export] Failed to save ${filename}:`, err.message);
+    console.error(`[db] Failed to save to ${tableName}:`, err.message);
   }
 }
 
@@ -226,7 +240,7 @@ export function registerRoutes(app) {
         ts: new Date().toISOString(),
       }));
 
-    await exportDatabaseCsv('nh_order.csv', processedList.filter(o => o.status === 'ACTIVE'));
+    await saveToDatabase('nh_order.csv', processedList.filter(o => o.status === 'ACTIVE'));
 
     res.json(typeof data === 'object' && !Array.isArray(data) ? { ...data, list: processedList } : processedList);
   }));
@@ -269,48 +283,48 @@ export function registerRoutes(app) {
     res.json({ success: true, maxPrice, totalPaid: totalPaid.toFixed(8), count: matchingOrders.length, orders: matchingOrders });
   }));
 
-  // app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => {
-  //   const clientParam = String(req.query.client || 'BT').toUpperCase();
-  //   if (isAggregate(clientParam)) {
-  //     const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
-  //     const processedClients = new Set();
-  //     for (const acct of nhAccounts) {
-  //       const { client, clientName } = resolveNhClient(acct);
-  //       if (!client || (acct !== 'BT' && clientName === 'BT') || processedClients.has(clientName)) continue;
-  //       processedClients.add(clientName);
-  //       try {
-  //         const data = await getNiceHashApp(client).hashpower.getOrderDetail(req.params.orderId);
-  //         if (data && !data.error) {
-  //           res.set('X-NH-Client', clientName);
-  //           return res.json(data);
-  //         }
-  //       } catch (e) { }
-  //     }
-  //   }
-  //   res.json(await req.nhApp.hashpower.getOrderDetail(req.params.orderId));
-  // }));
+  app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => {
+    const clientParam = String(req.query.client || 'BT').toUpperCase();
+    if (isAggregate(clientParam)) {
+      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+      const processedClients = new Set();
+      for (const acct of nhAccounts) {
+        const { client, clientName } = resolveNhClient(acct);
+        if (!client || (acct !== 'BT' && clientName === 'BT') || processedClients.has(clientName)) continue;
+        processedClients.add(clientName);
+        try {
+          const data = await getNiceHashApp(client).hashpower.getOrderDetail(req.params.orderId);
+          if (data && !data.error) {
+            res.set('X-NH-Client', clientName);
+            return res.json(data);
+          }
+        } catch (e) { }
+      }
+    }
+    res.json(await req.nhApp.hashpower.getOrderDetail(req.params.orderId));
+  }));
 
   app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.createOrder(req.body))));
   app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderBook(req.query))));
-  // app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
-  //   const clientParam = String(req.query.client || 'BT').toUpperCase();
-  //   if (isAggregate(clientParam)) {
-  //     const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
-  //     for (const acct of nhAccounts) {
-  //       const { client, clientName } = resolveNhClient(acct);
-  //       if (!client || (acct !== 'BT' && clientName === 'BT')) continue;
-  //       try {
-  //         const data = await getNiceHashApp(client).hashpower.getOrderPrice(req.query);
-  //         if (data && !data.error) {
-  //           res.set('X-NH-Client', clientName);
-  //           return res.json(data);
-  //         }
-  //       } catch (e) { }
-  //     }
-  //   }
+  app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
+    const clientParam = String(req.query.client || 'BT').toUpperCase();
+    if (isAggregate(clientParam)) {
+      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+      for (const acct of nhAccounts) {
+        const { client, clientName } = resolveNhClient(acct);
+        if (!client || (acct !== 'BT' && clientName === 'BT')) continue;
+        try {
+          const data = await getNiceHashApp(client).hashpower.getOrderPrice(req.query);
+          if (data && !data.error) {
+            res.set('X-NH-Client', clientName);
+            return res.json(data);
+          }
+        } catch (e) { }
+      }
+    }
 
-  //   return res.json(await req.nhApp.hashpower.getOrderPrice(req.query));
-  // }));
+    return res.json(await req.nhApp.hashpower.getOrderPrice(req.query));
+  }));
 
   app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.cancelOrder(req.params.orderId))));
   app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.refillOrder(req.params.orderId, req.body))));
@@ -460,7 +474,7 @@ export function registerRoutes(app) {
   app.get('/api/v2/mrr/monitor/snapshot', asyncHandler(async (req, res) => {
     db.all(`SELECT * FROM rentals ORDER BY last_updated DESC`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
-      exportDatabaseCsv('monitor_snapshot.csv', rows);
+      saveToDatabase('monitor_snapshot.csv', rows);
       res.json({ success: true, data: rows });
     });
   }));
@@ -557,7 +571,7 @@ export function registerRoutes(app) {
         if (res.error) errors.push(res.error);
       });
 
-      await exportDatabaseCsv('mrr_rigs.csv', allRigs);
+      await saveToDatabase('mrr_rigs.csv', allRigs);
 
       res.json({ success: true, rigs: allRigs, errors: errors.length > 0 ? errors : undefined });
     } else {
@@ -666,7 +680,7 @@ export function registerRoutes(app) {
       query: forwardQuery,
     });
     if (statusCode === 200 && data?.success) {
-      await exportDatabaseCsv('mrr_account_pools.csv', data.data || []);
+      await saveToDatabase('mrr_account_pools.csv', data.data || []);
 
       const pools = data.data || [];
       if (pools.length > 0) {
@@ -767,7 +781,7 @@ export function registerRoutes(app) {
     const { client: clientQuery, ...forwardQuery } = req.query || {};
     const result = await fetchAggregatedRentals(forwardQuery, String(clientQuery || defaultMrrClient).toUpperCase());
     
-    await exportDatabaseCsv('mrr_rentals.csv', result.data?.data?.rentals || []);
+    await saveToDatabase('mrr_rentals.csv', result.data?.data?.rentals || []);
 
     res.set('X-MRR-Client', result.clientName);
     res.status(result.statusCode).json(result.data);
@@ -777,7 +791,7 @@ export function registerRoutes(app) {
     const { client: clientQuery, ...forwardQuery } = req.query || {};
     const result = await fetchAggregatedRentals({ ...forwardQuery, history: '1' }, String(clientQuery || defaultMrrClient).toUpperCase());
     
-    await exportDatabaseCsv('mrr_rental_history.csv', result.data?.data?.rentals || []);
+    await saveToDatabase('mrr_rental_history.csv', result.data?.data?.rentals || []);
 
     res.set('X-MRR-Client', result.clientName);
     res.status(result.statusCode).json(result.data);

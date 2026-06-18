@@ -1,202 +1,221 @@
-// Unit factors relative to TH/s (1 TH = 1 TH, 1 PH = 1000 TH, 1 EH = 1,000,000 TH)
-export const UNIT_FACTORS = {
-  EH: 1e6, PH: 1000, TH: 1, GH: 1e-3, MH: 1e-6, KH: 1e-9, H: 1e-12,
-  EHS: 1e6, PHS: 1000, THS: 1, GHS: 1e-3, MHS: 1e-6,
-  E: 1e6, P: 1000, T: 1, G: 1e-3, M: 1e-6, K: 1e-9
+// mapping.js - Core algorithm mapping for NiceHash and MRR
+
+export const ALGO_DISPLAY_NAMES = {
+  'SHA256': 'SHA-256',
+  'SCRYPT': 'Scrypt',
+  'ETHASH': 'Ethash',
+  'DAGGERHASHIMOTO': 'DaggerHashimoto',
+  'ETCHASH': 'Etchash',
+  'EQUIHASH': 'Equihash',
+  'KAWPOW': 'KawPow',
+  'AUTOLYKOSV2': 'Autolykos v2',
+  'AUTOLYKOS': 'Autolykos',
+  'RANDOMX': 'RandomX',
+  'RANDOMXMONERO': 'RandomXMonero',
+  'OCTOPUS': 'Octopus',
+  'KHEAVYHASH': 'KHeavyHash',
+  'FISHHASH': 'FishHash',
+  'DYNEXSOLVE': 'DynexSolve',
+  'BEAMHASHIII': 'BeamHash III',
+  'BLAKE3': 'Blake3',
+  'BLAKE3_ALPH': 'Blake3 (Alephium)',
+  'JANUSHASH': 'Janushash',
+  'XELISHASHV3': 'XelisHash v3',
+  'PROGPOWZ': 'ProgPow Zano',
+  'PEARLHASH': 'PearlHash',
+  'X11': 'X11',
+  'LYRA2REV2': 'Lyra2REv2',
+  'LYRA2Z': 'Lyra2Z',
+  'NEOSCRYPT': 'NeoScrypt',
+  'YESPOWER': 'Yespower',
+  'ARGON2': 'Argon2',
+  'CN_R': 'CryptoNight R',
+  'CN_HEAVY': 'CryptoNight Heavy',
+  'IRONFISH': 'IronFish',
+  'ALEPHIUM': 'Alephium',
+  'BEAMV3': 'BeamV3',
 };
 
-/**
- * Shared algorithm mapping between MRR and NiceHash identifiers.
- */
-export const algoMap = {
-  // Common GPU Algorithms
+// NiceHash algorithm normalization
+export const NICEHASH_ALGO_MAP = {
+  'SHA256': 'SHA256',
+  'SCRYPT': 'SCRYPT',
   'ETHASH': 'DAGGERHASHIMOTO',
   'DAGGERHASHIMOTO': 'DAGGERHASHIMOTO',
-  'HASHIMOTO': 'DAGGERHASHIMOTO',
-  'HASHIMOTOS': 'DAGGERHASHIMOTO',
-  'ETCHASH': 'ETCHASH',
-  'ETC': 'ETCHASH',
-  'ETHEREUMCLASSIC': 'ETCHASH',
-  'KAWPOW': 'KAWPOW',
-  'RVN': 'KAWPOW',
-  'RAVEN': 'KAWPOW',
-  'OCTOPUS': 'OCTOPUS',
-  'CFX': 'OCTOPUS',
-  'AUTOLYKOS': 'AUTOLYKOS',
-  'AUTOLYKOSV2': 'AUTOLYKOS',
-  'AUTOLYKOSV2_ERGO': 'AUTOLYKOS',
-  'ERGO': 'AUTOLYKOS',
-  'ERG': 'AUTOLYKOS',
-  'FISHHASH': 'FISHHASH',
-  'PEARLHASH': 'PEARLHASH',
-
-  // Common ASIC Algorithms
-  'SHA256': 'SHA256', // Map generic SHA256 to the specific NiceHash variant
-  'SHA256ASICBOOST': 'SHA256ASICBOOST',
-  'SHA256AB': 'SHA256ASICBOOST',
-  // 'BTC': 'SHA256ASICBOOST',
-  'SCRYPT': 'SCRYPT',
-  'SCRYPTN': 'SCRYPT',
-  'SCRYPT-N': 'SCRYPT',
-  'LTC': 'SCRYPT',
-  'LITECOIN': 'SCRYPT',
-  'X11': 'X11',
-  'DASH': 'X11',
-  'QUARK': 'QUARK',
-  'X13': 'X13',
-  'KECCAK': 'KECCAK',
-  'SHA3': 'KECCAK',
-  'KECCAKSHA3': 'KECCAK',
-  'RANDOMX': 'RANDOMXMONERO', // Map generic RandomX to the specific NiceHash variant
-  'MONERO': 'RANDOMXMONERO', // Map Monero to the specific NiceHash variant
-  'RANDOMXMONERO': 'RANDOMXMONERO', // Keep as is
-  'XMR': 'RANDOMXMONERO', // Map XMR to the specific NiceHash variant
-  'RANDOMX_XMR': 'RANDOMXMONERO',
-
-  // Equihash Variants
   'EQUIHASH': 'EQUIHASH',
-  'ZHASH': 'ZHASH',
-  'EQUIHASH1445': 'ZHASH',
-  'EQUIHASH1927': 'ZHASH',
-  'BEAMV3': 'BEAMV3',
-  'EQUIHASH1254': 'BEAMV3',
-  'BEAMHASHIII': 'BEAMV3',
-  'BEAMIII': 'BEAMV3',
-  'BEAM': 'BEAMV3',
-  'XELISHASHV3': 'XELISHASHV3',
-
-  // Modern/Newer Algorithms
-  'IRONFISH': 'IRONFISH',
-  'IRON': 'IRONFISH',
-  'ALEPHIUM': 'ALEPHIUM',
-  'ALPH': 'ALEPHIUM',
-  'BLAKE3_ALPH': 'ALEPHIUM',
-  'KARLSENHASH': 'KARLSENHASH',
-  'KLS': 'KARLSENHASH',
-  'PYRINHASH': 'PYRINHASH',
-  'PYI': 'PYRINHASH',
-  'NEXA': 'NEXA',
+  'ETCHASH': 'ETCHASH',
+  'KAWPOW': 'KAWPOW',
+  'AUTOLYKOSV2': 'AUTOLYKOS',
+  'AUTOLYKOS': 'AUTOLYKOS',
+  'RANDOMX': 'RANDOMXMONERO',
+  'RANDOMXMONERO': 'RANDOMXMONERO',
+  'OCTOPUS': 'OCTOPUS',
   'KHEAVYHASH': 'KHEAVYHASH',
-  'KASPA': 'KHEAVYHASH',
-  'KAS': 'KHEAVYHASH',
-  'VERUSHASH': 'VERUSHASH',
-  'VRSC': 'VERUSHASH',
-  'NEOSCRYPT': 'NEOSCRYPT',
+  'FISHHASH': 'FISHHASH',
+  'DYNEXSOLVE': 'DYNEXSOLVE',
+  'BEAMHASHIII': 'BEAMV3',
+  'BEAMV3': 'BEAMV3',
+  'BLAKE3_ALPH': 'ALEPHIUM',
+  'BLAKE3': 'ALEPHIUM',
   'JANUSHASH': 'JANUSHASH',
-  'PROGPOWZ': 'PROGPOWZ',
-  'CUCKAROO30': 'CUCKAROO30',
-  'LYRA2REV3': 'LYRA2REV3',
-  'X16R': 'X16R',
-  'X16RV2': 'X16RV2',
-  'CUCKAROO29': 'GRINCUCKAROO29',
-  'GRINCUCKAROO29': 'GRINCUCKAROO29',
-  'CUCKATOO31': 'GRINCUCKATOO31',
-  'GRINCUCKATOO31': 'GRINCUCKATOO31',
-  'CUCKATOO32': 'GRINCUCKATOO32',
-  'GRINCUCKATOO32': 'GRINCUCKATOO32',
-  'HANDSHAKE': 'HANDSHAKE',
-  'HNS': 'HANDSHAKE',
-  'LBRY': 'LBRY'
-};
-
-/** Display names for algorithms (user-friendly formatting) */
-export const ALGO_DISPLAY_NAMES = {
-  'SHA256': 'SHA256',
-  'SCRYPT': 'Scrypt',
-  'DAGGERHASHIMOTO': 'DaggerHashimoto',
-  'KAWPOW': 'KawPow',
-  'RANDOMXMONERO': 'RandomXMonero',
-  'ETCHASH': 'Etchash',
-  'RANDOMX': 'RandomX',
-  'FISHHASH': 'FishHash',
-  'OCTOPUS': 'Octopus',
-  'AUTOLYKOS': 'Autolykos',
-  'KHEAVYHASH': 'KHeavyHash',
-  'EQUIHASH': 'Equihash',
-  'BLAKE2S': 'Blake2s',
-  'LBRY': 'LBRY',
+  'XELISHASHV3': 'XELISHASHV3',
   'X11': 'X11',
-  'GRIN29': 'Grin29',
-  'GRIN31': 'Grin31',
-  'LYRA2RE': 'Lyra2RE',
-  'LYRA2REV2': 'Lyra2REv2',
-  'LYRA2REV3': 'Lyra2REv3',
-  'NEOSCRYPT': 'NeoScrypt',
-  'PYRIN': 'Pyrin',
-  'KARLSEN': 'Karlsen',
-  'KARLSENHASH': 'KarlsenHash',
-  'IRONFISH': 'IronFish',
-  'EAGLESONG': 'EagleSong',
-  'HANDSHAKE': 'Handshake',
-  'SHA256ASICBOOST': 'SHA256AsicBoost'
+  'PROGPOWZ': 'PROGPOWZ',
+  'PEARLHASH': 'PEARLHASH',
+  'IRONFISH': 'IRONFISH',
+  'ALEPHIUM': 'ALEPHIUM',
 };
 
-/** Standardizes an algorithm name and maps it to the equivalent NiceHash identifier. */
+// MRR algorithm mapping
+export const MRR_ALGO_MAP = {
+  'SHA256': 'sha256',
+  'SCRYPT': 'scrypt',
+  'ETHASH': 'ethash',
+  'DAGGERHASHIMOTO': 'ethash',
+  'EQUIHASH': 'equihash',
+  'ETCHASH': 'etchash',
+  'KAWPOW': 'kawpow',
+  'AUTOLYKOSV2': 'autolykos_v2',
+  'AUTOLYKOS': 'autolykos_v2',
+  'RANDOMX': 'randomx',
+  'RANDOMXMONERO': 'randomx',
+  'OCTOPUS': 'octopus',
+  'KHEAVYHASH': 'kheavyhash',
+  'FISHHASH': 'fishhash',
+  'DYNEXSOLVE': 'dynexsolve',
+  'BEAMHASHIII': 'beamhash_iii',
+  'BLAKE3_ALPH': 'blake3_alph',
+  'BLAKE3': 'blake3_alph',
+  'JANUSHASH': 'janushash',
+  'XELISHASHV3': 'xelishash_v3',
+  'X11': 'x11',
+  'PROGPOWZ': 'progpowz',
+  'PEARLHASH': 'pearlhash',
+};
+
+// Hashrate suffixes for display
+export const HASHRATE_SUFFIXES = {
+  'EH': 1e18,
+  'PH': 1e15,
+  'TH': 1e12,
+  'GH': 1e9,
+  'MH': 1e6,
+  'KH': 1e3,
+  'H': 1,
+  'KSol': 1e3,
+  'Sol': 1,
+  'KSOL': 1e3,
+  'SOL': 1,
+};
+
+// Algorithm market units (NiceHash Market Standards)
+export const ALGO_UNITS = {
+  'SHA256': 'PH',
+  'SCRYPT': 'PH',
+  'X11': 'PH',
+  'DAGGERHASHIMOTO': 'TH',
+  'ETHASH': 'TH',
+  'ETCHASH': 'TH',
+  'KAWPOW': 'TH',
+  'EQUIHASH': 'TH',
+  'AUTOLYKOSV2': 'TH',
+  'AUTOLYKOS': 'TH',
+  'RANDOMX': 'TH',
+  'RANDOMXMONERO': 'TH',
+  'OCTOPUS': 'TH',
+  'KHEAVYHASH': 'TH',
+  'FISHHASH': 'TH',
+  'DYNEXSOLVE': 'TH',
+  'BEAMHASHIII': 'TH',
+  'BEAMV3': 'TH',
+  'BLAKE3_ALPH': 'TH',
+  'BLAKE3': 'TH',
+  'JANUSHASH': 'TH',
+  'XELISHASHV3': 'TH',
+  'PROGPOWZ': 'TH',
+  'PEARLHASH': 'TH',
+  'IRONFISH': 'TH',
+  'ALEPHIUM': 'TH'
+};
+
+// Factors relative to TH/s (Used for pricing math in MrrRigCard)
+export const UNIT_FACTORS = {
+  'EH': 1e6,
+  'PH': 1e3,
+  'TH': 1,
+  'GH': 1e-3,
+  'MH': 1e-6,
+  'KH': 1e-9,
+  'H': 1e-12,
+  'KSOL': 1e-9,
+  'SOL': 1e-12
+};
+
 export function normalizeAlgoForNiceHash(algo) {
-  if (!algo) return '';
-  let clean = String(algo).toUpperCase().trim().replace(/\s*\(.*\)/g, '');
-  const firstWord = clean.split(/\s+/)[0];
-  return algoMap[clean] || algoMap[firstWord] || clean.replace(/[^A-Z0-9]/g, '').toUpperCase();
+  if (!algo) return 'UNKNOWN';
+  const normalized = String(algo).toUpperCase().trim();
+  
+  // Direct mapping
+  if (NICEHASH_ALGO_MAP[normalized]) {
+    return NICEHASH_ALGO_MAP[normalized];
+  }
+  
+  // Handle common variations
+  if (normalized.includes('SHA256')) return 'SHA256';
+  if (normalized.includes('SCRYPT')) return 'SCRYPT';
+  if (normalized.includes('ETHASH')) return 'DAGGERHASHIMOTO';
+  if (normalized.includes('ETCHASH')) return 'ETCHASH';
+  if (normalized.includes('KAWPOW')) return 'KAWPOW';
+  if (normalized.includes('RANDOMX')) return 'RANDOMXMONERO';
+  if (normalized.includes('OCTOPUS')) return 'OCTOPUS';
+  if (normalized.includes('KHEAVYHASH')) return 'KHEAVYHASH';
+  if (normalized.includes('FISHHASH')) return 'FISHHASH';
+  if (normalized.includes('DYNEXSOLVE')) return 'DYNEXSOLVE';
+  if (normalized.includes('BEAMHASH')) return 'BEAMHASHIII';
+  if (normalized.includes('BLAKE3')) return 'BLAKE3';
+  if (normalized.includes('JANUSHASH')) return 'JANUSHASH';
+  if (normalized.includes('XELISHASH')) return 'XELISHASHV3';
+  if (normalized.includes('PROGPOW')) return 'PROGPOWZ';
+  if (normalized.includes('PEARLHASH')) return 'PEARLHASH';
+  
+  return 'UNKNOWN';
 }
 
-/** Reverse mapping: NiceHash identifier to MRR slug. */
-export function mapNiceHashToMRR(algo) {
-  if (!algo) return '';
-  const entry = Object.entries(algoMap).find(([mrr, nh]) => nh === algo.toUpperCase());
-  return entry ? entry[0] : algo.toUpperCase();
+export function mapNiceHashToMRR(nicehashAlgo) {
+  if (!nicehashAlgo) return 'unknown';
+  const normalized = String(nicehashAlgo).toUpperCase().trim();
+  return MRR_ALGO_MAP[normalized] || normalized.toLowerCase();
 }
 
-/** Returns a friendly display name for an algorithm code. */
-export function getAlgoDisplayName(code) {
-  if (!code) return 'N/A';
-  const uc = String(code).toUpperCase();
-  return ALGO_DISPLAY_NAMES[uc] || code;
+export function getAlgorithmUnit(algo) {
+  if (!algo) return 'H/s';
+  const normalized = String(algo).toUpperCase().trim();
+  return ALGO_UNITS[normalized] || 'H/s';
 }
 
-/** Maps market identifiers (numeric IDs, strings, or objects) to NiceHash string names (EU/USA). */
-export function getMarketName(market) {
-  // Handle case where market might be the full object from API
-  const id = (market && typeof market === 'object') ? market.id : market;
-  const m = String(id || '').trim().toUpperCase();
+export const getAlgoDisplayName = (algo) => getAlgorithmDisplayName(algo);
 
-  if (m === '0' || m === 'EU' || m === 'EUROPE') return 'EU';
-  if (m === '1' || m === 'USA' || m === 'US' || m === 'USA_EAST') return 'USA';
-  return 'USA'; // Default
+export function getAlgorithmDisplayName(algo) {
+  if (!algo) return 'Unknown';
+  const normalized = String(algo).toUpperCase().trim();
+  return ALGO_DISPLAY_NAMES[normalized] || algo;
 }
 
-/** Standardized hashrate pricing formatter. */
-export function formatHashratePrice(price, currency = 'BTC', unit = 'TH') {
-  const cleanUnit = String(unit || 'TH').toUpperCase().replace('S', '');
-  return `${parseFloat(price || 0).toFixed(6)} ${currency} / ${cleanUnit} / Day`;
+export function calculatePriceComparison(yourPrice, yourUnit, marketPrice, marketUnit, isMrrVsNh = false) {
+  if (!yourPrice || !marketPrice || yourPrice <= 0 || marketPrice <= 0) return null;
+  
+  // Convert to same unit (H/s)
+  const yourH = parseFloat(yourPrice) * getUnitMultiplier(yourUnit);
+  const marketH = parseFloat(marketPrice) * getUnitMultiplier(marketUnit);
+  
+  if (yourH === 0 || marketH === 0) return null;
+  
+  // Calculate percentage difference
+  const diff = ((yourH - marketH) / marketH) * 100;
+  return isMrrVsNh ? -diff : diff;
 }
 
-/** Extracts base unit prefix (e.g., 'BTC/TH/Day' -> 'TH') */
-const normalizeUnit = (u) => {
-  const match = String(u || '').toUpperCase().match(/(EH|PH|TH|GH|MH|KH|H)/);
-  return match ? match[0] : 'TH';
+function getUnitMultiplier(unit) {
+  const normalized = String(unit || '').toUpperCase().trim();
+  return HASHRATE_SUFFIXES[normalized] || 1;
 };
-
-/** Calculates the price difference ROI percentage. */
-export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit, isMrrVsNh = true) {
-  const nhPriceNum = Number.parseFloat(nhPrice || 0);
-  let mrrPriceNum = Number.parseFloat(mrrPrice || 0);
-  if (nhPriceNum <= 0 || mrrPriceNum <= 0) return null;
-
-  const mClean = normalizeUnit(mrrUnit);
-  const nClean = normalizeUnit(nhUnit);
-
-  // Magnitude Guard: If ASIC algorithm and price > 0.01, it's likely a PH price labeled as TH
-  const isAsic = String(mrrUnit || '').toUpperCase().includes('SHA256') || String(mrrUnit || '').toUpperCase().includes('SCRYPT') || String(nhUnit || '').toUpperCase().includes('SHA256');
-  let effectiveMrrUnit = mClean;
-  if (isAsic && mrrPriceNum > 0.01 && mClean === 'TH') effectiveMrrUnit = 'PH';
-
-  // Normalize prices to BTC/TH/Day
-  const mrrPricePerTh = mrrPriceNum / (UNIT_FACTORS[effectiveMrrUnit] || 1);
-  const nhPricePerTh = nhPriceNum / (UNIT_FACTORS[nClean] || 1);
-
-  const diff = isMrrVsNh
-    ? ((mrrPricePerTh - nhPricePerTh) / nhPricePerTh * 100) // (MRR - NH) / NH * 100
-    : ((nhPricePerTh - mrrPricePerTh) / nhPricePerTh * 100); // (NH - MRR) / NH * 100
-
-  return Number.isFinite(diff) ? diff.toFixed(1) : null;
-}

@@ -476,9 +476,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
           const mrrBtcData = getBtcPriceData(r.price || info.price);
           const mrrUnit = clean(info.hashrate.suffix || 'TH');
-          const mrrPriceNorm = (parseFloat(info.price.paid) > 0 && advertised > 0 && info.duration > 0)
-            ? (mrrBtcData.value / (parseFloat(info.duration) / 24) / advertised)
-            : mrrBtcData.value;
+          const durationHours = Number.parseFloat(info.duration);
+          const mrrPriceNorm =
+            Number.isFinite(advertised) && advertised > 0 && Number.isFinite(durationHours) && durationHours > 0
+              ? mrrBtcData.value / (durationHours / 24) / advertised
+              : mrrBtcData.value;
 
           if (nhP.price > 0 && mrrPriceNorm > 0) {
             priceRoi = calculatePriceComparison(mrrPriceNorm, mrrUnit, nhP.price, nhP.unit);

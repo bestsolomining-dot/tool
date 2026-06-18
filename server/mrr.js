@@ -14,16 +14,14 @@ let mrrSyncPromise = null;
 export let mrrConfigs = {}; // Declare as mutable
 export let defaultMrrClient = 'BT'; // Declare as mutable
 
-async function saveRigEndpointToCsv(endpoint, client) {
-  const filePath = path.join(process.cwd(), 'rig.csv');
+async function saveRigEndpointToDb(endpoint, client) {
   const ts = new Date().toISOString();
-  const header = 'timestamp,client,endpoint\n';
-  const line = `"${ts}","${client}","${endpoint}"\n`;
-  try {
-    await fs.writeFile(filePath, header + line, 'utf-8');
-  } catch (err) {
-    console.error(`[mrr:csv] Error saving to rig.csv: ${err.message}`);
-  }
+  db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS mrr_rig_logs (timestamp TEXT, client TEXT, endpoint TEXT)`);
+    db.run(`INSERT INTO mrr_rig_logs (timestamp, client, endpoint) VALUES (?, ?, ?)`, [ts, client, endpoint], (err) => {
+      if (err) console.error(`[mrr:db] Error saving to mrr_rig_logs: ${err.message}`);
+    });
+  });
 }
 
 const mrrQueueByClient = new Map(); // Serialized queue storage to prevent parallel nonce usage
@@ -488,7 +486,7 @@ export async function mrrApiCall({ endpoint, method = 'GET', query, body, client
     console.log(`[${logTime}] [mrr:${clientName}] endpoint=${normalizedPath} nonce=${currentNonce} status=${finalStatus} msg=${authMessage || 'OK'}`);
 
     if (finalStatus === 200 && normalizedPath.startsWith('/rig/')) {
-      saveRigEndpointToCsv(normalizedPath, clientName);
+      saveRigEndpointToDb(normalizedPath, clientName);
     }
 
     return { statusCode: finalStatus, data, clientName };

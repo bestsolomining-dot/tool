@@ -10,6 +10,7 @@ import HashCompletionCalculator from './src/components/HashCompletionCalculator'
 import MrrPoolsManager from './src/components/MrrManager';
 import Login from './src/components/Login';
 import HeroMinersCard from './src/components/HeroMinersCard';
+import { HASHRATE_SUFFIXES, normalizeAlgoForNiceHash, getAlgorithmUnit } from './src/core/mapping';
 import { RentedRigProvider } from './src/components/RentedRigContext';
 import './src/App.css';
 
@@ -88,14 +89,15 @@ export default function App() {
     const end = toDateTimeLocal(info?.endTime || rig?.end || (typeof rig?.status === 'object' ? rig.status.end : '') || '');
     const adsHashrate = parseHashrateValue(info?.advertised || rig?.hashrate?.advertised || rig?.advertised || rig?.hashrate?.hash || rig?.hash || '');
     const avgHashrate = parseHashrateValue(info?.average || rig?.hashrate?.average || rig?.average || rig?.hash || '');
-    const unit = inferUnitValue(info?.advertised || info?.average || rig?.hashrate?.advertised || rig?.hashrate?.average || rig?.hashrate?.suffix || rig?.hashrate_unit || rig?.hashrate?.type || '');
+    const nhAlgo = normalizeAlgoForNiceHash(algo);
+    const unit = HASHRATE_SUFFIXES[getAlgorithmUnit(nhAlgo)]; // Use HASHRATE_SUFFIXES directly with the algorithm's unit
     const nhPriceData = info?.nicehashPrice || rig?.nicehashPrice;
     const rawPrice = info?.price || rig?.price || rig?.min_price || null;
     const priceSource = rawPrice?.paid !== undefined
       ? { paid: rawPrice.paid, currency: rawPrice.currency || rawPrice.price_unit || 'BTC' }
       : rawPrice;
     const btcPriceSource = info?.price_converted || rig?.price_converted || info?.price?.BTC || rig?.price?.BTC || priceSource;
-    const priceUnit = rig?.hashrate_unit || rig?.hashrate?.advertised?.type || rig?.hashrate?.suffix || rig?.hashrate?.type || 'TH';
+    const priceUnit = getAlgorithmUnit(nhAlgo); // This is the string unit
 
     setCompletionCalculatorContext({
       initialAlgo: algo,
@@ -220,8 +222,11 @@ export default function App() {
           if (!options.silent) setOutput(data);
         } else if (!options.silent) {
           const errorMsg =
-            typeof data === 'string'
-              ? data
+            typeof data === 'string' ?
+              (data.trim().startsWith('<') ?
+                'API returned an invalid (HTML) response.' :
+                data
+              )
               : data?.errors?.[0]?.message || data?.error || data?.message || data?.data?.message || res.statusText || 'Unknown API Error';
 
           setError(errorMsg);

@@ -59,7 +59,7 @@ export default function App() {
     setAuthToken(token);
     addDebugLog('Login successful, token stored.', 'success');
     // Optionally, trigger a refresh of data after login
-    // forceCheckStatus(); // This will be called implicitly by effects if needed
+    forceCheckStatus(); // This will be called implicitly by effects if needed
   }, [addDebugLog]);
 
   // Function to handle logout (clears token)
@@ -98,11 +98,7 @@ export default function App() {
     const isPriceReq = path.includes('/order/price');
 
     if (path.startsWith('/api/v2/') && !enrichedQuery.client) {
-      // Logic: 
-      // 1. If it's a Pool request, use the Pool client (usually BT)
-      // 2. If it's a generic request and we are in VN (Aggregate) mode, 
-      //    send 'VN' so the backend knows to aggregate, but handle specific
-      //    order prices via the order client.
+      
       const isPoolReq = path.includes('/pools') || section === 'pools';
       // Don't add default client for price lookups to improve caching and avoid NiceHash parameter rejection
       if (!isPriceReq) enrichedQuery.client = isPoolReq ? nhPoolClient : nhOrderClient;
@@ -189,10 +185,7 @@ export default function App() {
           });
         }
 
-        // Check for 401 Unauthorized globally
         if (res.status === 401) {
-          // Only logout if it's a session failure (no token or invalid token)
-          // Avoid logging out if the backend failed to talk to a provider (like LUCKY account)
           const isProxyFailure = data?.msg?.includes('Invalid Key') || data?.message?.includes('Invalid Key');
           if (!isProxyFailure) {
             addDebugLog('Session expired or invalid (401). Clearing token.', 'error');

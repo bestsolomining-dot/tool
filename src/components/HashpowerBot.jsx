@@ -1,5 +1,42 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { apiFetch } from '../core/poolUtils';
+
+/**
+ * Sub-component for Logs to prevent re-rendering the whole bot on every log entry
+ */
+const LogViewer = memo(({ logs }) => {
+  return (
+    <div className="log-viewer">
+      <label className="label">Activity Logs</label>
+      <div
+        className="code-block-content"
+        style={{
+          height: '160px',
+          overflowY: 'auto',
+          fontSize: '11px',
+          background: 'rgba(0,0,0,0.2)',
+          padding: '10px',
+          borderRadius: '4px',
+          border: '1px solid rgba(255,255,255,0.05)'
+        }}
+      >
+        {logs.length === 0 ? (
+          <span style={{ opacity: 0.4 }}>Bot inactive. Press start to begin.</span>
+        ) : (
+          logs.map((log, i) => (
+            <div key={i} style={{
+              fontFamily: 'monospace',
+              marginBottom: '4px',
+              color: log.includes('[ERROR]') ? '#f87171' : log.includes('[SUCCESS]') ? '#34d399' : '#94a3b8'
+            }}>
+              {log}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+});
 
 /**
  * HashpowerBot Component
@@ -19,14 +56,19 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
   });
 
   const timerRef = useRef(null);
+  const configRef = useRef(config);
 
-  const addLog = (message, type = 'info') => {
+  // Keep ref in sync so the interval logic always has fresh values without re-triggering effects
+  useEffect(() => { configRef.current = config; }, [config]);
+
+  const addLog = useCallback((message, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
     setLogs(prev => [`[${timestamp}] [${type.toUpperCase()}] ${message}`, ...prev].slice(0, 100));
-  };
+  }, []);
 
-  const runIteration = async () => {
+  const runIteration = useCallback(async () => {
     addLog(`Checking market for ${algorithm} (${market})...`);
+    const currentConfig = configRef.current;
 
     try {
       // 1. Get my active orders to find the one we are managing
@@ -79,9 +121,9 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
       // 3. Compare and Adjust
       const myPrice = parseFloat(myOrder.price);
       const mySpeed = parseFloat(myOrder.acceptedCurrentSpeed);
-      const myLimit = parseFloat(config.limit) > 0 ? parseFloat(config.limit) : parseFloat(myOrder.limit);
-      const maxPriceThreshold = parseFloat(config.maxPrice) || 0;
-      const stepDownDelta = parseFloat(config.stepDown) || 0;
+      const myLimit = parseFloat(currentConfig.limit) > 0 ? parseFloat(currentConfig.limit) : parseFloat(myOrder.limit);
+      const maxPriceThreshold = parseFloat(currentConfig.maxPrice) || 0;
+      const stepDownDelta = parseFloat(currentConfig.stepDown) || 0;
       const minDelta = 0.0001; // Minimal increment to be above competitor
 
       // Find highest competitor price that is not ours
@@ -110,9 +152,9 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
       }
 
       // 4. Update the order if price has changed
-      const targetLimit = parseFloat(config.limit) > 0 ? config.limit : myOrder.limit;
+      const targetLimit = parseFloat(currentConfig.limit) > 0 ? currentConfig.limit : myOrder.limit;
       const priceChanged = Math.abs(nextPrice - myPrice) > 0.00001;
-      const limitChanged = parseFloat(config.limit) > 0 && Math.abs(parseFloat(config.limit) - parseFloat(myOrder.limit)) > 0.001;
+      const limitChanged = parseFloat(currentConfig.limit) > 0 && Math.abs(parseFloat(currentConfig.limit) - parseFloat(myOrder.limit)) > 0.001;
 
       if (priceChanged || limitChanged) {
         await onCall(`/api/v2/hashpower/order/${myOrder.id}/update`, {
@@ -132,7 +174,7 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
     } catch (err) {
       addLog(`Bot Error: ${err.message}`, 'error');
     }
-  };
+  }, [algorithm, market, nhClient, onCall, addLog]);
 
   useEffect(() => {
     if (isRunning) {
@@ -148,7 +190,7 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRunning, algorithm, market, config.checkInterval, onCall, nhClient]);
+  }, [isRunning, config.checkInterval, runIteration]);
 
   return (
     <div className="bot-panel" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem', marginTop: '1.5rem' }}>
@@ -226,35 +268,7 @@ export default function HashpowerBot({ algorithm, market, onCall, nhClient = 'BT
         <button className="btn-pro secondary" onClick={() => setLogs([])}>Clear Logs</button>
       </div>
 
-      <div className="log-viewer">
-        <label className="label">Activity Logs</label>
-        <div
-          className="code-block-content"
-          style={{
-            height: '160px',
-            overflowY: 'auto',
-            fontSize: '11px',
-            background: 'rgba(0,0,0,0.2)',
-            padding: '10px',
-            borderRadius: '4px',
-            border: '1px solid rgba(255,255,255,0.05)'
-          }}
-        >
-          {logs.length === 0 ? (
-            <span style={{ opacity: 0.4 }}>Bot inactive. Press start to begin.</span>
-          ) : (
-            logs.map((log, i) => (
-              <div key={i} style={{
-                fontFamily: 'monospace',
-                marginBottom: '4px',
-                color: log.includes('[ERROR]') ? '#f87171' : log.includes('[SUCCESS]') ? '#34d399' : '#94a3b8'
-              }}>
-                {log}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      <LogViewer logs={logs} />
     </div>
   );
 }

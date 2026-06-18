@@ -147,7 +147,7 @@ export const TelegramTemplates = {
       `<b>Total Paid:</b> ${info.price.paid} ${info.price.currency}`;
   },
 
-  heartbeatSummary: (barChart, ads, online, rented, offline, disabled, total, lines, time, rented24h, algos) => {
+  heartbeatSummary: (barChart, online, rented, offline, disabled, total, lines, time, rented24h, algos) => {
     return `📊 <b>SUMMARY</b> [${time}]\n` +
       `${divider}\n` +
       `🟢 Online: <b>${online}</b> / Renting: <b>${rented}</b>\n` +

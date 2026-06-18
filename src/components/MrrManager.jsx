@@ -183,8 +183,8 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
         await updatePools(rig, data.pools);
       }
       // Handle global stats if returned
-      if (data.herominers_global) {
-        setHeroMinersStats(data.herominers_global);
+      if (data.herominers) {
+        setHeroMinersStats(data.herominers);
       } else if (data.stats) {
         setHeroMinersStats(data);
       }
@@ -255,7 +255,7 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <button className="text-button" style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold' }} onClick={() => runWebSocketFetch('all', rig)}>Fetch All</button>
                   <button className="text-button" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => runWebSocketFetch('herominers', rig)}>HM Stats</button>
-                  <button className="text-button" style={{ fontSize: '10px', color: '#34d399' }} onClick={() => runWebSocketFetch('herominers_global', rig)}>HM Global</button>
+                  <button className="text-button" style={{ fontSize: '10px', color: '#34d399' }} onClick={() => runWebSocketFetch('herominers', rig)}>HM Global</button>
                   <button className="text-button" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => runWebSocketFetch('miningpooldutch', rig)}>Fetch MiningPoolDutch</button>
                   <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.1)', margin: '0 5px' }}></div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>

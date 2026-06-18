@@ -188,48 +188,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     fetchCoinPrices();
   }, [onCall]);
 
-  // Automatically fetch NiceHash market prices for displayed algorithms
-  useEffect(() => {
-    const fetchAllPrices = async () => {
-      const uniqueAlgos = [...new Set(filteredRigs.map(r => (r.algo || r.algorithm || r.type || 'N/A').toUpperCase()))]
-        .filter(a => a && a !== 'N/A');
-
-      for (const algo of uniqueAlgos) {
-        if (algo && algo !== 'N/A' && !algoMarketPrices[algo]) {
-          try {
-            const nhAlgo = normalizeAlgoForNiceHash(algo);
-            if (!nhAlgo) continue;
-
-            const fetchPrice = async (path) => {
-              const query = {
-                algorithm: String(nhAlgo),
-                market: 'USA',
-                client: (mrrClient === 'VN' || mrrClient === 'ALL' || !mrrClient) ? 'BT' : mrrClient
-              };
-              const data = await onCall(path, { query, silent: true });
-              if (!data || data.error || data.errors || data.success === false) return null;
-              return data?.price || data;
-            };
-
-            // Use price endpoint directly as business/order returns 405 Method Not Allowed for GET
-            let nhPriceData = await fetchPrice('/api/v2/hashpower/order/price');
-
-            if (nhPriceData && getNiceHashPriceValue(nhPriceData) > 0) {
-              setAlgoMarketPrices(prev => ({ ...prev, [algo]: nhPriceData }));
-            }
-
-            // Small delay to prevent nonce conflicts when using aggregate (VN) view
-            await new Promise(r => setTimeout(r, 200));
-          } catch (e) {
-            console.warn(`[nh:price] Failed to fetch for ${algo}`, e);
-          }
-        }
-      }
-    };
-
-    fetchAllPrices();
-  }, [filteredRigs, mrrClient]);
-
   const toggleAlgoGroup = (algo) => {
     setExpandedAlgos(prev => ({
       ...prev,

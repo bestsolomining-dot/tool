@@ -20,13 +20,32 @@ const PORT = process.env.PORT || 3000;
 // In production, configure this more restrictively based on your frontend's origin(s).
 app.use(cors());
 
-async function scrapeHeroMinersGlobal() {
+/**
+ * Realistic User-Agent to prevent being blocked by anti-bot protections 
+ * on HeroMiners and Mining-Dutch.
+ */
+const COMMON_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+};
+
+// Cache for mining addresses and global statistics to improve performance
+const addressCache = new Map();
+const statsCache = new Map();
+const CACHE_TTL = 30000; // 30 seconds
+
+async function scrapeHeroMinersGlobal(force = false) {
+  const CACHE_KEY = 'herominers_global';
+  if (!force) {
+    const cached = statsCache.get(CACHE_KEY);
+    if (cached && (Date.now() - cached.ts < CACHE_TTL)) return cached.data;
+  }
+
   // Directly target the JSON API endpoint as it is the source of truth and faster.
   // Added a 10s timeout to prevent the request from hanging and triggering frontend timeouts.
   const url = 'https://herominers.com/api/stats';
   
   const res = await fetch(url, { 
-    headers: { 'User-Agent': 'MiningTool/2.0' },
+    headers: COMMON_HEADERS,
     signal: AbortSignal.timeout(10000)
   });
 
@@ -61,10 +80,75 @@ async function scrapeHeroMinersGlobal() {
     console.warn('[scrapeHeroMinersGlobal] No coin stats found in API response.');
   }
 
-  return { 
+  const result = { 
     coinStats,
     miners: coinStats.reduce((acc, c) => acc + (c.miners || 0), 0)
   };
+
+  statsCache.set(CACHE_KEY, { data: result, ts: Date.now() });
+  return result;
+}
+
+async function scrapeMiningDutchGlobal(force = false) {
+  const CACHE_KEY = 'miningdutch_global';
+  if (!force) {
+    const cached = statsCache.get(CACHE_KEY);
+    if (cached && (Date.now() - cached.ts < CACHE_TTL)) return cached.data;
+  }
+
+  try {
+    const fetchWithTimeout = (u) => fetch(u, { 
+      headers: COMMON_HEADERS,
+      signal: AbortSignal.timeout(10000) 
+    });
+
+    const [psRes, nmRes, apRes] = await Promise.all([
+      fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/poolstatus'),
+      fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/multiport/?method=nowmining'),
+      fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/multiport/?method=avgprofitability')
+    ]);
+
+    const poolStatus = psRes.ok ? await psRes.json() : {};
+    const nowMining = nmRes.ok ? await nmRes.json() : { success: false };
+    const avgProfit = apRes.ok ? await apRes.json() : { success: 0 };
+
+    const nowMap = {};
+    if (nowMining.success && Array.isArray(nowMining.result)) {
+      nowMining.result.forEach(item => { nowMap[item.algorithm] = parseFloat(item.profitability) || 0; });
+    }
+
+    const avgMap = {};
+    if ((avgProfit.success === 1 || avgProfit.success === true) && avgProfit.result) {
+      Object.keys(avgProfit.result).forEach(algo => {
+        avgMap[algo] = parseFloat(avgProfit.result[algo]?.average) || 0;
+      });
+    }
+
+    const coinStats = Object.keys(poolStatus).map((algo) => {
+      const info = poolStatus[algo];
+      const btcPerDay = nowMap[algo] || avgMap[algo] || 0;
+      return {
+        algorithm: algo,
+        miners: parseInt(info.workers || 0, 10),
+        hashrate: parseFloat(info.hashrate || 0),
+        btcPerDay: btcPerDay,
+        usdPerDay: btcPerDay * 65000, // Fallback price
+      };
+    });
+
+    const result = { 
+      success: true, 
+      coinStats, 
+      totalAlgos: coinStats.length,
+      algoStats: coinStats.map(c => ({ algo: c.algorithm, hashrate: c.hashrate, miners: c.miners }))
+    };
+
+    statsCache.set(CACHE_KEY, { data: result, ts: Date.now() });
+    return result;
+  } catch (err) {
+    console.error(`[scrapeMiningDutchGlobal] ${err.message}`);
+    return { success: false, error: err.message };
+  }
 }
 
 // GET /api/v2/mining/herominers/global – scrape HeroMiners
@@ -74,6 +158,42 @@ app.get('/api/v2/mining/herominers/global', async (req, res) => {
     res.json({ success: true, data });
   } catch (err) {
     console.error('HeroMiners scrape error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// REST API Proxy routes for Mining-Dutch
+app.get('/api/v2/mining-dutch/poolstatus', async (req, res) => {
+  try {
+    const response = await fetch('https://www.mining-dutch.nl/api/v1/public/poolstatus', { headers: COMMON_HEADERS });
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/v2/mining-dutch/multiport', async (req, res) => {
+  try {
+    const { method } = req.query;
+    if (!method) return res.status(400).json({ success: false, error: 'Method is required' });
+    const response = await fetch(`https://www.mining-dutch.nl/api/v1/public/multiport/?method=${method}`, { headers: COMMON_HEADERS });
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/v2/mining-dutch/user-status', async (req, res) => {
+  try {
+    const { coin, api_key, id } = req.query;
+    if (!coin || !api_key || !id) return res.status(400).json({ success: false, error: 'Missing required parameters' });
+    const url = `https://www.mining-dutch.nl/pools/${coin}.php?page=api&action=getuserstatus&api_key=${api_key}&id=${id}`;
+    const response = await fetch(url, { headers: COMMON_HEADERS });
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -88,6 +208,11 @@ const server = app.listen(PORT, (err) => {
   console.log('--- NiceHash API Toolbox Server Started ---');
   console.log('Environment: ' + (process.env.NICEHASH_ENVIRONMENT ? process.env.NICEHASH_ENVIRONMENT.toUpperCase() : 'production'));
   console.log('Listening on http://localhost:' + PORT);
+
+  // Startup Fetch: Prime the global statistics cache
+  console.log('[init] Pre-fetching global pool statistics...');
+  scrapeHeroMinersGlobal(true).catch(e => console.warn('[init] HeroMiners pre-fetch failed:', e.message));
+  scrapeMiningDutchGlobal(true).catch(e => console.warn('[init] MiningDutch pre-fetch failed:', e.message));
 });
 
 // ---------- WebSocket Server Implementation ----------
@@ -105,17 +230,19 @@ wss.on('connection', (ws, request) => {
   ws.on('message', async (data) => {
     try {
       const payload = JSON.parse(data.toString());
-      const { action, client, rigid, coin: payloadCoin, requestId } = payload;
+      const { action, client, rigid, coin: payloadCoin, requestId, force } = payload;
       let responseData = {};
 
       // Fetch global statistics for all HeroMiners pools
-      if (action === 'herominers_global' || action === 'all') {
+      if (action === 'herominers' || action === 'herominers_global' || action === 'all') {
         try {
-          const scraped = await scrapeHeroMinersGlobal();
-          responseData.herominers_global = { success: true, ...scraped };
+          const scraped = await scrapeHeroMinersGlobal(!!force);
+          const key = action === 'herominers_global' ? 'herominers_global' : 'herominers';
+          responseData[key] = { success: true, ...scraped };
         } catch (err) {
-          console.error(`[ws:herominers_global] ${err.message}`);
-          responseData.herominers_global = { success: false, error: err.message };
+          console.error(`[ws:herominers] ${err.message}`);
+          const key = action === 'herominers_global' ? 'herominers_global' : 'herominers';
+          responseData[key] = { success: false, error: err.message };
         }
       }
 
@@ -149,17 +276,24 @@ wss.on('connection', (ws, request) => {
             }
           }
 
-          // 1. Resolve the address for the requested client (defaults to NiceHash address)
-          const { client: nhClientInstance } = resolveNhClient(client);
-          const nhApp = getNiceHashApp(nhClientInstance);
-          const addrData = await nhApp.mining.getMiningAddress();
-          const address = addrData.miningAddress;
+          // 1. Resolve the address for the requested client (check cache first)
+          const clientKey = client || 'BT';
+          let address = addressCache.get(clientKey);
+
+          if (!address) {
+            const { client: nhClientInstance } = resolveNhClient(client);
+            const nhApp = getNiceHashApp(nhClientInstance);
+            const addrData = await nhApp.mining.getMiningAddress();
+            address = addrData?.miningAddress;
+            if (address) addressCache.set(clientKey, address);
+          }
+          if (!address) throw new Error('Could not resolve mining address');
 
           // 2. Fetch from HeroMiners
           const url = `https://${coin}.herominers.com/api/stats/${address}`;
           console.log(`[ws:herominers] Fetching ${coin} stats for ${address}...`);
           const hmRes = await fetch(url, { 
-            headers: { 'User-Agent': 'MiningTool/2.0' },
+            headers: COMMON_HEADERS,
             signal: AbortSignal.timeout(10000)
           });
           
@@ -178,57 +312,7 @@ wss.on('connection', (ws, request) => {
       }
 
       if (action === 'miningpooldutch' || action === 'all') {
-        try {
-          // Proxy combined Mining-Dutch data to avoid frontend CORS
-          const fetchWithTimeout = (u) => fetch(u, { 
-            headers: { 'User-Agent': 'MiningTool/2.0' },
-            signal: AbortSignal.timeout(8000) 
-          });
-          const [psRes, nmRes, apRes] = await Promise.all([
-            fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/poolstatus'),
-            fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/multiport/?method=nowmining'),
-            fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/multiport/?method=avgprofitability')
-          ]);
-
-          const poolStatus = psRes.ok ? await psRes.json() : {};
-          const nowMining = nmRes.ok ? await nmRes.json() : { success: false };
-          const avgProfit = apRes.ok ? await apRes.json() : { success: 0 };
-
-          const nowMap = {};
-          if (nowMining.success && Array.isArray(nowMining.result)) {
-            nowMining.result.forEach(item => { nowMap[item.algorithm] = parseFloat(item.profitability) || 0; });
-          }
-
-          const avgMap = {};
-          if (avgProfit.success === 1 && avgProfit.result) {
-            Object.keys(avgProfit.result).forEach(algo => {
-              avgMap[algo] = parseFloat(avgProfit.result[algo]?.average) || 0;
-            });
-          }
-
-          const coinStats = Object.keys(poolStatus).map((algo) => {
-            const info = poolStatus[algo];
-            const btcPerDay = nowMap[algo] || avgMap[algo] || 0;
-            return {
-              algorithm: algo,
-              miners: parseInt(info.workers || 0, 10),
-              hashrate: parseFloat(info.hashrate || 0),
-              btcPerDay: btcPerDay,
-              usdPerDay: btcPerDay * 65000, // Fallback price
-            };
-          });
-
-          responseData.miningpooldutch = { 
-            success: true, 
-            coinStats, 
-            totalAlgos: coinStats.length,
-            // Backward compatibility for old UI if needed
-            algoStats: coinStats.map(c => ({ algo: c.algorithm, hashrate: c.hashrate, miners: c.miners }))
-          };
-        } catch (err) {
-          console.error(`[ws:miningdutch] ${err.message}`);
-          responseData.miningpooldutch = { success: false, error: err.message };
-        }
+        responseData.miningpooldutch = await scrapeMiningDutchGlobal(!!force);
       }
 
       // Determine overall success. If "all", we succeed if at least one part exists.

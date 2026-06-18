@@ -37,8 +37,7 @@ function initSocket() {
       pendingRequests.delete(requestId);
 
       if (success) {
-        // Trả về nhánh data cụ thể hoặc toàn bộ data tùy theo logic frontend
-        resolve(pending.resolve(data[action] || data));
+        pending.resolve(data[action] || data);
       } else {
         pending.reject(new Error(error || `Request "${action}" failed`));
       }
@@ -77,9 +76,9 @@ async function waitForSocket(socket) {
   });
 }
 
-export async function fetchMiningStats(type, client, rigId = null, coin = null, customTimeout = REQUEST_TIMEOUT) {
+export async function fetchMiningStats(type, client, rigId = null, coin = null, customTimeout = REQUEST_TIMEOUT, force = false) {
   let targetClient = client;
-  const globalActions = ['miningpooldutch', 'herominers', 'herominers_global', 'miningdutch_global', 'all'];
+  const globalActions = ['miningpooldutch', 'herominers', 'all'];
   
   if (targetClient === 'VN' && globalActions.includes(type)) {
     targetClient = 'BT';
@@ -104,7 +103,8 @@ export async function fetchMiningStats(type, client, rigId = null, coin = null, 
         action: type, 
         client: targetClient, 
         rigid: rigId, 
-        coin 
+        coin,
+        force
       }));
     });
   };

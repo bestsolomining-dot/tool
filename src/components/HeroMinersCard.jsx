@@ -7,39 +7,18 @@ const MININGDUTCH_ID = import.meta.env.VITE_MININGDUTCH_ID;
 const MININGDUTCH_API_KEY = import.meta.env.VITE_MININGDUTCH_API_BT;
 
 // ---------- Direct Mining-Dutch API calls ----------
-async function fetchPoolStatus() {
-  const res = await fetch('https://www.mining-dutch.nl/api/v1/public/poolstatus');
-  if (!res.ok) throw new Error(`Poolstatus HTTP ${res.status}`);
-  return res.json();
-}
-
-async function fetchNowMining() {
-  const res = await fetch('https://www.mining-dutch.nl/api/v1/public/multiport/?method=nowmining');
-  if (!res.ok) throw new Error(`Nowmining HTTP ${res.status}`);
-  const data = await res.json();
-  if (data.success !== true) throw new Error('Nowmining failed');
-  return data.result;
-}
-
-async function fetchAvgProfitability() {
-  const res = await fetch('https://www.mining-dutch.nl/api/v1/public/multiport/?method=avgprofitability');
-  if (!res.ok) throw new Error(`Avgprofit HTTP ${res.status}`);
-  const data = await res.json();
-  if (data.success !== 1) throw new Error('Avgprofit failed');
-  return data.result;
-}
-
-async function fetchDutchUserStatus(coin) {
+async function fetchDutchUserStatus(onCall, coin) {
   if (!coin) return null;
-  const url = `https://www.mining-dutch.nl/pools/${coin}.php?page=api&action=getuserstatus&api_key=${MININGDUTCH_API_KEY}&id=${MININGDUTCH_ID}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Dutch user status HTTP ${res.status}`);
-  const data = await res.json();
-  return data.getuserstatus?.data || null;
+  const res = await onCall('/api/v2/mining-dutch/user-status', {
+    query: { coin, api_key: MININGDUTCH_API_KEY, id: MININGDUTCH_ID },
+    silent: true
+  });
+  if (res?.error || res?.success === false) throw new Error(res.error || 'User status failed');
+  return res.getuserstatus?.data || res.data || null;
 }
 
 // ---------- Component ----------
-export default function HeroMinersCard({ pollInterval = 30000 }) {
+export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
   const { rentedRigs } = useRentedRigs();
   const [heroGlobalStats, setHeroGlobalStats] = useState(null);
   const [dutchStats, setDutchStats] = useState(null);
@@ -95,51 +74,21 @@ export default function HeroMinersCard({ pollInterval = 30000 }) {
     let fetchError = null;
 
     try {
-      // 1. HeroMiners global – via WebSocket (fetchMiningStats)
+      // 1. Fetch all global stats via WebSocket (Consolidated for speed)
       try {
-        const heroData = await fetchMiningStats('herominers_global', 'BT');
-        setHeroGlobalStats(heroData);
+        // Using 'all' action to get both HeroMiners and MiningPoolDutch in one message
+        const socketData = await fetchMiningStats('all', 'BT');
+        if (socketData.herominers_global) setHeroGlobalStats(socketData.herominers_global);
+        if (socketData.miningpooldutch) setDutchStats(socketData.miningpooldutch);
       } catch (err) {
-        console.error('HeroMiners fetch failed:', err.message);
-        fetchError = `HeroMiners: ${err.message}`;
+        console.error('WebSocket Stats fetch failed:', err.message);
+        fetchError = `Global Stats Error: ${err.message}`;
       }
 
-      // 2. Mining-Dutch global – combine three endpoints (direct HTTP)
+      // 2. Mining-Dutch User stats (specific to selected coin)
       try {
-        const [poolStatus, nowMining, avgProfit] = await Promise.all([
-          fetchPoolStatus(),
-          fetchNowMining(),
-          fetchAvgProfitability(),
-        ]);
-
-        const nowMap = {};
-        nowMining.forEach(item => {
-          nowMap[item.algorithm] = parseFloat(item.profitability) || 0;
-        });
-
-        const avgMap = {};
-        Object.keys(avgProfit).forEach(algo => {
-          avgMap[algo] = parseFloat(avgProfit[algo]?.average) || 0;
-        });
-
-        const dutchCoinStats = Object.keys(poolStatus).map((algo) => {
-          const info = poolStatus[algo];
-          const currentBtc = nowMap[algo] || 0;
-          const avgBtc = avgMap[algo] || 0;
-          const btcPerDay = currentBtc || avgBtc;
-          return {
-            algorithm: algo,
-            miners: parseInt(info.workers || 0, 10),
-            hashrate: parseFloat(info.hashrate || 0),
-            btcPerDay: btcPerDay,
-            usdPerDay: btcPerDay * 1000, // placeholder – replace with real BTC/USD if available
-          };
-        });
-        setDutchStats({ coinStats: dutchCoinStats });
-
-        // 3. Mining-Dutch user stats (if coin selected)
         if (selectedCoin) {
-          const user = await fetchDutchUserStatus(selectedCoin);
+          const user = await fetchDutchUserStatus(onCall, selectedCoin);
           setDutchUserStats(user);
         } else {
           setDutchUserStats(null);
@@ -157,7 +106,7 @@ export default function HeroMinersCard({ pollInterval = 30000 }) {
     } finally {
       setLoading(false);
     }
-  }, [selectedCoin]);
+  }, [onCall, selectedCoin]);
 
   // Polling
   useEffect(() => {

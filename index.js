@@ -21,33 +21,20 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 
 async function scrapeHeroMinersGlobal() {
-  // HeroMiners homepage uses JS to render tables. Scraping HTML with Cheerio often fails
-  // because it only sees the initial placeholder row. The JSON API is much more reliable.
-  const endpoints = [
-    'https://herominers.com',
-    'https://herominers.com/api/stats'
-  ];
+  // Directly target the JSON API endpoint as it is the source of truth and faster.
+  // Added a 10s timeout to prevent the request from hanging and triggering frontend timeouts.
+  const url = 'https://herominers.com/api/stats';
+  
+  const res = await fetch(url, { 
+    headers: { 'User-Agent': 'MiningTool/2.0' },
+    signal: AbortSignal.timeout(10000)
+  });
 
-  let data = null;
-  let lastError = null;
+  if (!res.ok) throw new Error(`HeroMiners API failed: ${res.statusText}`);
 
-  for (const url of endpoints) {
-    try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'MiningTool/2.0' } });
-      if (res.ok) {
-        const candidate = await res.json();
-        if (candidate && candidate.coins) {
-          data = candidate;
-          break; // Successfully found data
-        }
-      }
-    } catch (err) {
-      lastError = err;
-    }
-  }
-
-  if (!data) {
-    throw new Error(`HeroMiners API failed all endpoints. Last error: ${lastError?.message || 'Unknown response format'}`);
+  const data = await res.json();
+  if (!data || !data.coins) {
+    throw new Error('Invalid HeroMiners API response format');
   }
 
   const coinStats = [];
@@ -171,7 +158,10 @@ wss.on('connection', (ws, request) => {
           // 2. Fetch from HeroMiners
           const url = `https://${coin}.herominers.com/api/stats/${address}`;
           console.log(`[ws:herominers] Fetching ${coin} stats for ${address}...`);
-          const hmRes = await fetch(url, { headers: { 'User-Agent': 'MiningTool/2.0' } });
+          const hmRes = await fetch(url, { 
+            headers: { 'User-Agent': 'MiningTool/2.0' },
+            signal: AbortSignal.timeout(10000)
+          });
           
           if (hmRes.ok) {
             const stats = await hmRes.json();
@@ -190,10 +180,14 @@ wss.on('connection', (ws, request) => {
       if (action === 'miningpooldutch' || action === 'all') {
         try {
           // Proxy combined Mining-Dutch data to avoid frontend CORS
+          const fetchWithTimeout = (u) => fetch(u, { 
+            headers: { 'User-Agent': 'MiningTool/2.0' },
+            signal: AbortSignal.timeout(8000) 
+          });
           const [psRes, nmRes, apRes] = await Promise.all([
-            fetch('https://www.mining-dutch.nl/api/v1/public/poolstatus'),
-            fetch('https://www.mining-dutch.nl/api/v1/public/multiport/?method=nowmining'),
-            fetch('https://www.mining-dutch.nl/api/v1/public/multiport/?method=avgprofitability')
+            fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/poolstatus'),
+            fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/multiport/?method=nowmining'),
+            fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/multiport/?method=avgprofitability')
           ]);
 
           const poolStatus = psRes.ok ? await psRes.json() : {};

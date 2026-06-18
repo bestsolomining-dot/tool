@@ -24,7 +24,9 @@ export class NiceHashClient {
    */
   async getServerTime() {
     await this._delayFirstTime('getServerTime');
-    const response = await fetch(`${this.baseUrl}/api/v2/time`);
+    const response = await fetch(`${this.baseUrl}/api/v2/time`, {
+      headers: { 'User-Agent': 'MiningTool/2.0' }
+    });
     if (!response.ok) {
       throw new Error(`NiceHash Time Sync failed: ${response.status}`);
     }
@@ -100,6 +102,7 @@ export class NiceHashClient {
     const signature = this.computeSignature(method, cleanPath, queryString, body, time, nonce);
 
     const headers = {
+      'User-Agent': 'MiningTool/2.0',
       'X-Time': String(time),
       'X-Nonce': String(nonce),
       'X-Organization-Id': String(this.orgId || ''),

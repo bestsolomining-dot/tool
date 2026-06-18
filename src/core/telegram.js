@@ -38,13 +38,13 @@ const divider = '━━━━━━━━━━━━━━';
 export const TelegramTemplates = {
   divider,
 
-  activeRentalLine: (perfEmoji, algo, name, remaining, efficiency, roi, avg, ads, cur, target, extra, client, info) => {
+  activeRentalLine: (perfEmoji, algo, name, remaining, efficiency, roi, avg, ads, cur, target, extra, client, info = { price: {} }) => {
     return `${perfEmoji} <b>${escapeHtml(algo)}</b> 🔀 <b>${escapeHtml(client)}</b> | ${escapeHtml(name)}\n` +
       `⏱ Remaining: ${remaining}\n` +
       `⚡ Cur: <b>${cur}</b> | ` +
       `📊 Eff: <code>${typeof efficiency === 'number' ? efficiency.toFixed(2) : efficiency}%</code>\n` +
       `📈 Avg: <code>${avg}</code> | Adv: <code>${ads}</code>\n` +
-      `💰 Paid: <b>${info.price.paid} ${info.price.currency}</b>\n` +
+      `💰 Paid: <b>${escapeHtml(info.price?.paid)} ${escapeHtml(info.price?.currency)}</b>\n` +
       `${extra}${divider}\n`;
   },
 

@@ -553,7 +553,8 @@ export async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
       });
       if (statusCode === 200 && data.success) {
         const list = Array.isArray(data.data) ? data.data : (data.data?.rentals || []);
-        localRentals.push(...list);
+        // Filter out any null/undefined entries before pushing
+        localRentals.push(...list.filter(r => r && r.id));
       }
     }
 

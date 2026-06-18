@@ -638,7 +638,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             displayTarget,
             '', // extra
             acct, // client
-            `${info.price.paid} ${info.price.currency}` // paid
+            info // Pass the whole info object
           ));
         }
 

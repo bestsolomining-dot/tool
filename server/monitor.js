@@ -460,15 +460,16 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           
           if (!nhP) {
             const { client: nhCl } = resolveNhClient(acct);
+            // Ensure algorithm is stripped of pool-specific suffixes (e.g. MONERO -> RANDOMX)
+            const cleanAlgo = normalizeAlgoForNiceHash(nhAlgo);
             const pData = await getNiceHashApp(nhCl).hashpower.getOrderPrice({ 
-              algorithm: nhAlgo, 
-              market: '1', // Strictly use '1' for USA
+              algorithm: cleanAlgo, 
+              market: '1', // 1 = USA
               amount: '0.01' // Increased amount to satisfy minimums for all algos
             });
-            const rawP = pData;
             nhP = {
-              price: parseFloat(rawP?.fixedPrice || rawP?.standardPrice?.fast || rawP?.price || 0) || 0,
-              unit: String(rawP?.speedUnit || rawP?.unit || (nhAlgo.includes('SHA256') ? 'EH' : 'TH'))
+              price: parseFloat(pData?.fixedPrice || pData?.standardPrice?.fast || pData?.price || 0) || 0,
+              unit: String(pData?.speedUnit || pData?.unit || (cleanAlgo.includes('SHA256') ? 'EH' : 'TH'))
             };
             monitorNhPriceCache.set(cacheKey, nhP);
           }

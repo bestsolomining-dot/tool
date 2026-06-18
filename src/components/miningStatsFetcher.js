@@ -1,10 +1,29 @@
 // miningStatsFetcher.js
 
+export const herominer = '';
+export const miningDutch = null;
+export const nowmining = null;
+export const avgprofitability = null;
+
+/** Parses the HeroMiners home page HTML to extract global metadata */
+export function parseHeroMinerHtml(html) {
+  if (!html) return null;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  
+  // Extract data from meta tags or scripts
+  const description = doc.querySelector('meta[name="description"]')?.getAttribute('content');
+  const title = doc.title;
+  
+  return { title, description, length: html.length };
+}
+
 const MAX_ATTEMPTS = 5;
 const REQUEST_TIMEOUT = 20000;
 const BASE_DELAY = 1000;
 
 let sharedSocket = null;
+
 const pendingRequests = new Map(); // requestId -> { resolve, reject, timeoutId }
 
 function getWsUrl() {
@@ -116,7 +135,6 @@ export async function fetchMiningStats(type, client, rigId = null, coin = null, 
       return await attempt(i);
     } catch (err) {
       lastError = err;
-      // Nếu là lỗi logic (404, 401) từ backend, không cần retry
       if (err.message.includes('not found') || err.message.includes('Unauthorized')) throw err;
       
       const jitter = Math.random() * 500;

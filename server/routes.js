@@ -269,48 +269,48 @@ export function registerRoutes(app) {
     res.json({ success: true, maxPrice, totalPaid: totalPaid.toFixed(8), count: matchingOrders.length, orders: matchingOrders });
   }));
 
-  app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => {
-    const clientParam = String(req.query.client || 'BT').toUpperCase();
-    if (isAggregate(clientParam)) {
-      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
-      const processedClients = new Set();
-      for (const acct of nhAccounts) {
-        const { client, clientName } = resolveNhClient(acct);
-        if (!client || (acct !== 'BT' && clientName === 'BT') || processedClients.has(clientName)) continue;
-        processedClients.add(clientName);
-        try {
-          const data = await getNiceHashApp(client).hashpower.getOrderDetail(req.params.orderId);
-          if (data && !data.error) {
-            res.set('X-NH-Client', clientName);
-            return res.json(data);
-          }
-        } catch (e) { }
-      }
-    }
-    res.json(await req.nhApp.hashpower.getOrderDetail(req.params.orderId));
-  }));
+  // app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => {
+  //   const clientParam = String(req.query.client || 'BT').toUpperCase();
+  //   if (isAggregate(clientParam)) {
+  //     const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+  //     const processedClients = new Set();
+  //     for (const acct of nhAccounts) {
+  //       const { client, clientName } = resolveNhClient(acct);
+  //       if (!client || (acct !== 'BT' && clientName === 'BT') || processedClients.has(clientName)) continue;
+  //       processedClients.add(clientName);
+  //       try {
+  //         const data = await getNiceHashApp(client).hashpower.getOrderDetail(req.params.orderId);
+  //         if (data && !data.error) {
+  //           res.set('X-NH-Client', clientName);
+  //           return res.json(data);
+  //         }
+  //       } catch (e) { }
+  //     }
+  //   }
+  //   res.json(await req.nhApp.hashpower.getOrderDetail(req.params.orderId));
+  // }));
 
   app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.createOrder(req.body))));
   app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderBook(req.query))));
-  app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
-    const clientParam = String(req.query.client || 'BT').toUpperCase();
-    if (isAggregate(clientParam)) {
-      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
-      for (const acct of nhAccounts) {
-        const { client, clientName } = resolveNhClient(acct);
-        if (!client || (acct !== 'BT' && clientName === 'BT')) continue;
-        try {
-          const data = await getNiceHashApp(client).hashpower.getOrderPrice(req.query);
-          if (data && !data.error) {
-            res.set('X-NH-Client', clientName);
-            return res.json(data);
-          }
-        } catch (e) { }
-      }
-    }
+  // app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
+  //   const clientParam = String(req.query.client || 'BT').toUpperCase();
+  //   if (isAggregate(clientParam)) {
+  //     const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+  //     for (const acct of nhAccounts) {
+  //       const { client, clientName } = resolveNhClient(acct);
+  //       if (!client || (acct !== 'BT' && clientName === 'BT')) continue;
+  //       try {
+  //         const data = await getNiceHashApp(client).hashpower.getOrderPrice(req.query);
+  //         if (data && !data.error) {
+  //           res.set('X-NH-Client', clientName);
+  //           return res.json(data);
+  //         }
+  //       } catch (e) { }
+  //     }
+  //   }
 
-    return res.json(await req.nhApp.hashpower.getOrderPrice(req.query));
-  }));
+  //   return res.json(await req.nhApp.hashpower.getOrderPrice(req.query));
+  // }));
 
   app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.cancelOrder(req.params.orderId))));
   app.post('/api/v2/hashpower/order/:orderId/refill', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.refillOrder(req.params.orderId, req.body))));

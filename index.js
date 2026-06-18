@@ -2,6 +2,7 @@ import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
+import fs from 'node:fs/promises';
 import * as cheerio from 'cheerio';
 import { createApp, initializeApp } from './server/app.js';
 import cors from 'cors'; // Import cors middleware
@@ -13,6 +14,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, 'dist', 'client');
 
+const STATS_DB_PATH = path.join(__dirname, 'stats_db.json');
 const app = createApp({ distPath });
 const PORT = process.env.PORT || 3000;
 
@@ -25,13 +27,34 @@ app.use(cors());
  * on HeroMiners and Mining-Dutch.
  */
 const COMMON_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36'
 };
 
 // Cache for mining addresses and global statistics to improve performance
 const addressCache = new Map();
 const statsCache = new Map();
 const CACHE_TTL = 30000; // 30 seconds
+
+/** Persistence layer: Save stats to disk to act as a database */
+async function persistStats() {
+  try {
+    const data = Object.fromEntries(statsCache.entries());
+    await fs.writeFile(STATS_DB_PATH, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error('[db] Failed to save stats:', err.message);
+  }
+}
+
+async function loadStats() {
+  try {
+    const raw = await fs.readFile(STATS_DB_PATH, 'utf-8');
+    const data = JSON.parse(raw);
+    Object.entries(data).forEach(([k, v]) => statsCache.set(k, v));
+    console.log('[db] Loaded cached stats from disk');
+  } catch (err) {
+    console.log('[db] No existing stats database found, starting fresh.');
+  }
+}
 
 async function scrapeHeroMinersGlobal(force = false) {
   const CACHE_KEY = 'herominers_global';
@@ -86,6 +109,7 @@ async function scrapeHeroMinersGlobal(force = false) {
   };
 
   statsCache.set(CACHE_KEY, { data: result, ts: Date.now() });
+  await persistStats();
   return result;
 }
 
@@ -103,7 +127,7 @@ async function scrapeMiningDutchGlobal(force = false) {
     });
 
     const [psRes, nmRes, apRes] = await Promise.all([
-      fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/poolstatus'),
+      fetchWithTimeout('https://www.mining-dutch.nl/api/status/'),
       fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/multiport/?method=nowmining'),
       fetchWithTimeout('https://www.mining-dutch.nl/api/v1/public/multiport/?method=avgprofitability')
     ]);
@@ -144,6 +168,7 @@ async function scrapeMiningDutchGlobal(force = false) {
     };
 
     statsCache.set(CACHE_KEY, { data: result, ts: Date.now() });
+    await persistStats();
     return result;
   } catch (err) {
     console.error(`[scrapeMiningDutchGlobal] ${err.message}`);
@@ -198,12 +223,14 @@ app.get('/api/v2/mining-dutch/user-status', async (req, res) => {
   }
 });
 
-const server = app.listen(PORT, (err) => {
+const server = app.listen(PORT, async (err) => {
   if (err) {
     console.error('[api] Failed to bind port ' + PORT + ':', err.message);
     process.exit(1);
     return;
   }
+
+  await loadStats();
 
   console.log('--- NiceHash API Toolbox Server Started ---');
   console.log('Environment: ' + (process.env.NICEHASH_ENVIRONMENT ? process.env.NICEHASH_ENVIRONMENT.toUpperCase() : 'production'));
@@ -234,19 +261,18 @@ wss.on('connection', (ws, request) => {
       let responseData = {};
 
       // Fetch global statistics for all HeroMiners pools
-      if (action === 'herominers' || action === 'herominers_global' || action === 'all') {
+      if (action === 'herominers_global' || action === 'all') {
         try {
           const scraped = await scrapeHeroMinersGlobal(!!force);
-          const key = action === 'herominers_global' ? 'herominers_global' : 'herominers';
-          responseData[key] = { success: true, ...scraped };
+          responseData.herominers_global = { success: true, ...scraped };
         } catch (err) {
-          console.error(`[ws:herominers] ${err.message}`);
-          const key = action === 'herominers_global' ? 'herominers_global' : 'herominers';
-          responseData[key] = { success: false, error: err.message };
+          console.error(`[ws:herominers_global] ${err.message}`);
+          responseData.herominers_global = { success: false, error: err.message };
         }
       }
 
-      if (action === 'herominers' || action === 'all') {
+      // Fetch address-specific HeroMiners stats (only if action is 'herominers')
+      if (action === 'herominers') {
         try {
           // 0. Determine which HeroMiners coin subdomain to use
           let coin = payloadCoin || 'kaspa';

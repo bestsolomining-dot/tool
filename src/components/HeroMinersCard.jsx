@@ -7,14 +7,53 @@ const MININGDUTCH_ID = import.meta.env.VITE_MININGDUTCH_ID;
 const MININGDUTCH_API_KEY = import.meta.env.VITE_MININGDUTCH_API_BT;
 
 // ---------- Direct Mining-Dutch API calls ----------
-async function fetchDutchUserStatus(onCall, coin) {
+async function fetchDutchUserStatus(coin) {
   if (!coin) return null;
-  const res = await onCall('/api/v2/mining-dutch/user-status', {
-    query: { coin, api_key: MININGDUTCH_API_KEY, id: MININGDUTCH_ID },
-    silent: true
+  const url = `/api/md/pools/${coin}.php?page=api&action=getuserstatus&api_key=${MININGDUTCH_API_KEY}&id=${MININGDUTCH_ID}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`User status failed: ${res.statusText}`);
+  const data = await res.json();
+  return data.getuserstatus?.data || data.data || null;
+}
+
+async function fetchDutchGlobalStats() {
+  const [psRes, nmRes, apRes] = await Promise.all([
+    fetch('/api/md/api/status/'),
+    fetch('/api/md/api/v1/public/multiport/?method=nowmining'),
+    fetch('/api/md/api/v1/public/multiport/?method=avgprofitability')
+  ]);
+
+  if (!psRes.ok || !nmRes.ok || !apRes.ok) throw new Error('Mining-Dutch API returned error status');
+
+  const poolStatus = await psRes.json();
+  const nowMining = await nmRes.json();
+  const avgProfit = await apRes.json();
+
+  const nowMap = {};
+  if (nowMining.success && Array.isArray(nowMining.result)) {
+    nowMining.result.forEach(item => { nowMap[item.algorithm] = parseFloat(item.profitability) || 0; });
+  }
+
+  const avgMap = {};
+  if ((avgProfit.success === 1 || avgProfit.success === true) && avgProfit.result) {
+    Object.keys(avgProfit.result).forEach(algo => {
+      avgMap[algo] = parseFloat(avgProfit.result[algo]?.average) || 0;
+    });
+  }
+
+  const coinStats = Object.keys(poolStatus).map((algo) => {
+    const info = poolStatus[algo];
+    const btcPerDay = nowMap[algo] || avgMap[algo] || 0;
+    return {
+      algorithm: algo,
+      miners: parseInt(info.workers || 0, 10),
+      hashrate: parseFloat(info.hashrate || 0),
+      btcPerDay: btcPerDay,
+      usdPerDay: btcPerDay * 65000,
+    };
   });
-  if (res?.error || res?.success === false) throw new Error(res.error || 'User status failed');
-  return res.getuserstatus?.data || res.data || null;
+
+  return { success: true, coinStats };
 }
 
 // ---------- Component ----------
@@ -69,17 +108,19 @@ export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
   }, [heroGlobalStats, sortConfig, filterMiningOnly, activeAlgos]);
 
   // ---------- Data fetching ----------
-  const fetchAllData = useCallback(async () => {
+  const fetchAllData = useCallback(async (force = false) => {
     setLoading(true);
     let fetchError = null;
 
     try {
-      // 1. Fetch all global stats via WebSocket (Consolidated for speed)
+      // 1. Fetch all global stats (Hybrid approach: WS for HeroMiners, Proxy for MD)
       try {
-        // Using 'all' action to get both HeroMiners and MiningPoolDutch in one message
-        const socketData = await fetchMiningStats('all', 'BT');
-        if (socketData.herominers_global) setHeroGlobalStats(socketData.herominers_global);
-        if (socketData.miningpooldutch) setDutchStats(socketData.miningpooldutch);
+        const [heroData, mdData] = await Promise.all([
+          fetchMiningStats('herominers_global', 'BT', null, null, 20000, force),
+          fetchDutchGlobalStats()
+        ]);
+        setHeroGlobalStats(heroData);
+        setDutchStats(mdData);
       } catch (err) {
         console.error('WebSocket Stats fetch failed:', err.message);
         fetchError = `Global Stats Error: ${err.message}`;
@@ -88,7 +129,7 @@ export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
       // 2. Mining-Dutch User stats (specific to selected coin)
       try {
         if (selectedCoin) {
-          const user = await fetchDutchUserStatus(onCall, selectedCoin);
+          const user = await fetchDutchUserStatus(selectedCoin);
           setDutchUserStats(user);
         } else {
           setDutchUserStats(null);
@@ -124,7 +165,7 @@ export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
       clearInterval(pollTimerRef.current);
       pollTimerRef.current = setInterval(fetchAllData, pollInterval);
     }
-    fetchAllData();
+    fetchAllData(true); // Manual click forces a fresh scrape
   };
 
   // ---------- Rendering ----------

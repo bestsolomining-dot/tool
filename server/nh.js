@@ -279,10 +279,11 @@ export const getNiceHashApp = (client) => ({
     updatePriceLimit: (orderId, body) => client.call({ method: 'POST', path: `/main/api/v2/hashpower/order/${orderId}/updatePriceAndLimit`, body, query: { orgId: client.orgId } }),
     getVmmOrders: () => client.call({ method: 'GET', path: '/main/api/v2/hashpower/vmm/orders' }),
     getOrderPrice: (query) => {
-      const { algorithm, market, amount, ...rest } = query || {};
+      const { algorithm, market, amount, limit, ...rest } = query || {};
       // Ensure all required fields for /order/calculate are present
-      const finalAmount = amount || rest.limit || '0.001';
-      const finalAlgo = normalizeAlgoForNiceHash(algorithm || 'KAWPOW');
+      // Increased default amount to 0.01 to satisfy minimums for heavier algorithms
+      const finalAmount = amount || limit || '0.01';
+      const finalAlgo = normalizeAlgoForNiceHash(algorithm);
       const finalMarket = normalizeMarket(market || 'USA');
 
       return client.call({

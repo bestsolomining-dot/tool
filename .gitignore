@@ -15,3 +15,5 @@ mrr_monitor.db
 .wrangler
 .vscode
 *.db-journal
+stats_db.json
+vite.config.js

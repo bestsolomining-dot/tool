@@ -125,6 +125,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         const account = rig.mrrClient || rig.client || mrrClient || 'ALL';
 
         let perfEmoji = '🟡';
+        // Ensure rig.price exists before calling the template function
+        let perfEmoji = '⚪';
         if (effNum >= 100) perfEmoji = '💯';
         else if (effNum >= 95) perfEmoji = '🟢';
         else if (effNum >= 70) perfEmoji = '🔵';
@@ -142,6 +144,8 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           cur,
           target,
           account
+          account,
+          `${(rig.price?.paid || 0).toFixed(8)} ${rig.price?.currency || 'BTC'}`
         );
       })
       .filter(Boolean);

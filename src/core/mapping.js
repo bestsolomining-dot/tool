@@ -1,7 +1,7 @@
 // mapping.js - Core algorithm mapping for NiceHash and MRR
 
 export const ALGO_DISPLAY_NAMES = {
-  'SHA256': 'SHA-256',
+  'SHA256': 'SHA256',
   'SCRYPT': 'Scrypt',
   'ETHASH': 'Ethash',
   'DAGGERHASHIMOTO': 'DaggerHashimoto',

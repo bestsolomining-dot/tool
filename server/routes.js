@@ -9,10 +9,13 @@ import { resolveNhClient, getNiceHashApp, nhConfigs, isAggregate, normalizeAlgoF
 import { sendTelegramInternal, runRentalMonitor, getTelegramStatus, setTelegramStatus } from './monitor.js';
 import { db } from './db.js';
 
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+
 /** Helper to save JSON data to SQLite database */
 async function saveToDatabase(filename, items) {
   if (!items || !Array.isArray(items) || items.length === 0) return;
   const tableName = filename.replace('.csv', '').replace(/-/g, '_');
+  const filePath = path.join(DATA_DIR, filename);
   const columns = Object.keys(items[0]);
   const quotedColumns = columns.map(c => `"${c}"`);
   const placeholders = columns.map(() => '?').join(', ');
@@ -233,7 +236,6 @@ export function registerRoutes(app) {
         poolUser: o.pool?.username || '',
         poolPass: o.pool?.password || '',
         status: typeof o.status === 'object' ? o.status.code : o.status,
-        DEAD: ((o.status?.code || o.status) === 'ACTIVE' && parseFloat(o.acceptedCurrentSpeed || 0) === 0 && parseInt(o.rigsCount || 0) === 0) ? 'DEAD' : '',
         isDead: (o.status?.code || o.status) === 'ACTIVE' && parseFloat(o.acceptedCurrentSpeed || 0) === 0 && parseInt(o.rigsCount || 0) === 0,
         pool: o.pool,                                // Preserved for UI components (NiceHash.jsx)
         nhClient: o.nhClient,                        // Preserved for aggregation tracking
@@ -304,7 +306,7 @@ export function registerRoutes(app) {
     res.json(await req.nhApp.hashpower.getOrderDetail(req.params.orderId));
   }));
 
-  app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.createOrder(req.body))));
+  app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.createOrder(req.body)))); // Corrected typo in comment
   app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderBook(req.query))));
   app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || 'BT').toUpperCase();

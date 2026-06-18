@@ -224,10 +224,23 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   let warningAll = 0;
   let onlineAll = 0;
 
-  // Ensure history table exists for accurate 24h counting
-  await dbRunAsync("CREATE TABLE IF NOT EXISTS rental_history (id TEXT PRIMARY KEY, start_time INTEGER)").catch(() => {});
-  // Cleanup history older than 2 days
-  await dbRunAsync("DELETE FROM rental_history WHERE start_time < ?", [Date.now() - 172800000]).catch(() => {});
+  // Proactively ensure tables exist to prevent startup race conditions.
+  await new Promise((resolve) => {
+    db.serialize(() => {
+      db.run(`CREATE TABLE IF NOT EXISTS rentals (
+        id TEXT PRIMARY KEY, name TEXT, client TEXT, start_time INTEGER, end_time INTEGER, algo TEXT,
+        target_100 REAL, order_diff REAL, last_updated INTEGER, last_notified INTEGER,
+        low_hashrate_start INTEGER, zero_hashrate_start INTEGER, current_hashrate TEXT,
+        average_hashrate TEXT, advertised_hashrate TEXT, price_paid TEXT
+      )`, (err) => { if (err) console.error(`[monitor:db] Failed to create rentals table: ${err.message}`); });
+
+      db.run(`CREATE TABLE IF NOT EXISTS rental_history (id TEXT PRIMARY KEY, start_time INTEGER)`,
+        (err) => { if (err) console.error(`[monitor:db] Failed to create rental_history table: ${err.message}`); });
+
+      // Cleanup history older than 2 days
+      db.run("DELETE FROM rental_history WHERE start_time < ?", [Date.now() - 172800000], () => resolve());
+    });
+  });
 
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
@@ -476,7 +489,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
           const mrrBtcData = getBtcPriceData(r.price || info.price);
           const mrrUnit = clean(info.hashrate.suffix || 'TH');
-          const durationHours = Number.parseFloat(info.duration);
+          const durationHours = Number.parseFloat(info.duration) || 0;
           const mrrPriceNorm =
             Number.isFinite(advertised) && advertised > 0 && Number.isFinite(durationHours) && durationHours > 0
               ? mrrBtcData.value / (durationHours / 24) / advertised
@@ -502,34 +515,33 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         let zeroHashStart = row?.zero_hashrate_start || 0;
         let lastNotified = row?.last_notified || 0;
 
-        // Update database immediately to ensure row exists and status is tracked before notification checks
-        try {
-          await dbRunAsync(
-            `INSERT INTO rentals (
-               id, name, client, start_time, end_time, algo, 
-               target_100, order_diff, last_updated, low_hashrate_start, zero_hashrate_start,
-               current_hashrate, average_hashrate, advertised_hashrate, price_paid
-             ) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET 
-               name=excluded.name, client=excluded.client, algo=excluded.algo, order_diff=excluded.order_diff,
-               start_time=excluded.start_time, end_time=excluded.end_time, target_100=excluded.target_100, last_updated=excluded.last_updated,
-               low_hashrate_start=excluded.low_hashrate_start, zero_hashrate_start=excluded.zero_hashrate_start,
-               current_hashrate=excluded.current_hashrate, average_hashrate=excluded.average_hashrate,
-               advertised_hashrate=excluded.advertised_hashrate, price_paid=excluded.price_paid`,
-            [
-              String(r.id), r.name || r.id, acct, startT, endT, info.algo, displayTarget, orderDiff, now, lowHashStart, zeroHashStart,
-              currentHash, average, advertised, info.price.paid
-            ]
-          );
-
-          // Record in history to maintain count even after the rental ends
-          if (startT > 0) {
-            await dbRunAsync("INSERT OR IGNORE INTO rental_history (id, start_time) VALUES (?, ?)", [String(r.id), startT]);
-          }
-        } catch (err) {
-          console.error(`[${new Date().toLocaleTimeString()}] [monitor:db] Upsert error for ${r.id}: ${err.message}`);
-        }
+        // Serialize DB writes to prevent locking issues
+        await new Promise((resolve, reject) => {
+          db.serialize(() => {
+            // Update database immediately to ensure row exists and status is tracked before notification checks
+            db.run(
+              `INSERT INTO rentals (
+                 id, name, client, start_time, end_time, algo, 
+                 target_100, order_diff, last_updated, low_hashrate_start, zero_hashrate_start,
+                 current_hashrate, average_hashrate, advertised_hashrate, price_paid, last_notified
+               ) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET 
+                 name=excluded.name, client=excluded.client, algo=excluded.algo, order_diff=excluded.order_diff,
+                 start_time=excluded.start_time, end_time=excluded.end_time, target_100=excluded.target_100, last_updated=excluded.last_updated,
+                 low_hashrate_start=excluded.low_hashrate_start, zero_hashrate_start=excluded.zero_hashrate_start,
+                 current_hashrate=excluded.current_hashrate, average_hashrate=excluded.average_hashrate,
+                 advertised_hashrate=excluded.advertised_hashrate, price_paid=excluded.price_paid`,
+              [
+                String(r.id), r.name || r.id, acct, startT, endT, info.algo, displayTarget, orderDiff, now, lowHashStart, zeroHashStart,
+                currentHash, average, advertised, info.price.paid, lastNotified
+              ], (err) => { if (err) console.error(`[${new Date().toLocaleTimeString()}] [monitor:db] Upsert error for ${r.id}: ${err.message}`); }
+            );
+            // Record in history to maintain count even after the rental ends
+            if (startT > 0) db.run("INSERT OR IGNORE INTO rental_history (id, start_time) VALUES (?, ?)", [String(r.id), startT]);
+            resolve();
+          });
+        });
 
         // Efficiency < 50% for 15 minutes
         if (efficiency < 50) {

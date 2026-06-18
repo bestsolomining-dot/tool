@@ -1,21 +1,26 @@
 import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer } from 'ws'; // Corrected import
 import fs from 'node:fs/promises';
 import * as cheerio from 'cheerio';
 import { createApp, initializeApp } from './server/app.js';
 import cors from 'cors'; // Import cors middleware
 import { verifyToken } from './server/auth.js';
 import { resolveNhClient, getNiceHashApp } from './server/nh.js';
-import { mrrApiCall } from './server/mrr.js';
+import { mrrApiCall, initMrrConfigs } from './server/mrr.js';
 import sqlite3 from 'sqlite3';
+import { migrateOldCsvToDb } from './server/migrate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, 'dist', 'client');
 
-const STATS_DB_PATH = path.join(__dirname, 'stats.db');
+const DATA_DIR = path.join(__dirname, 'data');
+const STATS_DB_PATH = path.join(DATA_DIR, 'stats.db');
+
+import { setDb } from './server/db.js';
+
 const app = createApp({ distPath });
 const PORT = process.env.PORT || 3000;
 
@@ -37,14 +42,18 @@ const statsCache = new Map();
 const CACHE_TTL = 30000; // 30 seconds
 
 /** Persistence layer: Save stats to disk to act as a database */
-let db;
+let dbInstance;
 
 function initDatabase() {
+  fs.mkdir(DATA_DIR, { recursive: true }).catch(err => console.error(`[db] Failed to create data directory: ${err.message}`));
   return new Promise((resolve, reject) => {
-    db = new sqlite3.Database(STATS_DB_PATH, (dbErr) => {
+    dbInstance = new sqlite3.Database(STATS_DB_PATH, (dbErr) => {
       if (dbErr) return reject(dbErr);
 
-      db.run(`CREATE TABLE IF NOT EXISTS stats_cache (
+      // Enable WAL mode for better concurrency and to prevent SQLITE_BUSY errors.
+      dbInstance.run('PRAGMA journal_mode = WAL;', (err) => { if (err) console.warn('[db] Failed to enable WAL mode:', err.message); });
+
+      dbInstance.run(`CREATE TABLE IF NOT EXISTS stats_cache (
         key TEXT PRIMARY KEY,
         data TEXT,
         ts INTEGER
@@ -52,7 +61,7 @@ function initDatabase() {
         if (err) reject(err);
       });
 
-      db.run(`CREATE TABLE IF NOT EXISTS api_errors (
+      dbInstance.run(`CREATE TABLE IF NOT EXISTS api_errors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp TEXT,
         source TEXT,
@@ -62,20 +71,21 @@ function initDatabase() {
         if (err) console.error(`[db] Failed to create api_errors table: ${err.message}`);
       });
 
-      db.run(`CREATE TABLE IF NOT EXISTS mrr_nonces (
+      dbInstance.run(`CREATE TABLE IF NOT EXISTS mrr_nonces (
         client TEXT PRIMARY KEY,
         last_nonce TEXT
       )`, (err) => {
         if (err) reject(err);
       });
 
-      db.run(`CREATE TABLE IF NOT EXISTS settings (
+      dbInstance.run(`CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT
       )`, (err) => {
         if (err) console.error(`[db] Failed to create settings table: ${err.message}`);
       });
 
+      setDb(dbInstance); // Set the shared DB instance for other modules
       resolve();
     });
   });
@@ -85,8 +95,8 @@ async function cleanAllCache() {
   console.info('[init] Wiping persistent state for fresh start...');
   try {
     await new Promise((resolve, reject) => {
-      db.serialize(() => {
-        db.run("DELETE FROM rentals", (err) => {
+      dbInstance.serialize(() => {
+        dbInstance.run("DELETE FROM rentals", (err) => {
           if (err) console.warn(`[db] Failed to clear rentals: ${err.message}`);
           resolve();
         });
@@ -104,7 +114,7 @@ function persistStats() {
     const entries = Array.from(statsCache.entries());
     if (entries.length === 0) return resolve();
 
-    const stmt = db.prepare(`INSERT OR REPLACE INTO stats_cache (key, data, ts) VALUES (?, ?, ?)`);
+    const stmt = dbInstance.prepare(`INSERT OR REPLACE INTO stats_cache (key, data, ts) VALUES (?, ?, ?)`);
     let completed = 0;
 
     entries.forEach(([key, value]) => {
@@ -122,7 +132,7 @@ function persistStats() {
 
 function loadStats() {
   return new Promise((resolve) => {
-    db.all(`SELECT key, data, ts FROM stats_cache`, [], (err, rows) => {
+    dbInstance.all(`SELECT key, data, ts FROM stats_cache`, [], (err, rows) => {
       if (err) {
         console.log('[db] No existing stats database found or failed to read, starting fresh.');
         return resolve();
@@ -328,29 +338,70 @@ app.get('/api/v2/mining-dutch/user-status', async (req, res) => {
   }
 });
 
-const server = app.listen(PORT, async (err) => {
-  if (err) {
-    console.error('[api] Failed to bind port ' + PORT + ':', err.message);
-    process.exit(1);
-    return;
-  }
-
+async function startServer() {
   try {
     await initDatabase();
     await loadStats();
+    await migrateOldCsvToDb(); // Run the migration after DB is initialized
+    await initMrrConfigs(process.env);
+    await initializeApp(process.env);
+
+    const server = app.listen(PORT, (err) => {
+      if (err) {
+        console.error('[api] Failed to bind port ' + PORT + ':', err.message);
+        process.exit(1);
+      }
+
+      console.log('--- NiceHash API Toolbox Server Started ---');
+      console.log('Environment: ' + (process.env.NICEHASH_ENVIRONMENT ? process.env.NICEHASH_ENVIRONMENT.toUpperCase() : 'production'));
+      console.log('Listening on http://localhost:' + PORT);
+
+      // Startup Fetch: Prime the global statistics cache
+      console.log('[init] Pre-fetching global pool statistics...');
+      scrapeHeroMinersGlobal(true).catch(e => console.warn('[init] HeroMiners pre-fetch failed:', e.message));
+      scrapeMiningDutchGlobal(true).catch(e => console.warn('[init] MiningDutch pre-fetch failed:', e.message));
+    });
+
+    // Attach WebSocket server to the HTTP server
+    server.on('upgrade', (request, socket, head) => {
+      try {
+        const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+        const pathname = url.pathname.replace(/\/$/, ''); // Remove trailing slash
+
+        if (pathname === '/api/v2/mrr/fetch/ws') {
+          wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit('connection', ws, request);
+          });
+        } else {
+          // Only destroy if it's explicitly an API path we don't recognize.
+          // If it's a root path, it might be Vite's HMR, so we let it be.
+          if (pathname.startsWith('/api')) {
+            socket.destroy();
+          }
+        }
+      } catch (err) {
+        console.error('[ws:upgrade] Error during upgrade:', err.message);
+        socket.destroy();
+      }
+    });
+
+    server.on('error', (err) => {
+      console.error('[api] Server error on port ' + PORT + ':' , err.message);
+    });
+
+    function shutdown(signal) {
+      console.log('[api] Received ' + signal + ', shutting down...');
+      server.close(() => process.exit(0));
+    }
+
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+
   } catch (dbErr) {
-    console.error('[db] Database initialization failed:', dbErr.message);
+    console.error('❌ Critical Initialization Failure:', dbErr.message);
+    process.exit(1);
   }
-
-  console.log('--- NiceHash API Toolbox Server Started ---');
-  console.log('Environment: ' + (process.env.NICEHASH_ENVIRONMENT ? process.env.NICEHASH_ENVIRONMENT.toUpperCase() : 'production'));
-  console.log('Listening on http://localhost:' + PORT);
-
-  // Startup Fetch: Prime the global statistics cache
-  console.log('[init] Pre-fetching global pool statistics...');
-  scrapeHeroMinersGlobal(true).catch(e => console.warn('[init] HeroMiners pre-fetch failed:', e.message));
-  scrapeMiningDutchGlobal(true).catch(e => console.warn('[init] MiningDutch pre-fetch failed:', e.message));
-});
+}
 
 // ---------- WebSocket Server Implementation ----------
 // Handles real-time stats fetching requests from miningStatsFetcher.js
@@ -479,42 +530,6 @@ wss.on('connection', (ws, request) => {
   });
 });
 
-server.on('upgrade', (request, socket, head) => {
-  try {
-    const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
-    const pathname = url.pathname.replace(/\/$/, ''); // Remove trailing slash
-
-    if (pathname === '/api/v2/mrr/fetch/ws') {
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit('connection', ws, request);
-      });
-    } else {
-      // Only destroy if it's explicitly an API path we don't recognize.
-      // If it's a root path, it might be Vite's HMR, so we let it be.
-      if (pathname.startsWith('/api')) {
-        socket.destroy();
-      }
-    }
-  } catch (err) {
-    console.error('[ws:upgrade] Error during upgrade:', err.message);
-    socket.destroy();
-  }
-});
-
-server.on('error', (err) => {
-  console.error('[api] Server error on port ' + PORT + ':' , err.message);
-});
-
-function shutdown(signal) {
-  console.log('[api] Received ' + signal + ', shutting down...');
-  server.close(() => process.exit(0));
-}
-
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-
 if (process.env.RUN_MAIN !== 'false') {
-  initializeApp(process.env).catch((err) => {
-    console.error('[init] Failed during startup:', err.message);
-  });
+  startServer();
 }

@@ -17,3 +17,5 @@ mrr_monitor.db
 *.db-journal
 stats_db.json
 vite.config.js
+data/stats.db-shm
+data/stats.db-wal

@@ -111,7 +111,7 @@ export const TelegramTemplates = {
       `<b>Target:</b> ${target.toFixed(2)}`;
   },
 
-  completionSuccess: (acct, r, ads, avg, suffix, efficiency, info, algo ) => {
+  completionSuccess: (acct, r, ads, avg, suffix, efficiency, info = { price: {} }, algo ) => {
     return `✅ <b>[RENTAL SUCCESS]</b>\n` +
       `<b>Account:</b> <code>${formatAccount(acct)}</code>\n` +
       `${divider}\n` +
@@ -120,7 +120,7 @@ export const TelegramTemplates = {
       `<b>Avg Speed:</b> ${avg} ${suffix}\n` +
       `Adv: <code>${ads}</code>\n` +
       `<b>Final Efficiency:</b> <b>${efficiency}%</b>\n` +
-      `<b>Paid:</b> ${info.price.paid} ${info.price.currency}`;
+      `<b>Paid:</b> ${escapeHtml(info.price?.paid)} ${escapeHtml(info.price?.currency)}`;
   },
 
   perfectEfficiency: (acct, r, efficiency, info, ads, remainingMs, algo) => {

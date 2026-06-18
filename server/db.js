@@ -1,4 +1,8 @@
-import sqlite3 from 'sqlite3';
-import path from 'path';
+// This module acts as a singleton for the database connection.
+// The 'db' instance is initialized and exported from index.js
+// to ensure the entire application uses the same connection.
+export let db = null;
 
-export const db = new sqlite3.Database(path.join(process.cwd(), 'stats.db'));
+export function setDb(dbInstance) {
+  db = dbInstance;
+}

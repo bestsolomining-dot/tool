@@ -229,6 +229,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
       <div className="market-inputs" style={{ marginTop: '15px', display: 'flex', alignItems: 'center' }}>
         <select className="select-pro" value={selectedOrderId} onChange={(e) => handleOrderSelect(e.target.value)}>
           <option value="">Select Order</option>
+          {sortedOrders.some(o => (o.status?.code || o.status) !== 'ACTIVE') && <option disabled>--- Active Orders ---</option>}
           {sortedOrders.map((order, index) => {
             const id = String(order?.id ?? order?.orderId ?? order?.hashpowerOrderId ?? '');
             const algo = typeof order?.algorithm === 'object' ? order.algorithm.algorithm || order.algorithm.displayName : order?.algorithm;
@@ -236,10 +237,19 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
             const label = poolName ? `${poolName} (${algo || 'N/A'})` : (algo || order?.title || order?.name || `Order ${index + 1}`);
             const statusCode = order?.status?.code || order?.status || '';
             const clientSuffix = order?.nhClient ? ` [${order.nhClient}]` : '';
+            const isInactive = statusCode !== 'ACTIVE';
+
+            // Add a separator if we are transitioning from active to inactive orders
+            const prevOrder = sortedOrders[index - 1];
+            const showSeparator = isInactive && prevOrder && (prevOrder.status?.code || prevOrder.status) === 'ACTIVE';
+
             return (
-              <option key={id || `${label}-${index}`} value={id}>
-                {label}{statusCode ? ` [${statusCode}]` : ''}{clientSuffix}
-              </option>
+              <>
+                {showSeparator && <option disabled>--- Recent Inactive ---</option>}
+                <option key={id || `${label}-${index}`} value={id}>
+                  {label}{statusCode ? ` [${statusCode}]` : ''}{clientSuffix}
+                </option>
+              </>
             );
           })}
         </select>

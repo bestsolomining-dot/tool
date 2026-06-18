@@ -68,20 +68,27 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
 
       const list = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
       console.log(`[RentedRigContext] Fetched ${list.length} orders for client ${nhClient}`);
-
-      // Filter for ACTIVE orders
-      const activeOrders = list.filter(o => (o.status?.code || o.status) === 'ACTIVE');
-      console.log(`[RentedRigContext] Found ${activeOrders.length} active orders`);
-
-      if (activeOrders.length === 0) {
-        setRentedRigs([]);
+      
+      // Separate active and inactive orders
+      const activeOrders = [];
+      const inactiveOrders = [];
+      list.forEach(o => {
+        if ((o.status?.code || o.status) === 'ACTIVE') {
+          activeOrders.push(o);
+        } else {
+          inactiveOrders.push(o);
+        }
+      });
+      
+      if (list.length === 0) {
+        setRentedRigs([]); // Clear if no orders at all
         setSummary({ totalPaid: "0.00000000", count: 0 });
         setLoading(false);
         return;
       }
 
-      // Process basic order info
-      const tempProcessed = activeOrders.map(o => {
+      // Process all orders to get basic info
+      const tempProcessed = list.map(o => {
         const rawAlgo = typeof o.algorithm === 'object' 
           ? o.algorithm.algorithm || o.algorithm.displayName 
           : o.algorithm;
@@ -103,7 +110,8 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
           speed: o.acceptedCurrentSpeed || 0,
           poolName: o.pool?.name || o.pool?.stratumHostname || o.title || o.name || 'N/A',
           // Raw data for debugging
-          rawOrder: o
+          rawOrder: o,
+          isActive: (o.status?.code || o.status) === 'ACTIVE'
         };
       });
 
@@ -157,14 +165,19 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
         };
       }).sort((a, b) => parseFloat(b.speed || 0) - parseFloat(a.speed || 0));
 
+      // Create the final list: all active orders + the last 20 inactive ones
+      const finalActive = processed.filter(p => p.isActive);
+      const finalInactive = processed.filter(p => !p.isActive).slice(0, 20);
+      const combinedList = [...finalActive, ...finalInactive];
+
       // Calculate total paid
       const totalPaid = activeOrders.reduce(
         (sum, o) => sum + parseFloat(o.payedAmount || 0), 
         0
       ).toFixed(8);
 
-      setRentedRigs(processed);
-      setSummary({ totalPaid, count: processed.length });
+      setRentedRigs(combinedList);
+      setSummary({ totalPaid, count: finalActive.length });
       setLastRefreshTime(new Date().toISOString());
       
       console.log(`[RentedRigContext] Updated ${processed.length} orders`);

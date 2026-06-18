@@ -467,8 +467,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             });
             const rawP = pData;
             nhP = {
-              price: parseFloat(rawP?.fixedPrice || rawP?.standardPrice?.fast || rawP?.price || 0),
-              unit: rawP?.speedUnit || rawP?.unit || (nhAlgo.includes('SHA256') ? 'EH' : 'TH')
+              price: parseFloat(rawP?.fixedPrice || rawP?.standardPrice?.fast || rawP?.price || 0) || 0,
+              unit: String(rawP?.speedUnit || rawP?.unit || (nhAlgo.includes('SHA256') ? 'EH' : 'TH'))
             };
             monitorNhPriceCache.set(cacheKey, nhP);
           }

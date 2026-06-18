@@ -186,7 +186,7 @@ export function calculatePriceComparison(mrrPrice, mrrUnit, nhPrice, nhUnit, isM
   const nClean = normalizeUnit(nhUnit);
 
   // Magnitude Guard: If ASIC algorithm and price > 0.01, it's likely a PH price labeled as TH
-  const isAsic = mrrUnit?.toUpperCase().includes('SHA256') || mrrUnit?.toUpperCase().includes('SCRYPT') || nhUnit?.toUpperCase().includes('SHA256');
+  const isAsic = String(mrrUnit || '').toUpperCase().includes('SHA256') || String(mrrUnit || '').toUpperCase().includes('SCRYPT') || String(nhUnit || '').toUpperCase().includes('SHA256');
   let effectiveMrrUnit = mClean;
   if (isAsic && mrrPriceNum > 0.01 && mClean === 'TH') effectiveMrrUnit = 'PH';
 

@@ -23,13 +23,33 @@ app.use(cors());
 async function scrapeHeroMinersGlobal() {
   // HeroMiners homepage uses JS to render tables. Scraping HTML with Cheerio often fails
   // because it only sees the initial placeholder row. The JSON API is much more reliable.
-  const res = await fetch('https://stats.herominers.com/api/stats', { 
-    headers: { 'User-Agent': 'MiningTool/2.0' } 
-  });
-  
-  if (!res.ok) throw new Error(`HeroMiners API HTTP ${res.status}`);
-  
-  const data = await res.json();
+  const endpoints = [
+    'https://herominers.com',
+    'https://herominers.com/api/stats'
+  ];
+
+  let data = null;
+  let lastError = null;
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': 'MiningTool/2.0' } });
+      if (res.ok) {
+        const candidate = await res.json();
+        if (candidate && candidate.coins) {
+          data = candidate;
+          break; // Successfully found data
+        }
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (!data) {
+    throw new Error(`HeroMiners API failed all endpoints. Last error: ${lastError?.message || 'Unknown response format'}`);
+  }
+
   const coinStats = [];
 
   if (data && data.coins) {

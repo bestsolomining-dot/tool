@@ -100,11 +100,11 @@ export class NiceHashClient {
     const signature = this.computeSignature(method, cleanPath, queryString, body, time, nonce);
 
     const headers = {
-      'X-Time': time,
-      'X-Nonce': nonce,
-      'X-Organization-Id': this.orgId,
-      'X-Request-Id': requestId,
-      'X-Auth': `${this.apiKey}:${signature}`,
+      'X-Time': String(time),
+      'X-Nonce': String(nonce),
+      'X-Organization-Id': String(this.orgId || ''),
+      'X-Request-Id': String(requestId),
+      'X-Auth': String(`${this.apiKey}:${signature}`),
       'Content-Type': 'application/json'
     };
 

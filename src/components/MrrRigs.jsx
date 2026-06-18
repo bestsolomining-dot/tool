@@ -143,7 +143,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           ads,
           cur,
           target,
-          account
           account,
           `${(rig.price?.paid || 0).toFixed(8)} ${rig.price?.currency || 'BTC'}`
         );

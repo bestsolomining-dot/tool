@@ -22,16 +22,10 @@ function getNextSharedNonce(apiKey, forceJumpValue = null) {
 
   // Standardize on 19-digit nonces (Microseconds)
   // ms * 1,000,000 ensures we are always in the same magnitude
-  const now19 = BigInt(Date.now()) * 1000000n;
-  let nonce = now19 > lastNonce ? now19 : lastNonce + 1n;
-
-  // Safety: If our last nonce is more than 10 years in the future compared to 
-  // current system time, we likely have a bad baseline and should warn/reset.
-  const driftLimit = 3650n * 24n * 60n * 60n * 1000n * 1000000n;
-  if (lastNonce > (now19 + driftLimit)) {
-    console.warn(`[mrr] Nonce for ${apiKey.slice(0,6)} is drifted too far into future. Resetting to system time.`);
-    nonce = now19;
-  }
+  // Add a small buffer (e.g., 100ms) to 'now' to avoid race conditions
+  const now19 = (BigInt(Date.now()) + 100n) * 1000000n;
+  // The new nonce is always guaranteed to be greater than the last one.
+  const nonce = now19 > lastNonce ? now19 : lastNonce + 1n;
 
   mrrLastNonces.set(apiKey, nonce);
   return nonce.toString();

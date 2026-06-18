@@ -231,10 +231,11 @@ export function nextMrrNonce(apiKey, clientLabel) {
   }
 
   const nowMs = BigInt(Date.now()) + mrrClockOffset;
-  const now19 = BigInt(nowMs) * 1000000n;
+  // Add a small buffer (e.g., 100ms) to 'now' to avoid race conditions with the server clock
+  const now19 = (nowMs + 100n) * 1000000n;
 
   // Đảm bảo nonce luôn tăng và cộng thêm biến đếm toàn cục để tránh va chạm mili giây
-  mrrGlobalCounter = (mrrGlobalCounter + 1) % 1000;
+  mrrGlobalCounter = (mrrGlobalCounter + 1) % 10000; // Increase range for more entropy
   const baseNonce = (now19 > lastNonce) ? now19 : (lastNonce + 1n);
   const nonce = baseNonce + BigInt(mrrGlobalCounter);
 

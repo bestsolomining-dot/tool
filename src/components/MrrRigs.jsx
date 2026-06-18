@@ -143,7 +143,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           cur,
           target,
           account,
-          `${(rig.price?.paid || 0).toFixed(8)} ${rig.price?.currency || 'BTC'}`
+          rig.price ? `${(rig.price.paid || 0).toFixed(8)} ${rig.price.currency || 'BTC'}` : '0.00000000 BTC'
         );
       })
       .filter(Boolean);

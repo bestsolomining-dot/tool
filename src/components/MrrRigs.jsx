@@ -124,7 +124,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         const remaining = info?.remainingTimeStr || (info?.endTime ? calculateRemainingTime(info.endTime) : (rig.end ? calculateRemainingTime(rig.end) : ''));
         const account = rig.mrrClient || rig.client || mrrClient || 'ALL';
 
-        let perfEmoji = '🟡';
         // Ensure rig.price exists before calling the template function
         let perfEmoji = '⚪';
         if (effNum >= 100) perfEmoji = '💯';

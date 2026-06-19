@@ -11,6 +11,7 @@ import { resolveNhClient, getNiceHashApp } from './server/nh.js';
 import { mrrApiCall, initMrrConfigs } from './server/mrr.js';
 import sqlite3 from 'sqlite3';
 import { migrateOldCsvToDb } from './server/migrate.js';
+import { initMiningTrainingDb } from './server/miningTrainingDb.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -499,6 +500,7 @@ app.get('/api/v2/mining-dutch/html', async (req, res) => {
 async function startServer() {
   try {
     await initDatabase();
+    await initMiningTrainingDb();
     await loadStats();
     await migrateOldCsvToDb(); // Run the migration after DB is initialized
     await initMrrConfigs(process.env);

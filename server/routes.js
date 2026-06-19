@@ -8,6 +8,7 @@ import { mrrApiCall, mrrRequest, fetchAggregatedRentals, mrrConfigs, defaultMrrC
 import { resolveNhClient, getNiceHashApp, nhConfigs, isAggregate, normalizeAlgoForNiceHash, mapNiceHashToMRR, getCachedNhPools } from './nh.js';
 import { sendTelegramInternal, runRentalMonitor, getTelegramStatus, setTelegramStatus } from './monitor.js';
 import { db } from './db.js';
+import { saveMiningTrainingSnapshot } from './miningTrainingDb.js';
 import { getAlgorithmUnit } from '../src/core/mapping.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -1047,6 +1048,16 @@ export function registerRoutes(app) {
         return res.json([]);
       }
       res.status(500).json({ success: false, error: `Error reading extracted pools: ${err.message}` });
+    }
+  }));
+
+  app.post('/api/v2/mining/training-snapshot', asyncHandler(async (req, res) => {
+    try {
+      const result = await saveMiningTrainingSnapshot(req.body || {});
+      res.json({ success: true, data: result });
+    } catch (err) {
+      console.error('[mining-training] Failed to save snapshot:', err.message);
+      res.status(500).json({ success: false, error: err.message });
     }
   }));
 

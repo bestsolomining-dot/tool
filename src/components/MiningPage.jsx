@@ -20,10 +20,11 @@ function StatCard({ label, value, accent }) {
 }
 
 function MiningRouteHero() {
-  const { routes, heroRows, miningDutchRows, loading, error, lastUpdated, refresh } = useMiningWorkspace();
+  const { routes, opportunities, heroRows, miningDutchRows, loading, error, lastUpdated, refresh } = useMiningWorkspace();
   const bestRoute = routes[0] || null;
   const activeRouteCount = routes.filter((route) => route.miningDutchBtcPerDay > 0 || route.heroMiners > 0).length;
   const profitableCount = routes.filter((route) => route.spread > 0).length;
+  const bestOpportunity = opportunities[0] || null;
 
   return (
     <section style={{ display: 'grid', gap: '14px', marginBottom: '18px' }}>
@@ -136,7 +137,131 @@ function MiningRouteHero() {
           </div>
         </div>
       </div>
+
+      <div style={{
+        padding: '18px',
+        borderRadius: '18px',
+        border: '1px solid rgba(148,163,184,0.12)',
+        background: 'rgba(15,23,42,0.72)',
+        boxShadow: '0 18px 40px rgba(0,0,0,0.20)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+          <div>
+            <div style={{ color: '#38bdf8', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Opportunity Finder</div>
+            <div style={{ color: '#f8fafc', fontSize: '18px', fontWeight: 800 }}>Pool revenue vs NiceHash / MRR market price</div>
+          </div>
+          <div style={{ color: '#94a3b8', fontSize: '12px' }}>
+            Compare the same algo/day across all three sources
+          </div>
+        </div>
+
+        {bestOpportunity ? (
+          <div style={{
+            display: 'grid',
+            gap: '10px',
+            marginBottom: '14px',
+            padding: '14px',
+            borderRadius: '14px',
+            border: '1px solid rgba(148,163,184,0.10)',
+            background: 'linear-gradient(135deg, rgba(2,6,23,0.45), rgba(15,23,42,0.88))',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ color: '#e2e8f0', fontSize: '22px', fontWeight: 900 }}>{bestOpportunity.label}</div>
+                <div style={{ color: '#94a3b8', fontSize: '12px' }}>
+                  Winner: {bestOpportunity.winner} · NiceHash {bestOpportunity.nicehashAlgo} · MRR {bestOpportunity.mrrAlgo}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ color: bestOpportunity.opportunityScore >= 0 ? '#34d399' : '#f87171', fontSize: '18px', fontWeight: 900 }}>
+                  {btcValue(bestOpportunity.opportunityScore)}
+                </div>
+                <div style={{ color: '#94a3b8', fontSize: '11px' }}>Opportunity BTC/day</div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
+              <MiniStat label="Pool revenue" value={btcValue(bestOpportunity.poolRevenue)} tone="#34d399" />
+              <MiniStat label="NiceHash buy/day" value={btcValue(bestOpportunity.niceHashPrice)} tone="#60a5fa" />
+              <MiniStat label="MRR market/day" value={btcValue(bestOpportunity.mrrMarketPrice)} tone="#fbbf24" />
+              <MiniStat label="Spread vs NH" value={bestOpportunity.spreadVsNh === null ? 'N/A' : percentValue(bestOpportunity.spreadVsNh)} tone="#a78bfa" />
+            </div>
+          </div>
+        ) : (
+          <div style={{ color: '#94a3b8', fontSize: '12px' }}>No opportunity rows yet.</div>
+        )}
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px' }}>
+            <thead>
+              <tr style={{ color: '#94a3b8', borderBottom: '1px solid rgba(148,163,184,0.12)' }}>
+                <HeaderCell align="left">Algo</HeaderCell>
+                <HeaderCell align="left">Winner</HeaderCell>
+                <HeaderCell>Pool BTC/day</HeaderCell>
+                <HeaderCell>NH Buy/day</HeaderCell>
+                <HeaderCell>MRR Market/day</HeaderCell>
+                <HeaderCell>Spread NH</HeaderCell>
+                <HeaderCell>Spread MRR</HeaderCell>
+                <HeaderCell>Hero Coins</HeaderCell>
+              </tr>
+            </thead>
+            <tbody>
+              {opportunities.slice(0, 10).map((row) => (
+                <tr key={row.nicehashAlgo} style={{ borderBottom: '1px solid rgba(148,163,184,0.08)' }}>
+                  <BodyCell align="left">
+                    <strong style={{ color: '#e2e8f0' }}>{row.label}</strong>
+                    <div style={{ color: '#64748b', fontSize: '11px', marginTop: '2px' }}>{row.nicehashAlgo} • {row.mrrAlgo}</div>
+                  </BodyCell>
+                  <BodyCell align="left">{row.winner}</BodyCell>
+                  <BodyCell><strong style={{ color: '#34d399' }}>{btcValue(row.poolRevenue)}</strong></BodyCell>
+                  <BodyCell><strong style={{ color: '#60a5fa' }}>{btcValue(row.niceHashPrice)}</strong></BodyCell>
+                  <BodyCell><strong style={{ color: '#fbbf24' }}>{btcValue(row.mrrMarketPrice)}</strong></BodyCell>
+                  <BodyCell>
+                    <span style={{ color: row.spreadVsNh > 0 ? '#34d399' : row.spreadVsNh < 0 ? '#f87171' : '#94a3b8', fontWeight: 700 }}>
+                      {row.spreadVsNh === null ? 'N/A' : percentValue(row.spreadVsNh)}
+                    </span>
+                  </BodyCell>
+                  <BodyCell>
+                    <span style={{ color: row.spreadVsMrr > 0 ? '#34d399' : row.spreadVsMrr < 0 ? '#f87171' : '#94a3b8', fontWeight: 700 }}>
+                      {row.spreadVsMrr === null ? 'N/A' : percentValue(row.spreadVsMrr)}
+                    </span>
+                  </BodyCell>
+                  <BodyCell align="left">
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                      {row.heroCoins.slice(0, 4).map((coin) => (
+                        <span key={coin} style={{
+                          border: '1px solid rgba(96,165,250,0.22)',
+                          color: '#bfdbfe',
+                          background: 'rgba(37,99,235,0.12)',
+                          borderRadius: '999px',
+                          padding: '2px 6px',
+                          fontSize: '10px',
+                        }}>
+                          {coin}
+                        </span>
+                      ))}
+                    </div>
+                  </BodyCell>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
+  );
+}
+
+function MiniStat({ label, value, tone }) {
+  return (
+    <div style={{
+      padding: '12px',
+      borderRadius: '12px',
+      background: 'rgba(255,255,255,0.02)',
+      border: '1px solid rgba(148,163,184,0.08)',
+    }}>
+      <div style={{ color: '#64748b', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
+      <div style={{ color: tone, fontSize: '17px', fontWeight: 900, marginTop: '4px' }}>{value}</div>
+    </div>
   );
 }
 

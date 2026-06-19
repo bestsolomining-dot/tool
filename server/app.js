@@ -13,7 +13,7 @@ import authRoutes from './auth.js';
 export function createApp({ distPath }) {
   const app = express();
   app.set('etag', false);
-  app.use(express.json());
+  app.use(express.json({ limit: '2mb' }));
   app.use(corsMiddleware);
   app.use(logRequestMiddleware);
 

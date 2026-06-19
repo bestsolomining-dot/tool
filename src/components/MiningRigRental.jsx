@@ -488,7 +488,7 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
   };
 
   return (
-    <div className="rig-section" style={{ marginLeft: '5px', marginRight: '5px', marginTop: '5px', paddingTop: '5px', paddingBottom: '5px' }}>
+    <div className="rig-section" style={{ marginLeft: '5px', marginRight: '5px', marginTop: '5px', paddingTop: '5px', paddingBottom: '5px', maxHeight: 'auto' }}>
       <h2 className="section-title" style={{ paddingBottom: '10px' }}>Mining Rig Rentals</h2>
       {/* Client Selector */}
       <div className="market-inputs">

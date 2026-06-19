@@ -539,17 +539,17 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         </div>
       </div>
 
-      <div className="rig-list" style={{ marginTop: '5px', position: 'relative', flexGrow: 1, display: 'flex', flexDirection: 'column', maxHeight: '800px', overflowY: 'auto', paddingRight: '2px', scrollbarWidth: 'thin', scrollbarColor: 'rgba(143, 64, 64, 0.59) transparent', overscrollBehavior: 'contain' }}>
+      <div className="rig-list" style={{ marginTop: '5px', position: 'relative', flexGrow: 1, display: 'flex', flexDirection: 'column', maxHeight: 'auto', paddingRight: '2px' }}>
         {filteredRigs.length === 0 && !loading && !error && (
           <div style={{ opacity: 0.5, textAlign: 'center', padding: '20px' }}>No rigs found for this account.</div>
         )}
 
         <div className="rig-grid-container" style={{
-          minHeight: '800px',
-          maxHeight: 'auto',
+          // minHeight: '1200px',
+          // maxHeight: 'auto',
           overflowY: 'auto',
-          paddingRight: '8px',
-          overscrollBehavior: 'contain'
+          paddingRight: '6px',
+          // overscrollBehavior: 'contain',
         }}>
           {groupedRigs.map(([algoName, rigsInGroup]) => {
             const isExpanded = expandedAlgos[algoName];

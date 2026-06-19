@@ -341,9 +341,9 @@ function MiningWorkspaceShell({ onNavigateHome, onCall, nhClient }) {
         </aside>
       </section>
 
-      <section style={{ marginTop: '12px' }}>
+      {/* <section style={{ marginTop: '12px' }}>
         <TelegramManager onCall={onCall} mrrClient="VN" />
-      </section>
+      </section> */}
     </div>
   );
 }

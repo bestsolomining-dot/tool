@@ -167,9 +167,9 @@ const MONITOR_NH_ORDERS_TTL = 60 * 1000;
 // ==========================
 function escapeHtml(text) {
   return String(text || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>');
 }
 
 function getMonitorNhAlgoPriceUnit(order, fallbackAlgo) {
@@ -333,6 +333,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   const globalRentalsMap = new Map();
   const globalOnlineAlgos = new Map();
   const queuedTelegramMessages = [];
+  const notifiedRentalIdsThisRun = new Set();
 
   const queueTelegramMessage = (message, options = {}) => {
     const text = String(message || '').trim();
@@ -656,16 +657,28 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
       // 3) Process each rental (alerts, DB update)
       for (const r of rentals) {
-        // Inject current hashrate if missing
-        const liveRig = getRigLookupKeys(r).map(key => rigLookupByRentalId.get(key)).find(Boolean);
-        if (liveRig) {
-          if (!r.hashrate || typeof r.hashrate !== 'object') r.hashrate = {};
-          const liveVal = parseFloat(liveRig.hashrate || liveRig.status?.hashrate || 0);
-          if ((!r.hashrate.current || parseFloat(r.hashrate.current) === 0) && liveVal > 0) {
-            r.hashrate.current = liveVal;
+      // Inject current hashrate and rig name from live rig data
+      const liveRig = getRigLookupKeys(r).map(key => rigLookupByRentalId.get(key)).find(Boolean);
+      if (liveRig) {
+        // ALWAYS use the rig name, never the rental order description
+        r.name = liveRig.name || r.name;
+
+        // Merge live rig hashrate into rental for better accuracy
+        if (!r.hashrate || typeof r.hashrate !== 'object') r.hashrate = {};
+        const liveVal = parseFloat(liveRig.hashrate || liveRig.status?.hashrate || 0);
+        if (liveVal > 0) {
+          r.hashrate.current = liveVal;
+          // If rental has no detailed hashrate, promote the simple value as current
+          if (!r.hashrate.last_15min) {
+            r.hashrate.last_15min = { hash: liveVal, nice: `${liveVal.toFixed(2)} ${liveRig.hashrate_suffix || ''}` };
           }
-          if (!r.name) r.name = liveRig.name;
         }
+
+        // Merge rig algo if rental algo is missing
+        if ((!r.algo || r.algo === 'Unknown') && liveRig.algo) {
+          r.algo = liveRig.algo;
+        }
+      }
 
         const info = extractRentalInfo(r);
         const rawStart = info.startTime;
@@ -952,9 +965,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         // Send "rented" notification if new rental (first sighting)
         const isNewToMonitor = lastNotified === 0;
         const withinReasonableStart = startT > 0 && elapsedMs < (10 * 60 * 1000);
-        const shouldNotify = forceNotify || (isNewToMonitor && withinReasonableStart);
+        // Guard against both cross-account parallel duplicates and forceNotify re-sending
+        const alreadyNotifiedThisRun = notifiedRentalIdsThisRun.has(String(r.id));
+        const shouldNotify = !alreadyNotifiedThisRun && (forceNotify || (isNewToMonitor && withinReasonableStart));
 
         if (shouldNotify) {
+          notifiedRentalIdsThisRun.add(String(r.id));
           const hbType = forceNotify ? 'MONITOR' : 'RENTING';
           const timeProgress = totalDurationMs > 0 ? Math.floor((elapsedMs / totalDurationMs) * 100) : 0;
 
@@ -1083,7 +1099,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   const shouldSendCombinedSummary = forceNotify || (now - (lastAlertTimes.get('global_summary') || 0) >= RENTED_HEARTBEAT_MS);
   rentedAll = currentActiveRentalIds.size || activeRentalLines.length || accountMetrics.reduce((sum, metric) => sum + (Number(metric.rented) || 0), 0);
   if (shouldSendCombinedSummary && (accountMetrics.length > 0 || activeRentalLines.length > 0)) {
-    const maxBarLen = 14;
+    const maxBarLen = 30;
     const barChart = accountMetrics.map(am => {
       const ratio = totalAll > 0 ? am.total / totalAll : 0;
       const filled = Math.max(1, Math.round(ratio * maxBarLen));
@@ -1164,6 +1180,6 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     },
   };
   } finally {
-    isMonitorRunning = false;
+    isMonitorRunning = true;
   }
 }

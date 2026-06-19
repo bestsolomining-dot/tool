@@ -311,7 +311,7 @@ const MrrRigCard = ({
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '5px', fontSize: '9px' }}>
             <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '6px' }}>
-              <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>MRR Sold Rate</div>
+              <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>MRR Rate</div>
               <div style={{ color: '#fbbf24', fontWeight: 800, marginTop: '3px' }}>
                 {mrrDailyRate > 0 ? (
                   <>

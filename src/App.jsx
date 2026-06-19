@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Pools from './components/Pools';
 import Modal from './components/Modal';
-import HashrateCalculator from './components/HashrateCalculator';
 import HashCompletionCalculator from './components/HashCompletionCalculator';
 import HashpowerBot from './components/HashpowerBot';
 import NiceHash from './components/NiceHash';
 import MiningRigRental from './components/MiningRigRental';
+import CryptoRatePage from './components/CryptoRatePage';
 import MiningPage from './components/MiningPage.jsx';
 import { createApiClient } from './core/apiClient';
 import './App.css';
@@ -16,7 +16,6 @@ export default function App() {
   const [output, setOutput] = useState(null);
   const [lastCall, setLastCall] = useState(null);
   const [responseModalOpen, setResponseModalOpen] = useState(false);
-  const [calculatorModalOpen, setCalculatorModalOpen] = useState(false);
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
   const [algorithm, setAlgorithm] = useState('');
@@ -192,46 +191,44 @@ export default function App() {
           onNavigateHome={() => navigate('/')}
         />
       ) : (
-      <main className="dashboard">
-        <section className="quick-actions">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
-              <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>Open the hashrate calculator in a popup modal.</p>
+        <main className="dashboard" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
+          <section className="quick-actions">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
+                <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>Open the hashrate calculator in a popup modal.</p>
+              </div>
+              <button className="btn-pro secondary" onClick={() => {
+                setCompletionCalculatorContext(null);
+                setCompletionModalOpen(true);
+              }} style={{ whiteSpace: 'nowrap' }}>
+                Completion Calc
+              </button>
             </div>
-            <button className="btn-pro secondary" onClick={() => {
-              setCompletionCalculatorContext(null);
-              setCompletionModalOpen(true);
-            }} style={{ whiteSpace: 'nowrap' }}>
-              Completion Calc
-            </button>
-            <button className="btn-pro secondary" onClick={() => setCalculatorModalOpen(true)} style={{ whiteSpace: 'nowrap' }}>
-              Open Calculator
-            </button>
-          </div>
-          <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <article className="panel">
+                <NiceHash
+                  output={output}
+                  onCall={handleMiningCall}
+                  algorithm={algorithm}
+                  market={market}
+                />
+              </article>
+            </div>
             <article className="panel">
-              <NiceHash
-                output={output}
+              <MiningRigRental
                 onCall={handleMiningCall}
-                algorithm={algorithm}
-                market={market}
+                mrrClient={mrrClient}
+                setMrrClient={setMrrClient}
+                onOpenCompletionCalculator={openCompletionCalculator}
               />
             </article>
-          </div>
-          <article className="panel">
-            <MiningRigRental
-              onCall={handleMiningCall}
-              mrrClient={mrrClient}
-              setMrrClient={setMrrClient}
-              onOpenCompletionCalculator={openCompletionCalculator}
-            />
-          </article>
-          <section className="pools-section">
-            <Pools onCall={callApi} niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
+            <section className="pools-section">
+              <Pools onCall={callApi} niceHashData={output} mrrClient={mrrClient} setMrrClient={setMrrClient} />
+            </section>
           </section>
-        </section>
-      </main>
+          <CryptoRatePage onCall={callApi} />
+        </main>
       )}
       <Modal
         isOpen={responseModalOpen}
@@ -249,14 +246,6 @@ export default function App() {
         </pre>
       </Modal>
 
-      <Modal
-        isOpen={calculatorModalOpen}
-        onClose={() => setCalculatorModalOpen(false)}
-        title="Hashrate Calculator"
-        maxWidth="700px"
-      >
-        <HashrateCalculator />
-      </Modal>
       <Modal
         isOpen={completionModalOpen}
         onClose={() => setCompletionModalOpen(false)}

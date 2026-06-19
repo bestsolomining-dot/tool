@@ -161,16 +161,21 @@ const MrrRigCard = ({
   const isBehind = targetHashrate > adsVal;
   const hSuffix = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || '';
 
-  const accent = roiPercent === null
-    ? (isMine ? 'rgba(59, 130, 246, 0.30)' : 'rgba(148, 163, 184, 0.18)')
-    : roiPercent >= 0
-      ? 'rgba(16, 185, 129, 0.30)'
-      : 'rgba(239, 68, 68, 0.30)';
+  const getEfficiencyAccent = (efficiency) => {
+    if (!Number.isFinite(efficiency)) return 'rgba(148, 163, 184, 0.18)'; // Default grey
+    if (efficiency >= 100) return 'rgba(197, 34, 238, 0.3)'; // Cyan
+    if (efficiency >= 70) return 'rgba(23, 185, 131, 0.3)'; // Green
+    if (efficiency >= 50) return 'rgba(251, 191, 36, 0.30)'; // Yellow
+    return 'rgba(239, 68, 68, 0.30)'; // Red
+  };
+
+  const accent = getEfficiencyAccent(effNum);
 
   const shellStyle = {
-    background: `linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(15, 23, 42, 0.86) 100%), radial-gradient(circle at top right, ${accent} 0%, transparent 48%)`,
-    border: `1px solid ${roiPercent === null ? 'rgba(255,255,255,0.08)' : roiPercent >= 0 ? 'rgba(16,185,129,0.28)' : 'rgba(239,68,68,0.28)'}`,
-    borderTop: `3px solid ${accent}`,
+    
+    background: `radial-gradient(circle at top right, ${accent} 0%, transparent 88%)`,
+    border: `1px solid ${accent}`,
+    borderTop: `3px solid ${getRoiColor(effNum)}`,
     borderRadius: '12px',
     padding: '8px',
     position: 'relative',
@@ -347,7 +352,7 @@ const MrrRigCard = ({
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', marginBottom: '2px' }}>
                 <span style={{ opacity: 0.55, textTransform: 'uppercase' }}>Efficiency</span>
-                <span style={{ color: effNum >= 100 ? '#22d3ee' : effNum > 90 ? '#10b981' : effNum > 70 ? '#fbbf24' : '#ef4444', fontWeight: 800 }}>{eff}%</span>
+                <span style={{ color: effNum >= 100 ? '#22d3ee' : effNum > 90 ? '#10b981' : effNum > 50 ? '#fbbf24' : '#ef4444', fontWeight: 800 }}>{eff}%</span>
               </div>
               <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
                 <div style={{ width: `${Math.min(100, Math.max(0, effNum || 0))}%`, height: '100%', background: getRoiColor(effNum), borderRadius: '999px' }} />

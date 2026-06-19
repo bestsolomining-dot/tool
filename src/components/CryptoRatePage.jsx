@@ -256,7 +256,7 @@ export default function CryptoRatePage({ onCall }) {
             transition: 'all 0.2s ease'
           }}>
             {/* Decorative symbol */}
-            <div style={{ position: 'relative', top: '-5px', right: '-5px', fontSize: '3rem', fontWeight: '900', opacity: 0.03, pointerEvents: 'none' }}>{coin.symbol}</div>
+            <div style={{ position: 'absolute', top: '-5px', right: '-5px', fontSize: '3rem', fontWeight: '900', opacity: 0.03, pointerEvents: 'none' }}>{coin.symbol}</div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span style={{ fontWeight: 'bold', color: '#60a5fa', letterSpacing: '0.05em', fontSize: '0.7rem' }}>{coin.name.toUpperCase()}</span>

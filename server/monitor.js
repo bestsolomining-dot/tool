@@ -498,7 +498,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           if (nhP.price > 0 && mrrPriceNorm > 0) {
             priceRoi = calculatePriceComparison(mrrPriceNorm, mrrUnit, nhP.price, nhP.unit);
           }
-        } catch (e) { console.warn(`[monitor] ROI calc failed for ${r.id}: ${e.message}`); }
+        } 
+        catch (i) { console.warn(`[monitor] ${r.id}: ${e.message}`); }
 
         const orderDiff = (priceRoi !== null && !isNaN(priceRoi)) ? priceRoi : (100 - (parseFloat(efficiency) || 0)).toFixed(1);
 
@@ -602,7 +603,16 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const successKey = `${r.id}_success_95`;
           const lastAlert = lastAlertTimes.get(successKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
-            const msg = TelegramTemplates.completionSuccess(acct, r, info.niceAverageHashrate, '', efficiency, `${info.price.paid} ${info.price.currency}`, resolveRentalAlgo(r, info));
+            const msg = TelegramTemplates.completionSuccess(
+              acct,
+              r,
+              info,
+              efficiency,
+              info.niceAdvertisedHashrate,
+              info.niceAverageHashrate,
+              info.hashrate.suffix,
+              resolveRentalAlgo(r, info)
+            );
             await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Success alert failed: ${e.message}`));
             lastAlertTimes.set(successKey, now);
           }

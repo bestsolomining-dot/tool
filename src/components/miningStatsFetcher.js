@@ -69,7 +69,7 @@ function initSocket() {
   
   sharedSocket.onclose = () => {
     // Reject tất cả request đang đợi khi socket đóng bất ngờ
-    pendingRequests.forEach((req, id) => {
+    pendingRequests.forEach((req) => {
       clearTimeout(req.timeoutId);
       req.reject(new Error('WebSocket connection closed'));
     });
@@ -103,7 +103,7 @@ export async function fetchMiningStats(type, client, rigId = null, coin = null, 
     targetClient = 'BT';
   }
 
-  const attempt = async (retryIndex) => {
+  const attempt = async () => {
     const socket = initSocket();
     await waitForSocket(socket);
 

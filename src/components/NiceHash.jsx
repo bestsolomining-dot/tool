@@ -1,22 +1,20 @@
 // NiceHash.jsx
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import Accounting from './Accounting';
-import { normalizeAlgoForNiceHash } from '../core/mapping.js';
-import { useRentedRigs } from './RentedRigContext';
-import RentedRigCard from './NiceHashOrdersCard';
+import NiceHashOrderCard from './NiceHashOrdersCard.jsx';
+import { getAlgoDisplayName } from '../core/mapping.js';
+import { useNiceHashOrders } from './NiceHashContext';
 
-export default function MiningRigNiceHash({ onCall, output, algorithm, market, nhClient, setNhClient }) {
+export default function MiningRigNiceHash({ onCall, algorithm, nhClient, setNhClient }) {
   // Get ALL data from context including price data
   const { 
-    rentedRigs,           // Array of active orders with prices, market comparisons
-    marketPrices,         // Map of algo:market to price data
+    nicehashOrders,
     refresh: refreshSummary, 
     showPriceLookupModal, 
     setShowPriceLookupModal,
     getOrderPrice,        // Helper function to get price by order ID
-    selectedOrder: contextSelectedOrder, // Currently selected order from context
     setSelectedOrderId: setContextSelectedOrderId // Setter for context selection
-  } = useRentedRigs();
+  } = useNiceHashOrders();
 
   // Local state
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -36,13 +34,13 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     setSortConfig({ key, direction });
   };
 
-  // Use processed active orders from RentedRigContext instead of local redundant fetches
+  // Use processed active orders from NiceHashContext instead of local redundant fetches
   const orders = useMemo(() => {
-    return rentedRigs.map(r => ({
+    return nicehashOrders.map(r => ({
       ...r.rawOrder,
       nhClient: r.account, // Context uses 'account' field for the client label
     }));
-  }, [rentedRigs]);
+  }, [nicehashOrders]);
 
   // Unified refresh
   const handleManualRefresh = useCallback(() => {
@@ -58,7 +56,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
       const data = await onCall(`/api/v2/hashpower/order/${encodeURIComponent(id)}`, { silent: true });
       if (data && !data.error) {
         // Enrich with client info from context if available
-        const contextMatch = rentedRigs.find(r => r.id === id);
+        const contextMatch = nicehashOrders.find(r => r.id === id);
         setOrderDetail({ ...data, nhClient: contextMatch?.account || nhClient });
         setPriceInput(data.price || '');
         setLimitInput(data.limit || '');
@@ -76,7 +74,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
     setContextSelectedOrderId(value); // Sync with context
     
     // Pre-populate from context state to avoid blank UI while fetching fresh details
-    const existing = rentedRigs.find(r => r.id === String(value));
+    const existing = nicehashOrders.find(r => r.id === String(value));
     if (existing?.rawOrder) {
       setOrderDetail({ ...existing.rawOrder, nhClient: existing.account });
       setPriceInput(existing.rawOrder.price || '');
@@ -179,22 +177,12 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
 
   // Get market comparison from context
   const matchingOrderInfo = useMemo(() =>
-    rentedRigs.find(r => r.id === String(selectedOrderId)),
-    [rentedRigs, selectedOrderId]
+    nicehashOrders.find(r => r.id === String(selectedOrderId)),
+    [nicehashOrders, selectedOrderId]
   );
-
-  // Replace manual API price lookup with state-based lookup
-  const marketPriceData = useMemo(() => {
-    if (matchingOrderInfo) return { value: matchingOrderInfo.marketPrice, unit: matchingOrderInfo.marketUnit };
-    const nhAlgo = normalizeAlgoForNiceHash(algorithm);
-    const key = `${nhAlgo}:${market || 'USA'}`;
-    return marketPrices[key] || null;
-  }, [matchingOrderInfo, marketPrices, algorithm, market]);
 
   // Clear local state when client changes
   useEffect(() => {
-    setOrderDetail(null);
-
     if (nhClient && typeof onCall === 'function') {
       refreshSummary();
     }
@@ -213,7 +201,7 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
           <option value="NHATLINH">NhatLinh</option>
           <option value="KIMLOAN">KimLoan</option>
         </select>
-        <RentedRigsSummarySection />
+        <NiceHashOrdersCardView />
       </div>
 
       {/* Action Buttons */}
@@ -232,10 +220,10 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
           {sortedOrders.some(o => (o.status?.code || o.status) !== 'ACTIVE') && <option disabled>--- Active Orders ---</option>}
           {sortedOrders.map((order, index) => {
             const id = String(order?.id ?? order?.orderId ?? order?.hashpowerOrderId ?? '');
-            const algo = typeof order?.algorithm === 'object' ? order.algorithm.algorithm || order.algorithm.displayName : order?.algorithm;
+            const algoName = typeof order?.algorithm === 'object' ? order.algorithm.algorithm || order.algorithm.displayName : order?.algorithm;
             const poolName = order?.pool?.name || order?.pool?.stratumHostname;
-            const label = poolName ? `${poolName} (${algo || 'N/A'})` : (algo || order?.title || order?.name || `Order ${index + 1}`);
-            const statusCode = order?.status?.code || order?.status || '';
+            const label = poolName ? `${poolName} (${getAlgoDisplayName(algoName) || 'N/A'})` : (getAlgoDisplayName(algoName) || order?.title || order?.name || `Order ${index + 1}`);
+            const statusCode = String(order?.status?.code || order?.status || '').toUpperCase();
             const clientSuffix = order?.nhClient ? ` [${order.nhClient}]` : '';
             const isInactive = statusCode !== 'ACTIVE';
 
@@ -524,23 +512,25 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
 }
 
 // Helper component to display rented rigs
-function RentedRigsSummarySection() {
-  const { rentedRigs, summary, loading } = useRentedRigs();
+function NiceHashOrdersCardView() {
+  const { nicehashOrders, summary, loading } = useNiceHashOrders();
+
+  const activeOrders = useMemo(() => nicehashOrders.filter(order => order.isActive), [nicehashOrders]);
 
   return (
     <section style={{ marginBottom: '15px', padding: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
-        <h4 style={{ margin: 0 }}>Orders Card</h4>
+        <h4 style={{ margin: 0 }}>Active Orders</h4>
         <div style={{ fontSize: '0.6rem' }}>
           Total Paid: <span style={{ color: '#f3ba2f', fontWeight: 'bold' }}>{summary.totalPaid} BTC</span>
           <span style={{ margin: '0 10px', opacity: 0.3 }}>|</span>
-          Orders: <b>{summary.count}</b>
+          Active Orders: <b>{summary.count}</b>
         </div>
       </div>
       <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '5px' }}>
         {loading && <p>Updating orders...</p>}
-        {!loading && rentedRigs.length === 0 && <p style={{ fontSize: '0.8rem', opacity: 0.5 }}>No active NiceHash orders found for the card view.</p>}
-        {rentedRigs.map(rig => <RentedRigCard key={rig.id} order={rig} />)}
+        {!loading && activeOrders.length === 0 && <p style={{ fontSize: '0.8rem', opacity: 0.5 }}>No active NiceHash orders found for the card view.</p>}
+        {activeOrders.map(order => <NiceHashOrderCard key={order.id} order={order} />)}
       </div>
     </section>
   );

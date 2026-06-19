@@ -169,13 +169,15 @@ async function scrapeHeroMinersGlobal(force = false) {
   });
 
   const contentType = res.headers.get('content-type');
-  if (!res.ok || (contentType && contentType.includes('text/html'))) {
+  // Fallback to HTML scraping ONLY if the response is explicitly HTML and not a JSON response.
+  // The primary target is the JSON API at the root URL.
+  if (contentType && contentType.includes('text/html')) {
     const htmlContent = await res.text();
     const $ = cheerio.load(htmlContent);
     const coinStats = [];
     $('div.table-responsive > table.table-hover > tbody > tr').each((i, el) => {
       const tds = $(el).find('td');
-      if (tds.length < 8) return;
+      if (tds.length < 7) return; // Relaxed the check slightly in case a column is removed
       coinStats.push({
         coin: $(tds[0]).find('b').text().trim(),
         algorithm: $(tds[1]).text().trim(),
@@ -188,7 +190,7 @@ async function scrapeHeroMinersGlobal(force = false) {
     });
 
     if (coinStats.length === 0) {
-      throw new Error('Failed to parse coin stats from HeroMiners HTML.');
+      throw new Error('Failed to parse coin stats from HeroMiners HTML fallback.');
     }
 
     const result = { coinStats, miners: coinStats.reduce((acc, c) => acc + c.miners, 0) };
@@ -197,7 +199,12 @@ async function scrapeHeroMinersGlobal(force = false) {
     return result;
   }
 
-  const data = await res.json();
+  // If we are here, we expect a JSON response.
+  if (!res.ok) {
+    throw new Error(`HeroMiners API request failed with status: ${res.status}`);
+  }
+
+  const data = await res.json(); // This will throw if the body is not valid JSON
   if (!data || !data.coins) {
     throw new Error(`Invalid HeroMiners API response format from ${url}`);
   }
@@ -291,6 +298,35 @@ async function scrapeMiningDutchGlobal(force = false) {
   }
 }
 
+async function fetchMiningDutchHtml(force = false) {
+  const CACHE_KEY = 'miningdutch_html';
+  if (!force) {
+    const cached = statsCache.get(CACHE_KEY);
+    if (cached && (Date.now() - cached.ts < CACHE_TTL)) return cached.data;
+  }
+
+  const url = 'https://www.mining-dutch.nl/';
+  const res = await fetch(url, {
+    headers: COMMON_HEADERS,
+    signal: AbortSignal.timeout(10000)
+  });
+
+  if (!res.ok) {
+    throw new Error(`Mining-Dutch page fetch failed with status: ${res.status}`);
+  }
+
+  const result = {
+    success: true,
+    url,
+    html: await res.text(),
+    fetchedAt: new Date().toISOString()
+  };
+
+  statsCache.set(CACHE_KEY, { data: result, ts: Date.now() });
+  await persistStats();
+  return result;
+}
+
 // GET /api/v2/mining/herominers/global – scrape HeroMiners
 app.get('/api/v2/mining/herominers/global', async (req, res) => {
   try {
@@ -332,6 +368,15 @@ app.get('/api/v2/mining-dutch/user-status', async (req, res) => {
     const url = `https://www.mining-dutch.nl/pools/${coin}.php?page=api&action=getuserstatus&api_key=${api_key}&id=${id}`;
     const response = await fetch(url, { headers: COMMON_HEADERS });
     const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/v2/mining-dutch/html', async (req, res) => {
+  try {
+    const data = await fetchMiningDutchHtml(Boolean(req.query.force));
     res.json(data);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -436,8 +481,7 @@ wss.on('connection', (ws, request) => {
       if (action === 'herominers') {
         try {
           // 0. Determine which HeroMiners coin subdomain to use
-          let algorithm = 'monero';
-          let coinpayloadCoin;
+          let coin = payloadCoin || 'monero';
 
           // Automatically map algorithm to the correct HeroMiners subdomain
           const algoMap = {
@@ -478,7 +522,7 @@ wss.on('connection', (ws, request) => {
           if (!address) throw new Error('Could not resolve mining address');
 
           // 2. Fetch from HeroMiners
-          const url = `https://${algorithm}.herominers.com`;
+          const url = `https://${coin}.herominers.com`;
           console.log(`[ws:herominers] Fetching ${coin} stats for ${address}...`);
           const hmRes = await fetch(url, { 
             headers: COMMON_HEADERS,

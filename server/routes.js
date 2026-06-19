@@ -230,7 +230,7 @@ export function registerRoutes(app) {
         market: typeof o.market === 'object' ? o.market.id : o.market,
         price: o.price,
         limit: o.limit,
-        payedAmount: o.payedAmount || 0,             // Required for RentedRigContext summary
+        payedAmount: o.payedAmount || 0,             // Required for NiceHashContext summary
         availableAmount: o.availableAmount || 0,     // Required for order details
         rigsCount: o.rigsCount || 0,
         poolUser: o.pool?.username || '',

@@ -1,41 +1,24 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useRentedRigs } from './RentedRigContext';
-import { fetchMiningStats } from './miningStatsFetcher'; // your WebSocket wrapper
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { fetchMiningStats } from './miningStatsFetcher';
+import { useRentedRigs } from './RentedRigContext.jsx';
+import MiningDutch from './MiningDutch';
 
-// ---------- Component ----------
-export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
-  const { rentedRigs } = useRentedRigs();
-  const [heroGlobalStats, setHeroGlobalStats] = useState(null);
-  const [dutchStats, setDutchStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedCoin, setSelectedCoin] = useState('');
-  const [activeType, setActiveType] = useState('all');
-  const [sortConfig, setSortConfig] = useState({ key: 'usdPerDay', direction: 'desc' });
-  const [filterMiningOnly, setFilterMiningOnly] = useState(false);
-  const pollTimerRef = useRef(null);
+function formatNumber(value, digits = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toLocaleString(undefined, { maximumFractionDigits: digits }) : '0';
+}
 
-  // ---------- Sorting ----------
-  const requestSort = (key) => {
-    let direction = 'desc';
-    if (sortConfig.key === key && sortConfig.direction === 'desc') {
-      direction = 'asc';
-    }
-    setSortConfig({ key, direction });
-  };
+function HeroMinersTable({ stats, filterMiningOnly, activeAlgos, sortConfig, onSort }) {
+  const rows = useMemo(() => {
+    const list = Array.isArray(stats) ? [...stats] : [];
+    const filtered = filterMiningOnly
+      ? list.filter((coin) => activeAlgos.has(String(coin.algorithm || '').toUpperCase()))
+      : list;
 
-  const activeAlgos = useMemo(() => {
-    return new Set(rentedRigs.map((r) => (r.algo || '').toUpperCase()));
-  }, [rentedRigs]);
+    return filtered.sort((a, b) => {
+      let aVal;
+      let bVal;
 
-  const sortedCoinStats = useMemo(() => {
-    if (!heroGlobalStats?.coinStats) return [];
-    let stats = [...heroGlobalStats.coinStats];
-    if (filterMiningOnly) {
-      stats = stats.filter((c) => activeAlgos.has((c.algorithm || '').toUpperCase()));
-    }
-    return stats.sort((a, b) => {
-      let aVal, bVal;
       if (sortConfig.key === 'usdPerDay') {
         aVal = parseFloat(String(a.usdPerDay || '0').replace(/[^0-9.-]/g, '')) || 0;
         bVal = parseFloat(String(b.usdPerDay || '0').replace(/[^0-9.-]/g, '')) || 0;
@@ -43,159 +26,110 @@ export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
         aVal = Number(a.miners) || 0;
         bVal = Number(b.miners) || 0;
       } else {
-        aVal = a[sortConfig.key];
-        bVal = b[sortConfig.key];
+        aVal = String(a[sortConfig.key] || '').toLowerCase();
+        bVal = String(b[sortConfig.key] || '').toLowerCase();
       }
+
       if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [heroGlobalStats, sortConfig, filterMiningOnly, activeAlgos]);
+  }, [stats, filterMiningOnly, activeAlgos, sortConfig]);
 
-  // ---------- Data fetching ----------
-  const fetchAllData = useCallback(async (force = false) => {
+  if (!rows.length) {
+    return <div style={{ opacity: 0.6, padding: '10px' }}>No data available</div>;
+  }
+
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+      <thead>
+        <tr style={{ color: '#64748b', borderBottom: '1px solid #334155' }}>
+          <th style={{ padding: '6px 4px', textAlign: 'left', cursor: 'pointer' }} onClick={() => onSort('algorithm')}>Algorithm</th>
+          <th style={{ padding: '6px 4px', textAlign: 'right', cursor: 'pointer' }} onClick={() => onSort('miners')}>Miners</th>
+          <th style={{ padding: '6px 4px', textAlign: 'right', cursor: 'pointer' }} onClick={() => onSort('usdPerDay')}>USD/Day</th>
+          <th style={{ padding: '6px 4px', textAlign: 'right', cursor: 'pointer' }} onClick={() => onSort('btcPerDay')}>BTC/Day</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((coin, idx) => (
+          <tr key={`${coin.algorithm || 'coin'}-${idx}`} style={{ borderBottom: '1px solid #1e293b' }}>
+            <td style={{ padding: '6px 4px', color: '#e2e8f0' }}>{coin.algorithm || 'N/A'}</td>
+            <td style={{ padding: '6px 4px', textAlign: 'right' }}>{formatNumber(coin.miners, 0)}</td>
+            <td style={{ padding: '6px 4px', textAlign: 'right' }}>${parseFloat(coin.usdPerDay || 0).toFixed(2)}</td>
+            <td style={{ padding: '6px 4px', textAlign: 'right' }}>{parseFloat(coin.btcPerDay || 0).toFixed(8)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
+  const [heroGlobalStats, setHeroGlobalStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [sortConfig, setSortConfig] = useState({ key: 'usdPerDay', direction: 'desc' });
+  const [filterMiningOnly, setFilterMiningOnly] = useState(false);
+  const pollTimerRef = useRef(null);
+  const { rentedRigs } = useRentedRigs();
+
+  const activeAlgos = useMemo(
+    () => new Set(rentedRigs.map((r) => String(r.algo || '').toUpperCase()).filter(Boolean)),
+    [rentedRigs]
+  );
+
+  const requestSort = useCallback((key) => {
+    setSortConfig((current) => ({
+      key,
+      direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  }, []);
+
+  const fetchHeroMiners = useCallback(async (force = false) => {
     setLoading(true);
-    let heroGlobalError = null;
-    let dutchGlobalError = null;
-
     try {
-      // Use a single WebSocket call to fetch all global stats
-      const allStats = await fetchMiningStats('all', 'BT', null, null, 20000, force);
-
-      if (allStats.herominers_global?.success) {
-        setHeroGlobalStats(allStats.herominers_global);
+      const stats = await fetchMiningStats('herominers_global', 'BT', null, null, 20000, force);
+      if (stats?.success) {
+        setHeroGlobalStats(stats);
+        setError(null);
       } else {
-        heroGlobalError = allStats.herominers_global?.error || 'Failed to fetch HeroMiners stats.';
         setHeroGlobalStats(null);
-      }
-
-      if (allStats.miningpooldutch?.success) {
-        setDutchStats(allStats.miningpooldutch);
-      } else {
-        dutchGlobalError = allStats.miningpooldutch?.error || 'Failed to fetch Mining-Dutch stats.';
-        setDutchStats(null);
-      }
-
-      // Combine errors for display
-      const errors = [heroGlobalError, dutchGlobalError].filter(Boolean);
-      if (errors.length > 0) {
-        setError(errors.join('\n'));
-      } else {
-        setError(null); // Clear error if all fetches were successful
+        setError(stats?.error || 'Failed to fetch HeroMiners stats.');
       }
     } catch (err) {
-      // This catch block would only be hit if something truly unexpected happened outside the individual try/catch blocks
-      console.error('[HeroMinersCard] Unexpected error during fetchAllData:', err);
-      setError(err.message || 'Failed to fetch mining stats');
+      setHeroGlobalStats(null);
+      setError(err.message || 'Failed to fetch HeroMiners stats.');
     } finally {
       setLoading(false);
     }
-  }, [onCall]);
+  }, []);
 
-  // Polling
   useEffect(() => {
-    fetchAllData();
+    queueMicrotask(() => {
+      void fetchHeroMiners();
+    });
     if (pollInterval > 0) {
-      pollTimerRef.current = setInterval(fetchAllData, pollInterval);
+      pollTimerRef.current = setInterval(() => {
+        void fetchHeroMiners();
+      }, pollInterval);
     }
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
-  }, [fetchAllData, pollInterval]);
+  }, [fetchHeroMiners, pollInterval]);
 
-  const refreshData = () => {
+  const refreshData = useCallback(() => {
     if (pollTimerRef.current) {
       clearInterval(pollTimerRef.current);
-      pollTimerRef.current = setInterval(fetchAllData, pollInterval);
+      pollTimerRef.current = setInterval(() => {
+        void fetchHeroMiners();
+      }, pollInterval);
     }
-    fetchAllData(true); // Manual click forces a fresh scrape
-  };
+    void fetchHeroMiners(true);
+  }, [fetchHeroMiners, pollInterval]);
 
-  // ---------- Rendering ----------
-  const renderCoinTable = (stats, title) => {
-    if (!stats || !Array.isArray(stats) || stats.length === 0) {
-      return <div style={{ opacity: 0.6, padding: '10px' }}>No data available</div>;
-    }
-    return (
-      <div>
-        {title && <h4 style={{ margin: '0 0 8px 0', color: '#e2e8f0' }}>{title}</h4>}
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-          <thead>
-            <tr style={{ color: '#64748b', borderBottom: '1px solid #334155' }}>
-              <th style={{ padding: '6px 4px', textAlign: 'left', cursor: 'pointer' }} onClick={() => requestSort('algorithm')}>Algorithm</th>
-              <th style={{ padding: '6px 4px', textAlign: 'right', cursor: 'pointer' }} onClick={() => requestSort('miners')}>Miners</th>
-              <th style={{ padding: '6px 4px', textAlign: 'right', cursor: 'pointer' }} onClick={() => requestSort('usdPerDay')}>USD/Day</th>
-              <th style={{ padding: '6px 4px', textAlign: 'right', cursor: 'pointer' }} onClick={() => requestSort('btcPerDay')}>BTC/Day</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stats.map((coin, idx) => (
-              <tr key={idx} style={{ borderBottom: '1px solid #1e293b' }}>
-                <td style={{ padding: '6px 4px', color: '#e2e8f0' }}>{coin.algorithm || 'N/A'}</td>
-                <td style={{ padding: '6px 4px', textAlign: 'right' }}>{Number(coin.miners || 0).toLocaleString()}</td>
-                <td style={{ padding: '6px 4px', textAlign: 'right' }}>${parseFloat(coin.usdPerDay || 0).toFixed(2)}</td>
-                <td style={{ padding: '6px 4px', textAlign: 'right' }}>{parseFloat(coin.btcPerDay || 0).toFixed(8)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
+  const heroStats = heroGlobalStats?.coinStats || [];
 
-  const renderDutchStats = () => {
-    if (!dutchStats?.coinStats) return null;
-    return renderCoinTable(dutchStats.coinStats, 'Mining-Dutch Global');
-  };
-
-  const renderContent = () => {
-    if (loading && !error) {
-      return <div style={{ textAlign: 'center', padding: '20px', opacity: 0.7 }}>Loading…</div>;
-    }
-    if (error) {
-      return (
-        <div style={{ color: '#f87171', padding: '10px' }}>
-          <div>{error}</div>
-          <button
-            onClick={refreshData}
-            style={{
-              marginTop: '8px',
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid #475569',
-              color: '#e2e8f0',
-              padding: '4px 12px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      );
-    }
-
-    switch (activeType) {
-      case 'herominers_global':
-        return renderCoinTable(sortedCoinStats, 'HeroMiners Global');
-      case 'miningpooldutch':
-        return renderDutchStats();
-      case 'all':
-      default:
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {renderCoinTable(sortedCoinStats, 'HeroMiners Global')}
-            {renderDutchStats()}
-          </div>
-        );
-    }
-  };
-
-  const coinOptions = useMemo(() => {
-    if (!heroGlobalStats?.coinStats) return [];
-    return heroGlobalStats.coinStats.map(c => c.algorithm).filter(Boolean);
-  }, [heroGlobalStats]);
-
-  // ---------- UI ----------
   return (
     <div
       className="hero-miners-live-card"
@@ -204,96 +138,20 @@ export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
         background: 'rgba(255,255,255,0.02)',
         borderRadius: '12px',
         border: '1px solid rgba(255,255,255,0.05)',
+        display: 'grid',
+        gap: '16px'
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '12px',
-          flexWrap: 'wrap',
-          gap: '8px',
-        }}
-      >
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <button
-            className="text-button"
-            style={{
-              fontSize: '14px',
-              color: activeType === 'herominers_global' ? '#60a5fa' : '#94a3b8',
-              fontWeight: activeType === 'herominers_global' ? 'bold' : 'normal',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-            onClick={() => setActiveType('herominers_global')}
-          >
-            Global
-          </button>
-          <button
-            className="text-button"
-            style={{
-              fontSize: '14px',
-              color: activeType === 'miningpooldutch' ? '#fbbf24' : '#94a3b8',
-              fontWeight: activeType === 'miningpooldutch' ? 'bold' : 'normal',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-            onClick={() => setActiveType('miningpooldutch')}
-          >
-            Mining-Dutch Global
-          </button>
-          <button
-            className="text-button"
-            style={{
-              fontSize: '14px',
-              color: activeType === 'all' ? '#60a5fa' : '#94a3b8',
-              fontWeight: activeType === 'all' ? 'bold' : 'normal',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-            onClick={() => setActiveType('all')}
-          >
-            All
-          </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <div>
+          <h3 style={{ margin: 0, color: '#e2e8f0' }}>HeroMiners</h3>
+          <div style={{ fontSize: '11px', opacity: 0.6 }}>
+            {heroGlobalStats?.miners ? `${formatNumber(heroGlobalStats.miners)} miners` : 'Global pool snapshot'}
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {coinOptions.length > 0 && (
-            <select
-              value={selectedCoin}
-              onChange={(e) => setSelectedCoin(e.target.value)}
-              style={{
-                background: 'rgba(255,255,255,0.05)',
-                color: '#e2e8f0',
-                border: '1px solid #334155',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                fontSize: '11px',
-              }}
-            >
-              <option value="">Select coin</option>
-              {coinOptions.map((coin) => (
-                <option key={coin} value={coin}>
-                  {coin.toUpperCase()}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <label
-            style={{
-              fontSize: '11px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              color: '#94a3b8',
-            }}
-          >
+          <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#94a3b8' }}>
             <input
               type="checkbox"
               checked={filterMiningOnly}
@@ -323,7 +181,7 @@ export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
       <div
         className="code-block-content"
         style={{
-          maxHeight: '600px',
+          maxHeight: '380px',
           overflowY: 'auto',
           fontSize: '11px',
           color: '#94a3b8',
@@ -332,8 +190,38 @@ export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
           borderRadius: '8px',
         }}
       >
-        {renderContent()}
+        {loading && !error && <div style={{ textAlign: 'center', padding: '20px', opacity: 0.7 }}>Loading…</div>}
+        {error && (
+          <div style={{ color: '#f87171', padding: '10px' }}>
+            <div>{error}</div>
+            <button
+              onClick={refreshData}
+              style={{
+                marginTop: '8px',
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid #475569',
+                color: '#e2e8f0',
+                padding: '4px 12px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        {!error && !loading && (
+          <HeroMinersTable
+            stats={heroStats}
+            filterMiningOnly={filterMiningOnly}
+            activeAlgos={activeAlgos}
+            sortConfig={sortConfig}
+            onSort={requestSort}
+          />
+        )}
       </div>
+
+      <MiningDutch onCall={onCall} />
     </div>
   );
 }

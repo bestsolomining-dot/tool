@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useContext } from 'react';
 import { poolApi } from '../core/poolUtils';
 import { normalizeAlgoForNiceHash, getAlgoDisplayName } from '../core/mapping';
 import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils';
-import { useRentedRigs } from './RentedRigContext';
+import { NiceHashOrderContext } from './NiceHashContext';
 import MrrRigCard from './MrrRigCard';
 import { TelegramTemplates } from '../core/telegram.js';
 import { calculateRemainingTime } from '../core/time';
@@ -20,7 +20,8 @@ import {
 } from '../core/mrrUtils';
 
 export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletionCalculator, onInfo, endpoint = '/rig/mine', algo, initialStatus = 'available', onSummaryUpdate }) {
-  const { rentedRigs: nhOrders } = useRentedRigs();
+  const nhContext = useContext(NiceHashOrderContext);
+  const nhOrders = nhContext?.nicehashOrders || [];
   const [rigs, setRigs] = useState([]);
   const [userRigIds, setUserRigIds] = useState(new Set());
   const [loading, setLoading] = useState(false);
@@ -142,8 +143,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           ads,
           cur,
           target,
-          account,
-          rig.price ? `${(rig.price.paid || 0).toFixed(8)} ${rig.price.currency || 'BTC'}` : '0.00000000 BTC'
+          '', // extra
+          account, // client
+          { price: { paid: (rig.price?.paid || 0).toFixed(8), currency: rig.price?.currency || 'BTC' } } // info
         );
       })
       .filter(Boolean);

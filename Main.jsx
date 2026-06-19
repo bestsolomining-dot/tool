@@ -11,7 +11,7 @@ import MrrPoolsManager from './src/components/MrrManager';
 import Login from './src/components/Login';
 import HeroMinersCard from './src/components/HeroMinersCard';
 import { HASHRATE_SUFFIXES, normalizeAlgoForNiceHash, getAlgorithmUnit } from './src/core/mapping';
-import { RentedRigProvider } from './src/components/RentedRigContext';
+import { RentedRigProvider } from './src/components/NiceHashContext';
 import './src/App.css';
 
 export default function App() {

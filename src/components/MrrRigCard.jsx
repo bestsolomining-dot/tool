@@ -81,7 +81,7 @@ const MrrRigCard = ({
   // Simplified ROI Logic: Use List Rate and adjust by Efficiency (Effect)
   const mrrPriceNum = (() => {
     const listRate = listBtcData.value;
-    if (isRented && effNum > 0) {
+    if (isRented && effNum > 0 && Number.isFinite(listRate)) {
       // "ROI is dependence of effect": If efficiency is 50%, effective price paid for hashes delivered is doubled.
       return listRate / (effNum / 100);
     }
@@ -215,7 +215,12 @@ const MrrRigCard = ({
                     <span style={{ opacity: 0.7, fontSize: '8px' }}>{nhOrder ? 'Order' : 'Market'}: </span>
                     <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhPrice.toFixed(8)}</span>
                   </div>
-                  <div><span style={{ opacity: 0.7, fontSize: '10px' }}>{nhOrder ? 'ROI' : 'VS Market'}: </span><span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>{parseFloat(myOrderDiff) > 0 ? '+' : ''}{myOrderDiff}%</span></div>
+                  {myOrderDiff !== null && (
+                    <div>
+                      <span style={{ opacity: 0.7, fontSize: '10px' }}>{nhOrder ? 'ROI' : 'VS Market'}: </span>
+                      <span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>{myOrderDiff > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

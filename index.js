@@ -154,8 +154,9 @@ function loadStats() {
 
 async function scrapeHeroMinersGlobal(force = false) {
   const CACHE_KEY = 'herominers_global';
+  const staleCached = statsCache.get(CACHE_KEY);
   if (!force) {
-    const cached = statsCache.get(CACHE_KEY);
+    const cached = staleCached;
     if (cached && (Date.now() - cached.ts < CACHE_TTL)) return cached.data;
   }
 
@@ -190,7 +191,18 @@ async function scrapeHeroMinersGlobal(force = false) {
     });
 
     if (coinStats.length === 0) {
-      throw new Error('Failed to parse coin stats from HeroMiners HTML fallback.');
+      if (staleCached?.data) {
+        console.warn('[herominers_global] HTML fallback parse returned no rows; serving stale cached stats.');
+        return { ...staleCached.data, stale: true, warning: 'HeroMiners HTML fallback parse returned no rows.' };
+      }
+
+      console.warn('[herominers_global] HTML fallback parse returned no rows; serving empty stats.');
+      return {
+        coinStats: [],
+        rows: [],
+        miners: 0,
+        warning: 'HeroMiners HTML fallback parse returned no rows.'
+      };
     }
 
     const result = { coinStats, miners: coinStats.reduce((acc, c) => acc + c.miners, 0) };
@@ -552,7 +564,8 @@ wss.on('connection', (ws, request) => {
       const isSuccess = action === 'all'
         ? (Object.keys(responseData).length > 0) 
         : (responseData[action] && responseData[action].success !== false &&
-           (responseData[action].coinStats?.length > 0 || responseData[action].stats || responseData[action].algoStats?.length > 0));
+          (action === 'herominers_global' || action === 'miningpooldutch' ||
+           (responseData[action].coinStats?.length > 0 || responseData[action].stats || responseData[action].algoStats?.length > 0)));
       
       const errorMsg = !isSuccess ? (responseData[action]?.error || `No data found for "${action}". Check if mining is active or API is reachable.`) : null;
 

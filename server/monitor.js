@@ -78,8 +78,13 @@ function hasInactiveRentalStatus(rental) {
 function isRentalActive(now, endTs, sourceRig, rental) {
   if (hasInactiveRentalStatus(rental)) return false;
   if (endTs > 0) return now < endTs;
-  if (rental?.__rentalSide === 'sold') return true;
-  return !isRentalFinished(now, endTs, sourceRig);
+
+  const statusRaw = sourceRig?.status ?? rental?.status ?? rental?.state ?? rental?.rental_status ?? rental?.rentalStatus;
+  const status = String(typeof statusRaw === 'object' ? statusRaw.status : statusRaw || '').toLowerCase();
+  const hasLiveRentalId = Boolean(getRentalIdFromRig(sourceRig));
+  const rentedFlag = Boolean(sourceRig?.status?.rented || rental?.status?.rented);
+
+  return rentedFlag || hasLiveRentalId || status.includes('rented') || status.includes('active') || status.includes('running');
 }
 
 // ==========================
@@ -136,6 +141,7 @@ const RENTED_HEARTBEAT_MS = 15 * 60 * 1000; // Force heartbeat summary to every 
 const lastAlertTimes = new Map([['global_summary', Date.now()]]);   // key → timestamp
 const lastRigStates = new Map();    // rigId → status string
 const monitorNhPriceCache = new Map(); // algo:client -> {price, unit}
+const monitorNhPriceErrorCache = new Map(); // algo:client -> {message, ts}
 
 // ==========================
 //  Helper: HTML escaping
@@ -281,6 +287,78 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   const successfulAccts = [];
   const globalRentalsMap = new Map();
   const globalOnlineAlgos = new Map();
+  const queuedTelegramMessages = [];
+
+  const queueTelegramMessage = (message, options = {}) => {
+    const text = String(message || '').trim();
+    if (!text) return;
+    queuedTelegramMessages.push({
+      message: text,
+      label: options.label || 'Monitor',
+      type: options.type || options.label || 'Monitor',
+      onSuccess: options.onSuccess,
+      onFailure: options.onFailure,
+    });
+  };
+
+  const buildGroupedTelegramMessages = (items, typeLabel = 'Grouped Monitor') => {
+    const title = `📦 <b>Grouped Monitor Messages</b> [${new Date().toLocaleTimeString()}]\n` +
+      `━━━━━━━━━━━━━━\n` +
+      `<b>Type:</b> ${escapeHtml(typeLabel)}\n` +
+      `<b>Total:</b> ${items.length}\n\n`;
+    const chunks = [];
+    let current = title;
+
+    items.forEach((item, index) => {
+      const block = `<b>${index + 1}. ${escapeHtml(item.label)}</b>\n${item.message}\n\n━━━━━━━━━━━━━━\n`;
+      if (current.length > title.length && current.length + block.length > 3500) {
+        chunks.push(current);
+        current = title;
+      }
+      current += block;
+    });
+
+    if (current.length > title.length) chunks.push(current);
+    return chunks;
+  };
+
+  const flushQueuedTelegramMessages = async () => {
+    if (queuedTelegramMessages.length === 0) return;
+
+    const groupedByType = new Map();
+    for (const item of queuedTelegramMessages) {
+      const type = String(item.type || item.label || 'Monitor');
+      if (!groupedByType.has(type)) groupedByType.set(type, []);
+      groupedByType.get(type).push(item);
+    }
+
+    for (const [typeLabel, items] of groupedByType.entries()) {
+      if (items.length === 1) {
+        const item = items[0];
+        try {
+          await sendTelegramInternal(item.message);
+          await item.onSuccess?.();
+        } catch (err) {
+          await item.onFailure?.(err);
+        }
+        continue;
+      }
+
+      try {
+        const groupedMessages = buildGroupedTelegramMessages(items, typeLabel);
+        for (const groupedMessage of groupedMessages) {
+          await sendTelegramInternal(groupedMessage);
+        }
+        for (const item of items) {
+          await item.onSuccess?.();
+        }
+      } catch (err) {
+        for (const item of items) {
+          await item.onFailure?.(err);
+        }
+      }
+    }
+  };
 
   let totalAll = 0;
   let availableAll = 0;
@@ -388,7 +466,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
             if (now - lastRigAlert > ALERT_COOLDOWN_MS) {
               const rigMsg = TelegramTemplates.rigStatusWarning(acct, rig, resolveRentalAlgo(rig));
-              await sendTelegramInternal(rigMsg).catch(() => {});
+              queueTelegramMessage(rigMsg, { label: `Rig warning ${acct}`, type: 'RIG WARNING' });
               lastAlertTimes.set(rigAlertKey, now);
             }
           }
@@ -419,7 +497,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const lastWarnAlert = lastAlertTimes.get(alertKeyWarn) || 0;
           if (now - lastWarnAlert > ALERT_COOLDOWN_MS) {
             const warnMsg = TelegramTemplates.highWarningCount(acct, warningCount);
-            await sendTelegramInternal(warnMsg).catch(e => console.error(`[monitor] Warn alert failed: ${e.message}`));
+            queueTelegramMessage(warnMsg, {
+              type: 'SYSTEM ALERT',
+              label: `High warning count ${acct}`,
+              onFailure: (e) => console.error(`[monitor] Warn alert failed: ${e.message}`)
+            });
             lastAlertTimes.set(alertKeyWarn, now);
           }
         }
@@ -530,6 +612,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const totalDurationMs = (startT > 0 && endT > 0) ? endT - startT : 0;
         const elapsedMs = startT > 0 ? Math.max(0, Math.min(now - startT, totalDurationMs)) : 0;
         const remainingMs = endT > 0 ? Math.max(0, endT - now) : 0;
+        const isCurrentRental = isRentalActive(now, endT, liveRig, r);
+
+        if (!isCurrentRental) {
+          await dbRunAsync(`DELETE FROM rentals WHERE id = ?`, [String(r.id)]).catch(() => {});
+          continue;
+        }
 
         const advertised = parseFloat(info.hashrate.advertised);
         const average = parseFloat(info.hashrate.average);
@@ -545,9 +633,14 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         let priceRoi = null;
         try {
           const nhAlgo = normalizeAlgoForNiceHash(info.algo);
-          if (!nhAlgo || nhAlgo === 'Unknown' || nhAlgo === 'N/A') throw new Error('Unsupported algorithm');
+          if (!nhAlgo || nhAlgo === 'UNKNOWN' || nhAlgo === 'N/A') throw new Error('Unsupported algorithm');
 
           const cacheKey = `${nhAlgo}:${acct}`;
+          const cachedError = monitorNhPriceErrorCache.get(cacheKey);
+          if (cachedError && now - cachedError.ts < 10 * 60 * 1000) {
+            throw new Error(cachedError.message);
+          }
+
           let nhP = monitorNhPriceCache.get(cacheKey);
           
           if (!nhP) {
@@ -563,7 +656,9 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
               price: parseFloat(pData?.fixedPrice || pData?.standardPrice?.fast || pData?.price || 0) || 0,
               unit: String(pData?.speedUnit || pData?.unit || (cleanAlgo.includes('SHA256') ? 'EH' : 'TH'))
             };
+            if (nhP.price <= 0) throw new Error('NiceHash price unavailable');
             monitorNhPriceCache.set(cacheKey, nhP);
+            monitorNhPriceErrorCache.delete(cacheKey);
           }
 
           const mrrBtcData = getBtcPriceData(r.price || info.price);
@@ -578,7 +673,15 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             priceRoi = calculatePriceComparison(mrrPriceNorm, mrrUnit, nhP.price, nhP.unit);
           }
         } 
-        catch (err) { console.warn(`[monitor] ${r.id}: ${err.message}`); }
+        catch (err) {
+          const nhAlgoForLog = normalizeAlgoForNiceHash(info.algo);
+          const cacheKey = `${nhAlgoForLog}:${acct}`;
+          const cachedError = monitorNhPriceErrorCache.get(cacheKey);
+          if (!cachedError || cachedError.message !== err.message || now - cachedError.ts >= 10 * 60 * 1000) {
+            monitorNhPriceErrorCache.set(cacheKey, { message: err.message, ts: now });
+            console.warn(`[monitor] ROI price skipped for ${cacheKey}: ${err.message}`);
+          }
+        }
 
         const orderDiff = (priceRoi !== null && !isNaN(priceRoi)) ? priceRoi : (100 - (parseFloat(efficiency) || 0)).toFixed(1);
 
@@ -631,7 +734,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             const lastAlert = lastAlertTimes.get(alertKey) || 0;
             if (now - lastAlert > ALERT_COOLDOWN_MS) {
               const msg = TelegramTemplates.efficiency(acct, r, info, efficiency, displayTarget, resolveRentalAlgo(r, info));
-              await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Low hashrate alert failed: ${e.message}`));
+              queueTelegramMessage(msg, {
+                type: 'LOW EFFICIENCY',
+                label: `Low efficiency ${acct} ${r.id}`,
+                onFailure: (e) => console.error(`[monitor] Low hashrate alert failed: ${e.message}`)
+              });
               lastAlertTimes.set(alertKey, now);
             }
           }
@@ -647,7 +754,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             const lastAlert = lastAlertTimes.get(alertKey) || 0;
             if (now - lastAlert > ALERT_COOLDOWN_MS) {
               const msg = TelegramTemplates.zeroHashrate(acct, r, info, resolveRentalAlgo(r, info));
-              await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Zero hashrate alert failed: ${e.message}`));
+              queueTelegramMessage(msg, {
+                type: 'ZERO HASHRATE',
+                label: `Zero hashrate ${acct} ${r.id}`,
+                onFailure: (e) => console.error(`[monitor] Zero hashrate alert failed: ${e.message}`)
+              });
               lastAlertTimes.set(alertKey, now);
             }
           }
@@ -661,7 +772,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const lastAlert = lastAlertTimes.get(startupKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
             const msg = TelegramTemplates.startup(acct, r, info, efficiency, displayTarget, resolveRentalAlgo(r, info));
-            await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Startup alert failed: ${e.message}`));
+            queueTelegramMessage(msg, {
+              type: 'STARTUP ALERT',
+              label: `Startup alert ${acct} ${r.id}`,
+              onFailure: (e) => console.error(`[monitor] Startup alert failed: ${e.message}`)
+            });
             lastAlertTimes.set(startupKey, now);
           }
         }
@@ -672,7 +787,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const lastAlert = lastAlertTimes.get(completionKey) || 0;
           if (now - lastAlert > ALERT_COOLDOWN_MS) {
             const msg = TelegramTemplates.completionAlert(acct, r, info, efficiency, displayTarget, resolveRentalAlgo(r, info));
-            await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Completion alert failed: ${e.message}`));
+            queueTelegramMessage(msg, {
+              type: 'ALMOST COMPLETE',
+              label: `Completion alert ${acct} ${r.id}`,
+              onFailure: (e) => console.error(`[monitor] Completion alert failed: ${e.message}`)
+            });
             lastAlertTimes.set(completionKey, now);
           }
         }
@@ -692,7 +811,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
               info.hashrate.suffix,
               resolveRentalAlgo(r, info)
             );
-            await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Success alert failed: ${e.message}`));
+            queueTelegramMessage(msg, {
+              type: 'RENTAL SUCCESS',
+              label: `Completion success ${acct} ${r.id}`,
+              onFailure: (e) => console.error(`[monitor] Success alert failed: ${e.message}`)
+            });
             lastAlertTimes.set(successKey, now);
           }
         }
@@ -703,7 +826,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const lastPerfect = lastAlertTimes.get(perfectKey) || 0;
           if (now - lastPerfect >= 3600000) { // Every 1 hour
             const msg = TelegramTemplates.perfectEfficiency(acct, r, efficiency, `${info.price.paid} ${info.price.currency}`, remainingMs, resolveRentalAlgo(r, info));
-            await sendTelegramInternal(msg).catch(e => console.error(`[monitor] Perfect efficiency alert failed: ${e.message}`));
+            queueTelegramMessage(msg, {
+              type: 'PERFECT 100%',
+              label: `Perfect efficiency ${acct} ${r.id}`,
+              onFailure: (e) => console.error(`[monitor] Perfect efficiency alert failed: ${e.message}`)
+            });
             lastAlertTimes.set(perfectKey, now);  
           }
         }
@@ -760,13 +887,17 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
           const msg = TelegramTemplates.rentedNotice(hbType, r, info, acct, orderDiff, remStr, resolveRentalAlgo(r, info));
 
-          try {
-            await sendTelegramInternal(msg);
-            await dbRunAsync(`UPDATE rentals SET last_notified = ? WHERE id = ?`, [now, String(r.id)]);
-            notifications.push({ id: r.id, client: acct, status: 'Sent', telegram: 'ok' });
-          } catch (tgErr) {
-            notifications.push({ id: r.id, client: acct, status: 'Failed', error: tgErr.message });
-          }
+          queueTelegramMessage(msg, {
+            type: hbType,
+            label: `${hbType} ${acct} ${r.id}`,
+            onSuccess: async () => {
+              await dbRunAsync(`UPDATE rentals SET last_notified = ? WHERE id = ?`, [now, String(r.id)]);
+              notifications.push({ id: r.id, client: acct, status: 'Sent', telegram: 'ok' });
+            },
+            onFailure: (tgErr) => {
+              notifications.push({ id: r.id, client: acct, status: 'Failed', error: tgErr.message });
+            }
+          });
         } else {
           notifications.push({ id: r.id, client: acct, status: 'Skipped', reason: 'Already notified' });
         }
@@ -798,6 +929,17 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     );
 
     for (const fr of finishedRentals) {
+      const endTs = Number(fr.end_time || 0);
+      const lastUpdatedTs = Number(fr.last_updated || 0);
+      const hadRealEndTime = endTs > 0;
+      const endedRecently = hadRealEndTime && endTs <= now && now - endTs < 6 * 60 * 60 * 1000;
+      const wentMissingRecently = lastUpdatedTs > 0 && now - lastUpdatedTs < 10 * 60 * 1000;
+
+      if (!endedRecently && !wentMissingRecently) {
+        await dbRunAsync(`DELETE FROM rentals WHERE id = ?`, [fr.id]);
+        continue;
+      }
+
       let enriched = { ...fr };
       try {
         const res = await mrrApiCall({ endpoint: `/rental/${fr.id}`, clientNameRaw: fr.client });
@@ -811,16 +953,23 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
       const info = extractRentalInfo(enriched);
       const finishMsg = TelegramTemplates.finished(enriched, info, resolveRentalAlgo(enriched, info));
-      try {
-        await sendTelegramInternal(finishMsg);
-        notifications.push({ id: fr.id, client: fr.client, status: 'Sent', type: 'Finished', telegram: 'ok' });
-      } catch (e) {
-        console.warn(`[${new Date().toLocaleTimeString()}] [monitor] Finish notice failed for ${fr.id}: ${e.message}`);
-        notifications.push({ id: fr.id, client: fr.client, status: 'Failed', type: 'Finished', error: e.message });
-      }
-      await dbRunAsync(`DELETE FROM rentals WHERE id = ?`, [fr.id]);
+      queueTelegramMessage(finishMsg, {
+        type: 'RENTAL FINISHED',
+        label: `Finished ${fr.client} ${fr.id}`,
+        onSuccess: async () => {
+          notifications.push({ id: fr.id, client: fr.client, status: 'Sent', type: 'Finished', telegram: 'ok' });
+          await dbRunAsync(`DELETE FROM rentals WHERE id = ?`, [fr.id]);
+        },
+        onFailure: async (e) => {
+          console.warn(`[${new Date().toLocaleTimeString()}] [monitor] Finish notice failed for ${fr.id}: ${e.message}`);
+          notifications.push({ id: fr.id, client: fr.client, status: 'Failed', type: 'Finished', error: e.message });
+          await dbRunAsync(`DELETE FROM rentals WHERE id = ?`, [fr.id]);
+        }
+      });
     }
   }
+
+  await flushQueuedTelegramMessages();
 
   // ------------------------------------------------------------------
   //  Send combined summary heartbeat

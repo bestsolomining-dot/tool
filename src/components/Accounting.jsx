@@ -1,42 +1,97 @@
-import { useState } from 'react'
-import { apiFetch } from '../core/poolUtils'
+import { useState } from "react";
+import { apiFetch } from "../core/poolUtils";
 
 const ENDPOINTS = [
-  { key: 'balances', label: 'Get All Balances', method: 'GET', path: '/api/v2/accounting/balances' },
-  { key: 'balance', label: 'Get Balance (by currency)', method: 'GET', path: '/api/v2/accounting/balance/{currency}' },
-  { key: 'activitiesAll', label: 'Get All Activities', method: 'GET', path: '/api/v2/accounting/activities' },
-  { key: 'activity', label: 'Get Activities (by currency)', method: 'GET', path: '/api/v2/accounting/activity/{currency}' },
-  { key: 'currencies', label: 'Get Currencies', method: 'GET', path: '/api/v2/accounting/currencies' },
-  { key: 'depositAddresses', label: 'Deposit Addresses', method: 'GET', path: '/api/v2/accounting/depositAddresses' },
-  { key: 'deposits', label: 'Get Deposits (all)', method: 'GET', path: '/api/v2/accounting/deposits' },
-  { key: 'depositsByCurrency', label: 'Get Deposits (by currency)', method: 'GET', path: '/api/v2/accounting/deposits/{currency}' },
-  { key: 'withdrawals', label: 'Get Withdrawals (by currency)', method: 'GET', path: '/api/v2/accounting/withdrawals/{currency}' },
-  { key: 'createWithdrawal', label: 'Create Withdrawal (POST)', method: 'POST', path: '/api/v2/accounting/withdrawal' },
-  { key: 'transaction', label: 'Get Transaction (by currency & id)', method: 'GET', path: '/api/v2/accounting/transaction/{currency}/{transactionId}' },
-]
+  {
+    key: "balances",
+    label: "Get All Balances",
+    method: "GET",
+    path: "/api/v2/accounting/balances",
+  },
+  {
+    key: "balance",
+    label: "Get Balance (by currency)",
+    method: "GET",
+    path: "/api/v2/accounting/balance/{currency}",
+  },
+  {
+    key: "activitiesAll",
+    label: "Get All Activities",
+    method: "GET",
+    path: "/api/v2/accounting/activities",
+  },
+  {
+    key: "activity",
+    label: "Get Activities (by currency)",
+    method: "GET",
+    path: "/api/v2/accounting/activity/{currency}",
+  },
+  {
+    key: "currencies",
+    label: "Get Currencies",
+    method: "GET",
+    path: "/api/v2/accounting/currencies",
+  },
+  {
+    key: "depositAddresses",
+    label: "Deposit Addresses",
+    method: "GET",
+    path: "/api/v2/accounting/depositAddresses",
+  },
+  {
+    key: "deposits",
+    label: "Get Deposits (all)",
+    method: "GET",
+    path: "/api/v2/accounting/deposits",
+  },
+  {
+    key: "depositsByCurrency",
+    label: "Get Deposits (by currency)",
+    method: "GET",
+    path: "/api/v2/accounting/deposits/{currency}",
+  },
+  {
+    key: "withdrawals",
+    label: "Get Withdrawals (by currency)",
+    method: "GET",
+    path: "/api/v2/accounting/withdrawals/{currency}",
+  },
+  {
+    key: "createWithdrawal",
+    label: "Create Withdrawal (POST)",
+    method: "POST",
+    path: "/api/v2/accounting/withdrawal",
+  },
+  {
+    key: "transaction",
+    label: "Get Transaction (by currency & id)",
+    method: "GET",
+    path: "/api/v2/accounting/transaction/{currency}/{transactionId}",
+  },
+];
 
 export default function Accounting({ onCall }) {
-  const [endpointKey, setEndpointKey] = useState('balances')
-  const [currency, setCurrency] = useState('BTC')
-  const [transactionId, setTransactionId] = useState('')
-  const [body, setBody] = useState('')
-  const [output, setOutput] = useState(null)
-  const [lastCall, setLastCall] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [endpointKey, setEndpointKey] = useState("balances");
+  const [currency, setCurrency] = useState("BTC");
+  const [transactionId, setTransactionId] = useState("");
+  const [body, setBody] = useState("");
+  const [output, setOutput] = useState(null);
+  const [lastCall, setLastCall] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const endpoint = ENDPOINTS.find(item => item.key === endpointKey)
+  const endpoint = ENDPOINTS.find((item) => item.key === endpointKey);
 
   function buildPath() {
     return endpoint.path
-      .replace('{currency}', encodeURIComponent(currency))
-      .replace('{transactionId}', encodeURIComponent(transactionId))
+      .replace("{currency}", encodeURIComponent(currency))
+      .replace("{transactionId}", encodeURIComponent(transactionId));
   }
 
   async function callApi() {
-    const startedAt = performance.now()
-    const path = buildPath()
-    const options = { method: endpoint.method }
+    const startedAt = performance.now();
+    const path = buildPath();
+    const options = { method: endpoint.method };
 
     if (onCall) {
       const res = await onCall(path, { ...options, showModal: true });
@@ -44,22 +99,22 @@ export default function Accounting({ onCall }) {
       return;
     }
 
-    setLoading(true)
-    setError('')
-    setOutput(null)
+    setLoading(true);
+    setError("");
+    setOutput(null);
     setLastCall({
       method: endpoint.method,
       path,
-      status: 'Pending',
+      status: "Pending",
       durationMs: null,
-    })
+    });
 
-    if (endpoint.method === 'POST') {
+    if (endpoint.method === "POST") {
       try {
-        options.headers = { 'Content-Type': 'application/json' };
-        options.body = body ? JSON.stringify(JSON.parse(body)) : '{}'
+        options.headers = { "Content-Type": "application/json" };
+        options.body = body ? JSON.stringify(JSON.parse(body)) : "{}";
       } catch {
-        setError('Invalid JSON body');
+        setError("Invalid JSON body");
         setLoading(false);
         return;
       }
@@ -75,19 +130,23 @@ export default function Accounting({ onCall }) {
       });
 
       if (!result.ok) {
-        setError(typeof result.data === 'string' ? result.data : result.data?.error || result.data?.message || result.status);
+        setError(
+          typeof result.data === "string"
+            ? result.data
+            : result.data?.error || result.data?.message || result.status,
+        );
       } else {
         setOutput(result.data);
       }
     } catch (err) {
-      setError(err.message || String(err))
-      setLastCall(prev => ({
+      setError(err.message || String(err));
+      setLastCall((prev) => ({
         ...prev,
-        status: 'Failed',
+        status: "Failed",
         durationMs: Math.round(performance.now() - startedAt),
-      }))
+      }));
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -96,22 +155,27 @@ export default function Accounting({ onCall }) {
       <div className="field-row">
         <div className="field">
           <label className="label">Endpoint</label>
-          <select className="select-pro" value={endpointKey} onChange={event => setEndpointKey(event.target.value)}>
-            {ENDPOINTS.map(item => (
-              <option key={item.key} value={item.key}>{item.label}</option>
+          <select
+            className="select-pro"
+            value={endpointKey}
+            onChange={(event) => setEndpointKey(event.target.value)}
+          >
+            {ENDPOINTS.map((item) => (
+              <option key={item.key} value={item.key}>
+                {item.label}
+              </option>
             ))}
           </select>
         </div>
-
       </div>
 
-      {endpoint.method === 'POST' && (
+      {endpoint.method === "POST" && (
         <div className="field">
           {/* <label className="label">Request Body</label> */}
           <textarea
             className="input-pro code"
             value={body}
-            onChange={event => setBody(event.target.value)}
+            onChange={(event) => setBody(event.target.value)}
             placeholder='{"address":"...","amount":0.1}'
           />
         </div>
@@ -126,11 +190,15 @@ export default function Accounting({ onCall }) {
           {error && <pre className="error-message">{error}</pre>}
           <div className="inline-response-header">
             <h3>Response</h3>
-            <span>{lastCall ? `${lastCall.method} ${lastCall.path}` : 'No call yet'}</span>
+            <span>
+              {lastCall ? `${lastCall.method} ${lastCall.path}` : "No call yet"}
+            </span>
           </div>
-          <pre className="response-body">{output ? JSON.stringify(output, null, 2) : 'No response yet'}</pre>
+          <pre className="response-body">
+            {output ? JSON.stringify(output, null, 2) : "No response yet"}
+          </pre>
         </div>
       )}
     </div>
-  )
+  );
 }

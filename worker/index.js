@@ -18,7 +18,7 @@ export default {
     const apiKeyNhatLinh = env.NICEHASH_API_KEY_NHATLINH;
     const apiSecretNhatLinh = env.NICEHASH_API_SECRET_NHATLINH;
     const orgIdNhatLinh = env.NICEHASH_ORG_ID_NHATLINH;
-    
+
     const apiKeyAll = env.NICEHASH_API_KEY_VN;
     const apiSecretAll = env.NICEHASH_API_SECRET_VN;
     const orgIdAll = env.NICEHASH_ORG_ID_VN;
@@ -33,13 +33,13 @@ export default {
           nicehash_default: !!(apiKey && apiSecret && orgId),
           nicehash_ph: !!(apiKeyPh && apiSecretPh && orgIdPh),
           nicehash_all: !!(apiKeyAll && apiSecretAll && orgIdAll),
-          mrr: !!(mrrKey && mrrSecret)
+          mrr: !!(mrrKey && mrrSecret),
         },
         environments: {
           btApiKey: env.NICEHASH_API_KEY,
           btApiSecret: env.NICEHASH_API_SECRET,
           btOrgId: env.NICEHASH_ORG_ID,
-          btEnvironment: 'production',
+          btEnvironment: "production",
           phApiKey: env.NICEHASH_API_KEY_PH,
           phApiSecret: env.NICEHASH_API_SECRET_PH,
           phOrgId: env.NICEHASH_ORG_ID_PH,
@@ -49,15 +49,15 @@ export default {
           klApiKey: env.NICEHASH_API_KEY_KIMLOAN,
           klApiSecret: env.NICEHASH_API_SECRET_KIMLOAN,
           klOrgId: env.NICEHASH_ORG_ID_KIMLOAN,
-          phEnvironment: 'production',
+          phEnvironment: "production",
           allApiKey: env.NICEHASH_API_KEY_VN,
           allApiSecret: env.NICEHASH_API_SECRET_VN,
           allOrgId: env.NICEHASH_ORG_ID_VN,
-          allEnvironment: 'production'
+          allEnvironment: "production",
         },
-        default_client: env.NH_DEFAULT_CLIENT || 'BT'
+        default_client: env.NH_DEFAULT_CLIENT || "BT",
       });
     }
     return new Response(null, { status: 404 });
   },
-}
+};

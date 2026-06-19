@@ -1,4 +1,10 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
 
 const RentedRigContext = createContext();
 
@@ -11,13 +17,9 @@ export function RentedRigProvider({ children, callApi }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await callApi('/api/v2/mrr/rentals');
+      const data = await callApi("/api/v2/mrr/rentals");
       if (data?.error) throw new Error(data.error);
-      const rentals =
-        data?.data?.rentals ||
-        data?.data ||
-        data?.rentals ||
-        [];
+      const rentals = data?.data?.rentals || data?.data || data?.rentals || [];
       setRentedRigs(Array.isArray(rentals) ? rentals : []);
     } catch (err) {
       setError(err.message);
@@ -39,11 +41,16 @@ export function RentedRigProvider({ children, callApi }) {
 
   const value = { rentedRigs, loading, error, refresh: fetchRentedRigs };
 
-  return <RentedRigContext.Provider value={value}>{children}</RentedRigContext.Provider>;
+  return (
+    <RentedRigContext.Provider value={value}>
+      {children}
+    </RentedRigContext.Provider>
+  );
 }
 
 export const useRentedRigs = () => {
   const context = useContext(RentedRigContext);
-  if (!context) throw new Error('useRentedRigs must be used within a RentedRigProvider');
+  if (!context)
+    throw new Error("useRentedRigs must be used within a RentedRigProvider");
   return context;
 };

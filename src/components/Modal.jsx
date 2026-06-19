@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react'
-import { createPortal } from 'react-dom'
+import React, { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Generic Modal component for consistent modal behavior and styling.
@@ -13,7 +13,14 @@ import { createPortal } from 'react-dom'
  * @param {string} [props.maxWidth='800px'] - The maximum width of the modal.
  * @param {React.RefObject} [props.initialFocusRef=null] - Optional ref to an element to focus when the modal opens.
  */
-export default function Modal({ isOpen, onClose, title, children, maxWidth = '800px', initialFocusRef = null }) {
+export default function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  maxWidth = "800px",
+  initialFocusRef = null,
+}) {
   const modalRef = useRef(null);
 
   useEffect(() => {
@@ -27,56 +34,69 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = '80
     }
 
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         onClose();
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen, onClose, initialFocusRef]);
 
   if (!isOpen) return null;
 
   const backdropStyle = {
-    position: 'fixed',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)', // Dark tinted background
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(15, 23, 42, 0.9)", // Dark tinted background
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 9999, // Ensure it's on top of everything
-    padding: '20px',
-    backdropFilter: 'blur(4px)', // Optional blur effect
+    padding: "20px",
+    backdropFilter: "blur(4px)", // Optional blur effect
   };
 
   const modalStyle = {
     maxWidth,
-    width: '100%',
-    maxHeight: '90vh',
-    display: 'flex',
-    flexDirection: 'column',
-    outline: 'none'
+    width: "100%",
+    maxHeight: "90vh",
+    display: "flex",
+    flexDirection: "column",
+    outline: "none",
   };
 
   return createPortal(
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose} style={backdropStyle}>
-      <section 
-        className="response-modal" 
-        role="dialog" 
-        aria-modal="true" 
-        aria-labelledby="modal-title" 
-        onMouseDown={e => e.stopPropagation()} 
-        ref={modalRef} 
-        tabIndex={-1} 
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+      style={backdropStyle}
+    >
+      <section
+        className="response-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        onMouseDown={(e) => e.stopPropagation()}
+        ref={modalRef}
+        tabIndex={-1}
         style={modalStyle}
       >
-        <div className="modal-header"><h2 id="modal-title">{title}</h2><button className="close-button" onClick={onClose}>&times;</button></div>
+        <div className="modal-header">
+          <h2 id="modal-title">{title}</h2>
+          <button className="close-button" onClick={onClose}>
+            &times;
+          </button>
+        </div>
         <div className="modal-content">{children}</div>
       </section>
     </div>,
-    document.body
-  )
+    document.body,
+  );
 }

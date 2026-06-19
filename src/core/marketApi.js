@@ -1,5 +1,5 @@
 // src/core/marketApi.js
-import { normalizeAlgoForNiceHash, getAlgorithmUnit } from './mapping.js';
+import { normalizeAlgoForNiceHash, getAlgorithmUnit } from "./mapping.js";
 
 /**
  * Fetches the market price for a given algorithm from the NiceHash API.
@@ -12,14 +12,24 @@ import { normalizeAlgoForNiceHash, getAlgorithmUnit } from './mapping.js';
 export async function fetchMarketPrice(callApi, algo, market, client) {
   try {
     const nhAlgo = normalizeAlgoForNiceHash(algo);
-    const priceData = await callApi('/api/v2/hashpower/marketPrice', {
-      query: { algorithm: nhAlgo, market: market || 'USA', client: client || 'BT' },
-      silent: true
+    const priceData = await callApi("/api/v2/hashpower/marketPrice", {
+      query: {
+        algorithm: nhAlgo,
+        market: market || "USA",
+        client: client || "BT",
+      },
+      silent: true,
     });
 
     const rawPrice = priceData?.price || priceData;
     if (rawPrice && !rawPrice.error) {
-      const priceValue = parseFloat(rawPrice.fixedPrice || rawPrice.standardPrice?.fast || rawPrice.standardPrice || rawPrice.price || 0);
+      const priceValue = parseFloat(
+        rawPrice.fixedPrice ||
+          rawPrice.standardPrice?.fast ||
+          rawPrice.standardPrice ||
+          rawPrice.price ||
+          0,
+      );
       const priceUnit = getAlgorithmUnit(nhAlgo);
       return { value: priceValue, unit: priceUnit };
     }

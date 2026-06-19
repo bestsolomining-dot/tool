@@ -1,54 +1,60 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from "xlsx";
 
-const DEFAULT_VERIFICATION_LOCATION = 'ANY'
+const DEFAULT_VERIFICATION_LOCATION = "ANY";
 
 /** Safely extracts an array from various MRR API response shapes */
-export function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'items', 'data']) {
-  if (!payload || typeof payload !== 'object') return [];
+export function extractArray(
+  payload,
+  keys = ["rentals", "rigs", "list", "result", "items", "data"],
+) {
+  if (!payload || typeof payload !== "object") return [];
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload.rigs)) return payload.rigs;
   if (Array.isArray(payload.data)) return payload.data;
-  
+
   for (const key of keys) {
     if (Array.isArray(payload[key])) return payload[key];
   }
 
   // If payload.data contains an array, recurse once to look for array keys inside the envelope
-  if (payload.data && typeof payload.data === 'object') {
+  if (payload.data && typeof payload.data === "object") {
     return extractArray(payload.data, keys);
   }
 
   return [];
 }
-const LOCATION_MAP = { // NiceHash API v2 pool verification service locations
-  'EU': 'EUROPE',
-  'EUROPE': 'EUROPE',
-  'USA': 'USA',
-  'US': 'USA',
-  'US_EAST': 'USA_EAST',
-  'USA_EAST': 'USA_EAST',
-  'EUROPE_NORTH': 'EUROPE_NORTH',
-  'SA': 'SOUTH_AMERICA',
-  'SOUTH_AMERICA': 'SOUTH_AMERICA',
-  'ASIA': 'ASIA',
-  'JP': 'JAPAN',
-  'JAPAN': 'JAPAN',
-  'IN': 'INDIA',
-  'INDIA': 'INDIA',
-  'BR': 'BRAZIL',
-  'BRAZIL': 'BRAZIL',
-  'RU': 'RUSSIA',
-  'RUSSIA': 'RUSSIA',
-  'ANY': 'ANY',
-}
+const LOCATION_MAP = {
+  // NiceHash API v2 pool verification service locations
+  EU: "EUROPE",
+  EUROPE: "EUROPE",
+  USA: "USA",
+  US: "USA",
+  US_EAST: "USA_EAST",
+  USA_EAST: "USA_EAST",
+  EUROPE_NORTH: "EUROPE_NORTH",
+  SA: "SOUTH_AMERICA",
+  SOUTH_AMERICA: "SOUTH_AMERICA",
+  ASIA: "ASIA",
+  JP: "JAPAN",
+  JAPAN: "JAPAN",
+  IN: "INDIA",
+  INDIA: "INDIA",
+  BR: "BRAZIL",
+  BRAZIL: "BRAZIL",
+  RU: "RUSSIA",
+  RUSSIA: "RUSSIA",
+  ANY: "ANY",
+};
 
 /**
  * Shared API wrapper
  */
 export async function apiFetch(path, options = {}) {
   const res = await fetch(path, options);
-  const contentType = res.headers.get('content-type') || '';
-  const data = contentType.includes('application/json') ? await res.json() : await res.text();
+  const contentType = res.headers.get("content-type") || "";
+  const data = contentType.includes("application/json")
+    ? await res.json()
+    : await res.text();
   return { ok: res.ok, status: res.status, data, headers: res.headers };
 }
 
@@ -56,98 +62,148 @@ export async function apiFetch(path, options = {}) {
  * Pool Data Helpers
  */
 export const poolHelpers = {
-  getKey: (p, i = 0) => String(p?.id || p?.poolId || p?.name || p?.__generatedId || `gen-${i}`),
+  getKey: (p, i = 0) =>
+    String(p?.id || p?.poolId || p?.name || p?.__generatedId || `gen-${i}`),
   getId: (p) => p?.id || p?.poolId,
-  getLabel: (p, i = 0) => String(p?.name || p?.id || p?.poolId || p?.__generatedId || `Pool ${i + 1}`),
+  getLabel: (p, i = 0) =>
+    String(
+      p?.name || p?.id || p?.poolId || p?.__generatedId || `Pool ${i + 1}`,
+    ),
   getAlgo: (p) => {
-    let val = p?.miningAlgorithm || p?.algorithm || (typeof p === 'string' ? p : null);
-    if (val && typeof val === 'object') val = val.code || val.enumName || val.name || 'Unknown';
-    let str = String(val || 'Unknown');
-    if (str.includes(':')) str = str.split(':').pop().trim();
+    let val =
+      p?.miningAlgorithm || p?.algorithm || (typeof p === "string" ? p : null);
+    if (val && typeof val === "object")
+      val = val.code || val.enumName || val.name || "Unknown";
+    let str = String(val || "Unknown");
+    if (str.includes(":")) str = str.split(":").pop().trim();
     return str;
   },
 
   normalizeList: (data) => {
-    let list = []
-    if (Array.isArray(data)) list = data
-    else if (!data) list = []
-    else if (Array.isArray(data.list)) list = data.list
-    else if (Array.isArray(data.pools)) list = data.pools
-    else if (data.result && Array.isArray(data.result.pools)) list = data.result.pools
-    else if (typeof data === 'object') list = Object.values(data)
+    let list = [];
+    if (Array.isArray(data)) list = data;
+    else if (!data) list = [];
+    else if (Array.isArray(data.list)) list = data.list;
+    else if (Array.isArray(data.pools)) list = data.pools;
+    else if (data.result && Array.isArray(data.result.pools))
+      list = data.result.pools;
+    else if (typeof data === "object") list = Object.values(data);
 
     return (Array.isArray(list) ? list : []).map((item, index) => {
-      const obj = (typeof item === 'object' && !Array.isArray(item)) ? { ...item } : { value: item }
-      if (!obj.id && !obj.poolId && !obj.name) obj.__generatedId = `gen-${index}`
-      return obj
-    })
+      const obj =
+        typeof item === "object" && !Array.isArray(item)
+          ? { ...item }
+          : { value: item };
+      if (!obj.id && !obj.poolId && !obj.name)
+        obj.__generatedId = `gen-${index}`;
+      return obj;
+    });
   },
 
   getVerifyMessage: (result) => {
-    const data = result?.data || result
-    if (!data) return 'No response'
-    if (data.error) return data.error
-    if (data.message) return data.message
-    if (data.stopped) return data.message || 'Stopped'
+    const data = result?.data || result;
+    if (!data) return "No response";
+    if (data.error) return data.error;
+    if (data.message) return data.message;
+    if (data.stopped) return data.message || "Stopped";
     if (Array.isArray(data.logs) && data.logs.length > 0) {
-      return data.logs[data.logs.length - 1]?.message || 'Verification completed'
+      return (
+        data.logs[data.logs.length - 1]?.message || "Verification completed"
+      );
     }
-    return poolHelpers.isVerifySuccess(result) ? 'Verified' : 'Verification failed'
+    return poolHelpers.isVerifySuccess(result)
+      ? "Verified"
+      : "Verification failed";
   },
 
   getVerifyLogs: (result) => {
-    const logs = result?.data?.logs || result?.logs
-    return Array.isArray(logs) ? logs : []
+    const logs = result?.data?.logs || result?.logs;
+    return Array.isArray(logs) ? logs : [];
   },
 
   getVerifyAlgo: (result) => {
-    let val = result?.requestBody?.miningAlgorithm ||
-                result?.poolDetails?.miningAlgorithm || 
-                result?.poolDetails?.algorithm;
+    let val =
+      result?.requestBody?.miningAlgorithm ||
+      result?.poolDetails?.miningAlgorithm ||
+      result?.poolDetails?.algorithm;
 
     if (!val) {
       const logs = result?.data?.logs || result?.logs;
       if (Array.isArray(logs)) {
-        const found = logs.find(l => l.message && l.message.includes('mining algorithm:'));
+        const found = logs.find(
+          (l) => l.message && l.message.includes("mining algorithm:"),
+        );
         if (found) val = found.message;
       }
     }
 
-    if (val && typeof val === 'object') val = val.code || val.enumName || val.name || 'Unknown';
-    let str = String(val || 'Unknown');
-    if (str.includes(':')) str = str.split(':').pop().trim();
+    if (val && typeof val === "object")
+      val = val.code || val.enumName || val.name || "Unknown";
+    let str = String(val || "Unknown");
+    if (str.includes(":")) str = str.split(":").pop().trim();
     return str;
   },
-  
-  normalizeLocation: (val) => LOCATION_MAP[String(val || '').trim().toUpperCase()] || DEFAULT_VERIFICATION_LOCATION,
 
-  buildVerifyBody: (pool) => !pool ? null : ({
-    poolVerificationServiceLocation: poolHelpers.normalizeLocation(
-      pool.poolVerificationServiceLocation || pool.serviceLocation || pool.location || pool.market
+  normalizeLocation: (val) =>
+    LOCATION_MAP[
+      String(val || "")
+        .trim()
+        .toUpperCase()
+    ] || DEFAULT_VERIFICATION_LOCATION,
+
+  buildVerifyBody: (pool) =>
+    !pool
+      ? null
+      : {
+          poolVerificationServiceLocation: poolHelpers.normalizeLocation(
+            pool.poolVerificationServiceLocation ||
+              pool.serviceLocation ||
+              pool.location ||
+              pool.market,
+          ),
+          miningAlgorithm: pool.miningAlgorithm || pool.algorithm,
+          stratumHost: pool.stratumHost || pool.stratumHostname || pool.host,
+          stratumPort: Number(pool.stratumPort || pool.port),
+          username: pool.username,
+          password: pool.password,
+        },
+
+  buildSaveBody: (pool) =>
+    !pool
+      ? null
+      : {
+          ...(pool.id || pool.poolId ? { id: pool.id || pool.poolId } : {}),
+          name: pool.name,
+          algorithm: pool.algorithm || pool.miningAlgorithm,
+          stratumHostname:
+            pool.stratumHostname || pool.stratumHost || pool.host,
+          stratumPort: Number(pool.stratumPort || pool.port),
+          username: pool.username,
+          password: pool.password,
+        },
+
+  getMissingVerifyFields: (p) =>
+    Object.entries(p || {})
+      .filter(
+        ([, v]) => v === undefined || v === null || v === "" || Number.isNaN(v),
+      )
+      .map(([k]) => k),
+
+  getMissingSaveFields: (p) =>
+    [
+      "name",
+      "algorithm",
+      "stratumHostname",
+      "stratumPort",
+      "username",
+      "password",
+    ].filter(
+      (k) =>
+        p?.[k] === undefined ||
+        p?.[k] === null ||
+        p?.[k] === "" ||
+        Number.isNaN(p?.[k]),
     ),
-    miningAlgorithm: pool.miningAlgorithm || pool.algorithm,
-    stratumHost: pool.stratumHost || pool.stratumHostname || pool.host,
-    stratumPort: Number(pool.stratumPort || pool.port),
-    username: pool.username,
-    password: pool.password,
-  }),
-
-  buildSaveBody: (pool) => !pool ? null : ({
-    ...(pool.id || pool.poolId ? { id: pool.id || pool.poolId } : {}),
-    name: pool.name,
-    algorithm: pool.algorithm || pool.miningAlgorithm,
-    stratumHostname: pool.stratumHostname || pool.stratumHost || pool.host,
-    stratumPort: Number(pool.stratumPort || pool.port),
-    username: pool.username,
-    password: pool.password,
-  }),
-
-  getMissingVerifyFields: (p) => Object.entries(p || {})
-    .filter(([, v]) => v === undefined || v === null || v === '' || Number.isNaN(v))
-    .map(([k]) => k),
-
-  getMissingSaveFields: (p) => ['name', 'algorithm', 'stratumHostname', 'stratumPort', 'username', 'password']
-    .filter(k => p?.[k] === undefined || p?.[k] === null || p?.[k] === '' || Number.isNaN(p?.[k])),
 
   isVerifySuccess: (result) => {
     if (!result || result.ok === false) return false;
@@ -155,10 +211,10 @@ export const poolHelpers = {
     return !(data.success === false || data.valid === false || data.error);
   },
 
-  exportToXlsx: (data, filename = 'export.xlsx') => {
+  exportToXlsx: (data, filename = "export.xlsx") => {
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Results");
     XLSX.writeFile(workbook, filename);
   },
 
@@ -168,7 +224,7 @@ export const poolHelpers = {
       reader.onload = (e) => {
         try {
           const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
+          const workbook = XLSX.read(data, { type: "array" });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
           const jsonData = XLSX.utils.sheet_to_json(worksheet);
           resolve(jsonData);
@@ -186,11 +242,11 @@ export const poolHelpers = {
    * @param {number} hashrate - Hashrate in base units (H/s)
    * @param {string} algo - Optional algorithm to determine base units
    */
-  formatHashrate: (hashrate, algo = '') => {
-    if (!hashrate || isNaN(hashrate)) return '0 H/s';
+  formatHashrate: (hashrate, algo = "") => {
+    if (!hashrate || isNaN(hashrate)) return "0 H/s";
     const val = parseFloat(hashrate);
-    const units = ['H/s', 'KH/s', 'MH/s', 'GH/s', 'TH/s', 'PH/s', 'EH/s'];
-    
+    const units = ["H/s", "KH/s", "MH/s", "GH/s", "TH/s", "PH/s", "EH/s"];
+
     // MRR values are often already in higher units depending on the algo,
     // but standard normalization works best:
     let i = 0;
@@ -208,33 +264,42 @@ poolHelpers.normalizeMrrPoolsForExport = (mrrPoolData) => {
 
   let results = [];
   // This logic is similar to MrrPoolsTable's data normalization
-  if (mrrPoolData?.data && typeof mrrPoolData.data === 'object' && !Array.isArray(mrrPoolData.data) && (mrrPoolData.data.pools || mrrPoolData.data.result)) {
+  if (
+    mrrPoolData?.data &&
+    typeof mrrPoolData.data === "object" &&
+    !Array.isArray(mrrPoolData.data) &&
+    (mrrPoolData.data.pools || mrrPoolData.data.result)
+  ) {
     results = [mrrPoolData.data];
   } else {
     const rawData = mrrPoolData.data || mrrPoolData;
-    const extracted = extractArray(rawData, ['pools', 'data', 'result']);
-    if (extracted.length > 0 && !extracted[0].pools && (extracted[0].user || extracted[0].host || extracted[0].stratumHost)) {
+    const extracted = extractArray(rawData, ["pools", "data", "result"]);
+    if (
+      extracted.length > 0 &&
+      !extracted[0].pools &&
+      (extracted[0].user || extracted[0].host || extracted[0].stratumHost)
+    ) {
       // It's a flat list of pools, not grouped by rig/rental
-      results = [{ id: 'UnknownRigOrRental', pools: extracted }];
+      results = [{ id: "UnknownRigOrRental", pools: extracted }];
     } else {
       results = extracted;
     }
   }
 
   const exportableData = [];
-  results.forEach(item => {
-    const rigId = item.rigId || item.rigid || item.id || 'N/A';
+  results.forEach((item) => {
+    const rigId = item.rigId || item.rigid || item.id || "N/A";
     const pools = Array.isArray(item.pools) ? item.pools : [];
-    pools.forEach(pool => {
+    pools.forEach((pool) => {
       exportableData.push({
-        'Rig/Rental ID': rigId,
-        'Priority': pool.priority,
-        'Host': pool.host || pool.stratumHost,
-        'Port': pool.port || pool.stratumPort,
-        'Username': pool.user || pool.username,
-        'Password': pool.pass || pool.password, // Include password for completeness, but be mindful of security
-        'Algorithm': pool.algo || pool.algorithm || pool.type,
-        'Status': pool.status,
+        "Rig/Rental ID": rigId,
+        Priority: pool.priority,
+        Host: pool.host || pool.stratumHost,
+        Port: pool.port || pool.stratumPort,
+        Username: pool.user || pool.username,
+        Password: pool.pass || pool.password, // Include password for completeness, but be mindful of security
+        Algorithm: pool.algo || pool.algorithm || pool.type,
+        Status: pool.status,
       });
     });
   });
@@ -245,34 +310,35 @@ poolHelpers.normalizeMrrPoolsForExport = (mrrPoolData) => {
  * Shared API Actions
  */
 export const poolApi = {
-  list: (client) => apiFetch(`/api/v2/pools${client ? `?client=${client}` : ''}`),
+  list: (client) =>
+    apiFetch(`/api/v2/pools${client ? `?client=${client}` : ""}`),
   get: (id, client, signal) => {
-    const url = `/api/v2/pool/${encodeURIComponent(id)}${client ? `?client=${client}` : ''}`;
+    const url = `/api/v2/pool/${encodeURIComponent(id)}${client ? `?client=${client}` : ""}`;
     return apiFetch(url, { signal });
   },
   verify: (body, client, signal) => {
-    const url = `/api/v2/pools/verify${client ? `?client=${client}` : ''}`;
+    const url = `/api/v2/pools/verify${client ? `?client=${client}` : ""}`;
     return apiFetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal
+      signal,
     });
   },
   save: (body, client) => {
-    const url = `/api/v2/pool${client ? `?client=${client}` : ''}`;
+    const url = `/api/v2/pool${client ? `?client=${client}` : ""}`;
     return apiFetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
   },
   mrrRigs: (client, endpoint, params = {}) => {
     const query = new URLSearchParams({
       ...(client ? { client } : {}),
       ...(endpoint ? { endpoint } : {}),
-      ...params
+      ...params,
     });
     return apiFetch(`/api/v2/mrr/rigs?${query.toString()}`);
-  }
+  },
 };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -20,22 +20,26 @@ class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       // You can render any custom fallback UI
       return (
-        <div style={{ 
-          padding: '20px', 
-          border: '1px solid #ff4444', 
-          backgroundColor: '#fff5f5', 
-          color: '#c53030',
-          borderRadius: '8px',
-          margin: '10px'
-        }}>
+        <div
+          style={{
+            padding: "20px",
+            border: "1px solid #ff4444",
+            backgroundColor: "#fff5f5",
+            color: "#c53030",
+            borderRadius: "8px",
+            margin: "10px",
+          }}
+        >
           <h3>Something went wrong in the Rig display.</h3>
           <p>{this.state.error?.message}</p>
-          <button onClick={() => this.setState({ hasError: false })}>Try again</button>
+          <button onClick={() => this.setState({ hasError: false })}>
+            Try again
+          </button>
         </div>
       );
     }
 
-    return this.props.children; 
+    return this.props.children;
   }
 }
 

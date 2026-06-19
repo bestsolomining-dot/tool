@@ -1,12 +1,19 @@
-import React from 'react'
-import Modal from './Modal'
-import PoolEditor from './PoolEditor'
+import React from "react";
+import Modal from "./Modal";
+import PoolEditor from "./PoolEditor";
 
 /**
- * A wrapper component that decides whether to render the PoolEditor 
+ * A wrapper component that decides whether to render the PoolEditor
  * inside a Modal (Popup) or a separate Window (Popout).
  */
-export default function PoolEditorPopup({ editor, onClose, onSave, onSaveSuccess, onVerifySuccess, nhClient }) {
+export default function PoolEditorPopup({
+  editor,
+  onClose,
+  onSave,
+  onSaveSuccess,
+  onVerifySuccess,
+  nhClient,
+}) {
   const content = (
     <PoolEditor
       pool={editor}
@@ -19,11 +26,16 @@ export default function PoolEditorPopup({ editor, onClose, onSave, onSaveSuccess
       isPopout={false}
       nhClient={nhClient}
     />
-  )
+  );
 
   return (
-    <Modal isOpen={true} onClose={onClose} title="Pool Editor" maxWidth="1100px">
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title="Pool Editor"
+      maxWidth="1100px"
+    >
       {content}
     </Modal>
-  )
+  );
 }

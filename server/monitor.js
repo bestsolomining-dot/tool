@@ -1,6 +1,6 @@
 import { db } from './db.js';
 import { mrrApiCall, mrrConfigs } from './mrr.js';
-import { resolveNhClient, getNiceHashApp, isAggregate } from './nh.js';
+import { resolveNhClient, getNiceHashApp, isAggregate, nhConfigs } from './nh.js';
 import { extractRentalInfo, extractRigInfo } from './utils.js';
 import { TELEGRAM_CONFIG, TelegramTemplates } from '../src/core/telegram.js';
 import { ALGO_DISPLAY_NAMES, HASHRATE_SUFFIXES, normalizeAlgoForNiceHash, getMrrAlgorithmUnit, calculatePriceComparison } from '../src/core/mapping.js';
@@ -97,6 +97,13 @@ function isRentalActive(now, endTs, sourceRig, rental) {
   return rentedFlag || hasLiveRentalId || status.includes('rented') || status.includes('active') || status.includes('running');
 }
 
+function isLiveRigCurrentlyRented(rig) {
+  if (!rig) return false;
+  const statusRaw = rig?.status;
+  const status = String(typeof statusRaw === 'object' ? statusRaw.status : statusRaw || '').toLowerCase();
+  return Boolean(getRentalIdFromRig(rig)) && (status.includes('rented') || status.includes('active') || status.includes('running'));
+}
+
 // ==========================
 //  Global State (Persisted in DB)
 // ==========================
@@ -152,6 +159,8 @@ const lastAlertTimes = new Map([['global_summary', Date.now()]]);   // key → t
 const lastRigStates = new Map();    // rigId → status string
 const monitorNhPriceCache = new Map(); // algo:client -> {price, unit}
 const monitorNhPriceErrorCache = new Map(); // algo:client -> {message, ts}
+const monitorNhOrdersCache = new Map(); // client -> { orders, ts }
+const MONITOR_NH_ORDERS_TTL = 60 * 1000;
 
 // ==========================
 //  Helper: HTML escaping
@@ -161,6 +170,31 @@ function escapeHtml(text) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+function getMonitorNhAlgoPriceUnit(order, fallbackAlgo) {
+  const algo = normalizeAlgoForNiceHash(order?.algorithm || order?.algo || order?.type || fallbackAlgo);
+  return getMrrAlgorithmUnit(algo);
+}
+
+async function getMonitorNhActiveOrders(clientName) {
+  const cacheKey = String(clientName || 'BT').toUpperCase();
+  const cached = monitorNhOrdersCache.get(cacheKey);
+  if (cached && (Date.now() - cached.ts < MONITOR_NH_ORDERS_TTL)) {
+    return cached.orders;
+  }
+
+  const cfg = nhConfigs[cacheKey];
+  if (!cfg?.apiKey || !cfg?.apiSecret || !cfg?.orgId) return [];
+
+  const { client } = resolveNhClient(cacheKey);
+  if (!client) return [];
+
+  const result = await getNiceHashApp(client).hashpower.getMyOrders({ op: 'LE', limit: 100 });
+  const rawList = result?.list || result?.myOrders || (Array.isArray(result) ? result : []);
+  const activeOrders = rawList.filter(o => String(o?.status?.code || o?.status || '').toUpperCase() === 'ACTIVE');
+  monitorNhOrdersCache.set(cacheKey, { orders: activeOrders, ts: Date.now() });
+  return activeOrders;
 }
 
 // ==========================
@@ -315,7 +349,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
   const buildGroupedTelegramMessages = (items, typeLabel = 'Grouped Monitor') => {
     if (typeLabel === 'RENTAL FINISHED') {
-      const title = `📦 <b>Grouped Monitor Messages</b> [${new Date().toLocaleTimeString()}]\n` +
+      const title = `📦 [${new Date().toLocaleTimeString()}]\n` +
         `━━━━━━━━━━━━━━\n` +
         `<b>Type:</b> ${escapeHtml(typeLabel)}\n` +
         `<b>Total:</b> ${items.length}\n\n`;
@@ -340,7 +374,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       return chunks;
     }
 
-    const title = `📦 <b>Grouped Monitor Messages</b> [${new Date().toLocaleTimeString()}]\n` +
+    const title = `📦 [${new Date().toLocaleTimeString()}]\n` +
       `━━━━━━━━━━━━━━\n` +
       `<b>Type:</b> ${escapeHtml(typeLabel)}\n` +
       `<b>Total:</b> ${items.length}\n\n`;
@@ -650,7 +684,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const totalDurationMs = (startT > 0 && endT > 0) ? endT - startT : 0;
         const elapsedMs = startT > 0 ? Math.max(0, Math.min(now - startT, totalDurationMs)) : 0;
         const remainingMs = endT > 0 ? Math.max(0, endT - now) : 0;
-        const isCurrentRental = isRentalActive(now, endT, liveRig, r);
+        const isCurrentRental = isLiveRigCurrentlyRented(liveRig) && isRentalActive(now, endT, liveRig, r);
 
         if (!isCurrentRental) {
           await dbRunAsync(`DELETE FROM rentals WHERE id = ?`, [String(r.id)]).catch(() => {});
@@ -685,17 +719,20 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           let nhP = monitorNhPriceCache.get(cacheKey);
           
           if (!nhP) {
-            const { client: nhCl } = resolveNhClient(acct);
-            // Ensure algorithm is stripped of pool-specific suffixes (e.g. MONERO -> RANDOMX)
-            const cleanAlgo = normalizeAlgoForNiceHash(nhAlgo);
-            const pData = await getNiceHashApp(nhCl).hashpower.getOrderPrice({ 
-              algorithm: cleanAlgo, 
-              market: '1', // 1 = USA
-              amount: '0.01' // Increased amount to satisfy minimums for all algos
-            });
+            const cfg = nhConfigs[acct];
+            if (!cfg?.apiKey || !cfg?.apiSecret || !cfg?.orgId) {
+              throw new Error(`NiceHash client "${acct}" is not configured`);
+            }
+
+            const activeOrders = await getMonitorNhActiveOrders(acct);
+            const matchedOrder = activeOrders.find(order => normalizeAlgoForNiceHash(order?.algorithm || order?.algo || order?.type) === nhAlgo);
+            if (!matchedOrder) {
+              throw new Error(`No active NiceHash order found for ${nhAlgo}`);
+            }
+
             nhP = {
-              price: parseFloat(pData?.fixedPrice || pData?.standardPrice?.fast || pData?.price || 0) || 0,
-              unit: String(pData?.speedUnit || pData?.unit || (cleanAlgo.includes('SHA256') ? 'EH' : 'TH'))
+              price: parseFloat(matchedOrder?.price ?? matchedOrder?.marketPrice ?? matchedOrder?.fixedPrice ?? 0) || 0,
+              unit: getMonitorNhAlgoPriceUnit(matchedOrder, nhAlgo)
             };
             if (nhP.price <= 0) throw new Error('NiceHash price unavailable');
             monitorNhPriceCache.set(cacheKey, nhP);
@@ -879,7 +916,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
         // Build line for summary heartbeat
         const hasEndTime = endT > 0;
-        const isFinished_s = !isRentalActive(now, endT, liveRig, r);
+        const isFinished_s = !isLiveRigCurrentlyRented(liveRig) || !isRentalActive(now, endT, liveRig, r);
         const remD_s = Math.floor(remainingMs / 86400000);
         const remH_s = Math.floor((remainingMs % 86400000) / 3600000);
         const remM_s = Math.floor((remainingMs % 3600000) / 60000);
@@ -889,7 +926,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         const divider = '━━━━━━━━━━━━━━━━━';  
 
         // Include all active rentals in the summary list regardless of speed to match the "Rented" count
-        if (!isFinished_s) {
+        if (isLiveRigCurrentlyRented(liveRig)) {
           accountRentedActive++;
           const currentSpeedVal = parseFloat(info.hashrate.current || 0);
           const speedStatus = currentSpeedVal > 0 ? `<b>${info.niceHashrate}H</b>` : '⚠️ <b>0 H/s</b>';
@@ -1044,7 +1081,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   //  Send combined summary heartbeat
   // ------------------------------------------------------------------
   const shouldSendCombinedSummary = forceNotify || (now - (lastAlertTimes.get('global_summary') || 0) >= RENTED_HEARTBEAT_MS);
-  rentedAll = accountMetrics.reduce((sum, metric) => sum + (Number(metric.rented) || 0), 0);
+  rentedAll = currentActiveRentalIds.size || activeRentalLines.length || accountMetrics.reduce((sum, metric) => sum + (Number(metric.rented) || 0), 0);
   if (shouldSendCombinedSummary && (accountMetrics.length > 0 || activeRentalLines.length > 0)) {
     const maxBarLen = 14;
     const barChart = accountMetrics.map(am => {

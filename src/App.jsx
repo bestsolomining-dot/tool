@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Pools from './components/Pools';
 import Modal from './components/Modal';
 import HashrateCalculator from './components/HashrateCalculator';
@@ -6,6 +6,7 @@ import HashCompletionCalculator from './components/HashCompletionCalculator';
 import HashpowerBot from './components/HashpowerBot';
 import NiceHash from './components/NiceHash';
 import MiningRigRental from './components/MiningRigRental';
+import MiningPage from './components/MiningPage.jsx';
 import { createApiClient } from './core/apiClient';
 import './App.css';
 
@@ -22,6 +23,7 @@ export default function App() {
   const [market, setMarket] = useState('');
   const [mrrClient, setMrrClient] = useState('BT');
   const [completionCalculatorContext, setCompletionCalculatorContext] = useState(null);
+  const [, setRouteTick] = useState(0);
 
   const toDateTimeLocal = (value) => {
     if (!value) return '';
@@ -142,25 +144,54 @@ export default function App() {
     return callApi(path, { ...opts, section: 'hashpower' });
   }, [callApi]);
 
+  const navigate = useCallback((to) => {
+    const nextPath = String(to || '/').startsWith('/') ? String(to || '/') : `/${String(to || '')}`;
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, '', nextPath);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+  }, []);
+
+  useEffect(() => {
+    const onPopState = () => setRouteTick((value) => value + 1);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const isMiningRoute = (window.location.pathname || '/').startsWith('/mining');
+
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div className="brand-block">
-          {/* <h2>Ben Tre Mining Tool</h2> */}
-          <p className="subtitle">
-            A powerful desktop tool for Nicehash miners. Manage rigs, monitor stats, and automate hashpower purchases with ease.
-          </p>
-        </div>
-        <div className="status-card">
-          <div className="status-item">
-            <span>Status:</span>
-            <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`} style={{ color: 'green' }}>
-              {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
-            </span>
+      {!isMiningRoute && (
+        <header className="app-header">
+          <div className="brand-block">
+            {/* <h2>Ben Tre Mining Tool</h2> */}
+            <p className="subtitle">
+              A powerful desktop tool for Nicehash miners. Manage rigs, monitor stats, and automate hashpower purchases with ease.
+            </p>
           </div>
-        </div>
-      </header>
+          <div className="status-card" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <div className="status-item">
+              <span>Status:</span>
+              <span className={`status-value ${loading ? 'status-ready' : error ? 'status-error' : 'status-success'}`} style={{ color: 'green' }}>
+                {loading ? 'Loading...' : error ? 'Error' : 'Ready'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button className="btn-pro secondary" onClick={() => navigate('/')}>Dashboard</button>
+              <button className="btn-pro secondary" onClick={() => navigate('/mining')}>Mining</button>
+            </div>
+          </div>
+        </header>
+      )}
 
+      {isMiningRoute ? (
+        <MiningPage
+          onCall={callApi}
+          nhClient="BT"
+          onNavigateHome={() => navigate('/')}
+        />
+      ) : (
       <main className="dashboard">
         <section className="quick-actions">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
@@ -201,6 +232,7 @@ export default function App() {
           </section>
         </section>
       </main>
+      )}
       <Modal
         isOpen={responseModalOpen}
         onClose={() => setResponseModalOpen(false)}

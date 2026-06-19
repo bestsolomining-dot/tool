@@ -8,6 +8,7 @@ import { mrrApiCall, mrrRequest, fetchAggregatedRentals, mrrConfigs, defaultMrrC
 import { resolveNhClient, getNiceHashApp, nhConfigs, isAggregate, normalizeAlgoForNiceHash, mapNiceHashToMRR, getCachedNhPools } from './nh.js';
 import { sendTelegramInternal, runRentalMonitor, getTelegramStatus, setTelegramStatus } from './monitor.js';
 import { db } from './db.js';
+import { getAlgorithmUnit } from '../src/core/mapping.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 
@@ -105,7 +106,7 @@ export function registerRoutes(app) {
   app.get('/api/v2/accounting/balances', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || 'BT').toUpperCase();
     if (isAggregate(clientParam)) {
-      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret);
+      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && nhConfigs[k].orgId);
 
       // Group by resolved client name to avoid redundant calls to the same underlying account
       const clientMap = new Map();
@@ -156,7 +157,7 @@ export function registerRoutes(app) {
   app.get('/api/v2/mining/rigs2', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || 'BT').toUpperCase();
     if (isAggregate(clientParam)) {
-      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && nhConfigs[k].orgId && !isAggregate(k));
 
       const clientMap = new Map();
       for (const acct of nhAccounts) {
@@ -191,7 +192,7 @@ export function registerRoutes(app) {
 
     let data;
     if (isAggregate(clientParam)) {
-      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && nhConfigs[k].orgId && !isAggregate(k));
 
       const clientMap = new Map();
       for (const acct of nhAccounts) {
@@ -255,7 +256,7 @@ export function registerRoutes(app) {
 
     const clientParam = String(req.query.client || 'ALL').toUpperCase();
     const nhAccounts = isAggregate(clientParam)
-      ? Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k))
+      ? Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && nhConfigs[k].orgId && !isAggregate(k))
       : [clientParam];
 
     let totalPaid = 0;
@@ -290,28 +291,70 @@ export function registerRoutes(app) {
     const query = { ...req.query };
     if (!query.ts) query.ts = Date.now().toString();
 
+    const algorithm = normalizeAlgoForNiceHash(query.algorithm);
+    const matchActiveOrder = async (clientName, client) => {
+      try {
+        const data = await getNiceHashApp(client).hashpower.getMyOrders({ op: 'LE', limit: 100 });
+        const rawList = data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
+        const activeOrders = rawList.filter(o => String(o?.status?.code || o?.status || '').toUpperCase() === 'ACTIVE');
+        const found = activeOrders.find(o => normalizeAlgoForNiceHash(o?.algorithm || o?.algo || o?.type) === algorithm);
+        if (!found) return null;
+        const price = Number.parseFloat(found.price ?? found.marketPrice ?? found.fixedPrice ?? 0);
+        if (!Number.isFinite(price) || price <= 0) return null;
+        return {
+          fixedPrice: price.toFixed(8),
+          speedUnit: getAlgorithmUnit(algorithm),
+          price,
+          marketPrice: price,
+          marketUnit: getAlgorithmUnit(algorithm),
+          source: 'active-order',
+          nhClient: clientName,
+          orderId: found.id,
+        };
+      } catch {
+        return null;
+      }
+    };
+
     if (isAggregate(clientParam)) {
-      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && nhConfigs[k].orgId && !isAggregate(k));
       for (const acct of nhAccounts) {
         const { client, clientName } = resolveNhClient(acct);
         if (!client || (acct !== 'BT' && clientName === 'BT')) continue;
         try {
-          const data = await getNiceHashApp(client).hashpower.getOrderPrice(query);
-          if (data && !data.error) {
+          const orderPrice = await matchActiveOrder(clientName, client);
+          if (orderPrice) {
             res.set('X-NH-Client', clientName);
-            return res.json(data);
+            return res.json(orderPrice);
           }
         } catch (e) { }
       }
     }
 
-    res.json(await req.nhApp.hashpower.getOrderPrice(query));
+    if (clientParam !== 'ALL' && clientParam !== 'VN') {
+      const { client, clientName } = resolveNhClient(clientParam);
+      if (client) {
+        const orderPrice = await matchActiveOrder(clientName, client);
+        if (orderPrice) {
+          res.set('X-NH-Client', clientName);
+          return res.json(orderPrice);
+        }
+      }
+    }
+
+    return res.json({
+      success: false,
+      error: `No active NiceHash order price found for ${algorithm || 'unknown'}.`,
+      algorithm: query.algorithm,
+      market: query.market || 'USA',
+      source: 'active-order',
+    });
   }));
 
   app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || 'BT').toUpperCase();
     if (isAggregate(clientParam)) {
-      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && nhConfigs[k].orgId && !isAggregate(k));
       const processedClients = new Set();
       for (const acct of nhAccounts) {
         const { client, clientName } = resolveNhClient(acct);
@@ -339,7 +382,7 @@ export function registerRoutes(app) {
   app.get('/api/v2/pools', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || 'BT').toUpperCase();
     if (isAggregate(clientParam)) {
-      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && nhConfigs[k].orgId && !isAggregate(k));
 
       const clientMap = new Map();
       for (const acct of nhAccounts) {
@@ -385,7 +428,7 @@ export function registerRoutes(app) {
   app.get('/api/v2/pool/:poolId', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || 'BT').toUpperCase();
     if (isAggregate(clientParam)) {
-      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && nhConfigs[k].orgId && !isAggregate(k));
       const processedClients = new Set();
       for (const acct of nhAccounts) {
         const { client, clientName } = resolveNhClient(acct);

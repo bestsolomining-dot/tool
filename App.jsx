@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useRef, useMemo, useReducer } from 'react';
 import Login from './src/components/Login';
 import Dashboard from './src/components/Dashboard';
+import MiningPage from './src/components/MiningPage.jsx';
 import { RentedRigProvider } from './src/components/RentedRigContext.jsx';
 import CryptoRatePage from './src/components/CryptoRatePage';
 import './src/App.css';
@@ -25,7 +26,11 @@ const initialState = {
   nhOrderClient: 'VN',
   nhPoolClient: 'BT',
   mrrClient: 'BT',
-  view: 'dashboard',
+  view: (typeof window !== 'undefined' && window.location.pathname === '/mining')
+    ? 'mining'
+    : (typeof window !== 'undefined' && window.location.pathname === '/cryptorate')
+      ? 'cryptorate'
+      : 'dashboard',
   activeDashboard: 'nicehash',
 };
 
@@ -433,7 +438,10 @@ export default function App() {
   useEffect(() => {
     const handlePath = () => {
       const path = window.location.pathname;
-      dispatch({ type: 'SET_VIEW', payload: path === '/cryptorate' ? 'cryptorate' : 'dashboard' });
+      dispatch({
+        type: 'SET_VIEW',
+        payload: path === '/cryptorate' ? 'cryptorate' : path === '/mining' ? 'mining' : 'dashboard',
+      });
     };
     window.addEventListener('popstate', handlePath);
     handlePath();
@@ -509,6 +517,21 @@ export default function App() {
         </div>
         <CryptoRatePage onCall={callApi} />
       </div>
+    );
+  }
+
+  if (state.view === 'mining') {
+    return (
+      <RentedRigProvider callApi={callApi}>
+        <MiningPage
+          onCall={callApi}
+          nhClient={state.nhOrderClient}
+          onNavigateHome={() => {
+            window.history.pushState({}, '', '/');
+            dispatch({ type: 'SET_VIEW', payload: 'dashboard' });
+          }}
+        />
+      </RentedRigProvider>
     );
   }
 

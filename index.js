@@ -40,6 +40,9 @@ const COMMON_HEADERS = {
 const addressCache = new Map();
 const statsCache = new Map();
 const CACHE_TTL = 30000; // 30 seconds
+const HERO_MINERS_POOL_LIST_CACHE_KEY = 'herominers_pool_list';
+const HERO_MINERS_POOL_DISCOVERY_TTL = 6 * 60 * 60 * 1000; // 6 hours
+const heroMinersWarnThrottle = new Map();
 
 /** Persistence layer: Save stats to disk to act as a database */
 let dbInstance;
@@ -160,86 +163,150 @@ async function scrapeHeroMinersGlobal(force = false) {
     if (cached && (Date.now() - cached.ts < CACHE_TTL)) return cached.data;
   }
 
-  // Directly target the JSON API endpoint as it is the source of truth and faster.
-  // Added a 10s timeout to prevent the request from hanging and triggering frontend timeouts.
-  const url = 'https://herominers.com';
-  
-  const res = await fetch(url, { 
-    headers: COMMON_HEADERS,
-    signal: AbortSignal.timeout(10000)
-  });
+  const now = Date.now();
 
-  const contentType = res.headers.get('content-type');
-  // Fallback to HTML scraping ONLY if the response is explicitly HTML and not a JSON response.
-  // The primary target is the JSON API at the root URL.
-  if (contentType && contentType.includes('text/html')) {
-    const htmlContent = await res.text();
-    const $ = cheerio.load(htmlContent);
-    const coinStats = [];
-    $('div.table-responsive > table.table-hover > tbody > tr').each((i, el) => {
-      const tds = $(el).find('td');
-      if (tds.length < 7) return; // Relaxed the check slightly in case a column is removed
-      coinStats.push({
-        coin: $(tds[0]).find('b').text().trim(),
-        algorithm: $(tds[1]).text().trim(),
-        poolHashrate: $(tds[3]).text().trim(),
-        networkHashrate: $(tds[4]).text().trim(),
-        miners: parseInt($(tds[5]).text().trim(), 10) || 0,
-        workers: parseInt($(tds[6]).text().trim(), 10) || 0,
-        blockHeight: $(tds[2]).text().trim(),
-      });
-    });
-
-    if (coinStats.length === 0) {
-      if (staleCached?.data) {
-        console.warn('[herominers_global] HTML fallback parse returned no rows; serving stale cached stats.');
-        return { ...staleCached.data, stale: true, warning: 'HeroMiners HTML fallback parse returned no rows.' };
-      }
-
-      console.warn('[herominers_global] HTML fallback parse returned no rows; serving empty stats.');
-      return {
-        coinStats: [],
-        rows: [],
-        miners: 0,
-        warning: 'HeroMiners HTML fallback parse returned no rows.'
-      };
-    }
-
-    const result = { coinStats, miners: coinStats.reduce((acc, c) => acc + c.miners, 0) };
-    statsCache.set(CACHE_KEY, { data: result, ts: Date.now() });
-    await persistStats();
-    return result;
-  }
-
-  // If we are here, we expect a JSON response.
-  if (!res.ok) {
-    throw new Error(`HeroMiners API request failed with status: ${res.status}`);
-  }
-
-  const data = await res.json(); // This will throw if the body is not valid JSON
-  if (!data || !data.coins) {
-    throw new Error(`Invalid HeroMiners API response format from ${url}`);
-  }
-
-  const coinStats = [];
-  Object.entries(data.coins).forEach(([coinId, stats]) => {
-    coinStats.push({
-      coin: coinId.toUpperCase(),
-      algorithm: stats.algorithm || 'N/A',
-      networkHashrate: stats.network_hashrate || '0',
-      poolHashrate: stats.pool_hashrate || '0',
-      blockHeight: stats.block_height || '0',
-      miners: parseInt(stats.miners) || 0,
-      workers: parseInt(stats.workers) || 0,
-    });
-  });
-
-  const result = { 
-    coinStats,
-    miners: coinStats.reduce((acc, c) => acc + (c.miners || 0), 0)
+  const parseNumber = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
   };
 
-  statsCache.set(CACHE_KEY, { data: result, ts: Date.now() });
+  const humanHashrate = (value) => {
+    const num = parseNumber(value);
+    if (!Number.isFinite(num) || num <= 0) return '0 H/s';
+    const units = [
+      ['EH/s', 1e18],
+      ['PH/s', 1e15],
+      ['TH/s', 1e12],
+      ['GH/s', 1e9],
+      ['MH/s', 1e6],
+      ['KH/s', 1e3],
+    ];
+    for (const [unit, factor] of units) {
+      if (num >= factor) return `${(num / factor).toFixed(num >= factor * 100 ? 0 : 2)} ${unit}`;
+    }
+    return `${num.toFixed(0)} H/s`;
+  };
+
+  const throttledWarn = (key, message, cooldownMs = 5 * 60 * 1000) => {
+    const lastTs = heroMinersWarnThrottle.get(key) || 0;
+    if (now - lastTs >= cooldownMs) {
+      heroMinersWarnThrottle.set(key, now);
+      console.warn(message);
+    }
+  };
+
+  const fetchPoolList = async () => {
+    const cached = statsCache.get(HERO_MINERS_POOL_LIST_CACHE_KEY);
+    if (!force && cached && (now - cached.ts < HERO_MINERS_POOL_DISCOVERY_TTL) && Array.isArray(cached.data)) {
+      return cached.data;
+    }
+
+    const res = await fetch('https://herominers.com/sitemap.xml', {
+      headers: COMMON_HEADERS,
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) {
+      throw new Error(`HeroMiners sitemap request failed with status: ${res.status}`);
+    }
+
+    const xml = await res.text();
+    const poolHosts = [...new Set(
+      [...xml.matchAll(/https:\/\/([a-z0-9-]+)\.herominers\.com\//gi)]
+        .map(match => match[1])
+        .filter(host => host && host !== 'herominers')
+    )].sort();
+
+    if (poolHosts.length === 0) {
+      throw new Error('HeroMiners sitemap returned no pool hosts.');
+    }
+
+    statsCache.set(HERO_MINERS_POOL_LIST_CACHE_KEY, { data: poolHosts, ts: now });
+    return poolHosts;
+  };
+
+  const poolHosts = await fetchPoolList();
+  const settled = await Promise.allSettled(poolHosts.map(async (host) => {
+    const url = `https://${host}.herominers.com/api/stats`;
+    const res = await fetch(url, {
+      headers: COMMON_HEADERS,
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) {
+      throw new Error(`${host} returned ${res.status}`);
+    }
+    const data = await res.json();
+    return { host, data };
+  }));
+
+  const coinStats = [];
+  for (const item of settled) {
+    if (item.status !== 'fulfilled') {
+      throttledWarn(`hero:${item.reason?.message || 'unknown'}`, `[herominers_global] ${item.reason?.message || 'Failed to fetch HeroMiners pool stats.'}`);
+      continue;
+    }
+
+    const { host, data } = item.value;
+    const config = data?.config || {};
+    const pool = data?.pool || {};
+    const network = data?.network || {};
+    const lastblock = data?.lastblock || {};
+    const symbol = String(config.symbol || host).toUpperCase();
+    const algorithm = String(config.cnAlgorithm || config.algorithm || host).trim();
+    const poolHashrate = parseNumber(pool.hashrate) + parseNumber(pool.soloHashrate);
+    const miners = parseNumber(pool.miners) + parseNumber(pool.soloMiners);
+    const workers = parseNumber(pool.workers) + parseNumber(pool.soloWorkers);
+    const priceUsd = parseNumber(pool.price?.usd ?? pool.price?.USD ?? pool.price?.priceUsd);
+    const priceBtc = parseNumber(pool.price?.btc ?? pool.price?.BTC ?? pool.price?.priceBtc);
+    const blockHeight = lastblock.height || network.height || 0;
+    const networkHashrate = parseNumber(network.difficulty) && parseNumber(network.difficultyTarget)
+      ? parseNumber(network.difficulty) / parseNumber(network.difficultyTarget)
+      : 0;
+
+    coinStats.push({
+      coin: symbol,
+      symbol,
+      host,
+      algorithm,
+      poolHashrate: humanHashrate(poolHashrate),
+      networkHashrate: humanHashrate(networkHashrate),
+      blockHeight,
+      miners,
+      workers,
+      usdPerDay: priceUsd,
+      btcPerDay: priceBtc,
+      priceUsd,
+      priceBtc,
+      source: 'herominers-api',
+      url: `https://${host}.herominers.com/`
+    });
+  }
+
+  if (coinStats.length === 0) {
+    if (staleCached?.data) {
+      throttledWarn('hero:stale', '[herominers_global] No pool stats returned; serving stale cached stats.');
+      return { ...staleCached.data, stale: true, warning: 'HeroMiners API returned no pool stats.' };
+    }
+
+    return {
+      success: true,
+      coinStats: [],
+      rows: [],
+      miners: 0,
+      workers: 0,
+      warning: 'HeroMiners API returned no pool stats.'
+    };
+  }
+
+  const result = {
+    success: true,
+    coinStats,
+    rows: coinStats,
+    totalCoins: coinStats.length,
+    miners: coinStats.reduce((acc, c) => acc + (c.miners || 0), 0),
+    workers: coinStats.reduce((acc, c) => acc + (c.workers || 0), 0)
+  };
+
+  statsCache.set(CACHE_KEY, { data: result, ts: now });
   await persistStats();
   return result;
 }

@@ -560,7 +560,10 @@ export async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
 
   const fetchSingleAccount = async (clientName) => {
     const localRentals = [];
-    const typesToFetch = mrrQuery.type ? [mrrQuery.type] : ['bought', 'sold'];
+    const requestedType = String(mrrQuery.type || '').trim().toLowerCase();
+    const typesToFetch = requestedType
+      ? [requestedType]
+      : ((mrrQuery.history || mrrQuery.includeBought || mrrQuery.all) ? ['bought', 'sold'] : ['sold']);
     
     for (const type of typesToFetch) {
       const { data, statusCode } = await mrrApiCall({ 

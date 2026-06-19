@@ -171,33 +171,33 @@ const MrrRigCard = ({
     background: `linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(15, 23, 42, 0.86) 100%), radial-gradient(circle at top right, ${accent} 0%, transparent 48%)`,
     border: `1px solid ${roiPercent === null ? 'rgba(255,255,255,0.08)' : roiPercent >= 0 ? 'rgba(16,185,129,0.28)' : 'rgba(239,68,68,0.28)'}`,
     borderTop: `3px solid ${accent}`,
-    borderRadius: '14px',
-    padding: '10px',
+    borderRadius: '12px',
+    padding: '8px',
     position: 'relative',
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
-    boxShadow: '0 12px 26px rgba(0, 0, 0, 0.18)',
+    gap: '6px',
+    boxShadow: '0 10px 22px rgba(0, 0, 0, 0.16)',
     overflow: 'hidden',
   };
 
   const sectionStyle = {
     background: 'rgba(255,255,255,0.035)',
     border: '1px solid rgba(255,255,255,0.06)',
-    borderRadius: '12px',
-    padding: '8px',
+    borderRadius: '10px',
+    padding: '6px',
   };
 
   return (
     <article className="rig-card" style={shellStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
             <span style={{
               background: isMine ? 'rgba(37, 99, 235, 0.18)' : 'rgba(255,255,255,0.08)',
               color: 'white',
-              fontSize: '9px',
-              padding: '3px 7px',
+              fontSize: '8px',
+              padding: '2px 6px',
               borderRadius: '999px',
               fontWeight: '700',
               letterSpacing: '0.04em',
@@ -208,8 +208,8 @@ const MrrRigCard = ({
             {rig.mrrClient && (
               <span style={{
                 ...getClientBadgeStyle(rig.mrrClient),
-                fontSize: '9px',
-                padding: '3px 7px',
+                fontSize: '8px',
+                padding: '2px 6px',
                 borderRadius: '999px',
                 fontWeight: '700'
               }}>
@@ -217,8 +217,8 @@ const MrrRigCard = ({
               </span>
             )}
             <span style={{
-              fontSize: '9px',
-              padding: '3px 7px',
+              fontSize: '8px',
+              padding: '2px 6px',
               borderRadius: '999px',
               fontWeight: '700',
               ...getStatusClass(rig.status)
@@ -229,7 +229,7 @@ const MrrRigCard = ({
           <strong
             title={rig.name}
             style={{
-              fontSize: '14px',
+              fontSize: '13px',
               lineHeight: 1.15,
               color: '#f8fafc',
               overflow: 'hidden',
@@ -239,110 +239,120 @@ const MrrRigCard = ({
           >
             {rig.name}
           </strong>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', color: '#94a3b8', fontSize: '10px' }}>
-            <span style={{ fontSize: '16px', fontWeight: 900, color: '#38bdf8', textShadow: '0 0 18px rgba(56, 189, 248, 0.22)' }}>{displayAlgo}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', color: '#94a3b8', fontSize: '9px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 900, color: '#38bdf8', textShadow: '0 0 18px rgba(56, 189, 248, 0.22)' }}>{displayAlgo}</span>
             <span style={{ opacity: 0.35 }}>|</span>
             <span>{roiFormulaLabel}</span>
             {paidLabel && (
               <>
                 {/* <span style={{ opacity: 0.35 }}>•</span> */}
-                <span style={{ color: '#fbbf24', fontWeight: 900, fontSize: '13px' }}>Sold {paidLabel}</span>
+                <span style={{ color: '#fbbf24', fontWeight: 900, fontSize: '11px' }}>Sold {paidLabel}</span>
               </>
             )}
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: '6px', minWidth: '160px', textAlign: 'right' }}>
+        <div style={{ display: 'grid', gap: '4px', minWidth: '142px', textAlign: 'right' }}>
           <div style={{
-            padding: '8px 10px',
-            borderRadius: '12px',
+            padding: '6px 8px',
+            borderRadius: '10px',
             background: roiPercent === null ? 'rgba(255,255,255,0.04)' : roiPercent >= 0 ? 'rgba(16,185,129,0.10)' : 'rgba(239,68,68,0.10)',
             border: `1px solid ${roiPercent === null ? 'rgba(255,255,255,0.08)' : roiPercent >= 0 ? 'rgba(16,185,129,0.22)' : 'rgba(239,68,68,0.22)'}`,
           }}>
-            <div style={{ fontSize: '10px', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.06em' }}>ROI</div>
-            <div style={{ fontSize: '22px', lineHeight: 1, fontWeight: 900, color: getRoiColor(roiPercent ?? 0) }}>
+            <div style={{ fontSize: '8px', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.06em' }}>ROI</div>
+            <div style={{ fontSize: '18px', lineHeight: 1, fontWeight: 900, color: getRoiColor(roiPercent ?? 0) }}>
               {roiLabel}
             </div>
-            <div style={{ fontSize: '9px', opacity: 0.7, marginTop: '3px' }}>
+            <div style={{ fontSize: '8px', opacity: 0.7, marginTop: '2px' }}>
               {roiFormulaLabel}
             </div>
-            <div style={{ fontSize: '8px', opacity: 0.48, marginTop: '2px' }}>
+            <div style={{ fontSize: '7px', opacity: 0.5, marginTop: '1px' }}>
               (MRR Sold Rate - NiceHash Buy Order) / NiceHash Buy Order
             </div>
           </div>
           {isRented && (
-            <div style={{ fontSize: '10px', opacity: 0.7 }}>
+            <div style={{ fontSize: '9px', opacity: 0.7 }}>
               {formatRentalStartTime(rentalStartTime)}
             </div>
           )}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.9fr', gap: '8px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.85fr', gap: '6px' }}>
         <section style={sectionStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '6px', marginBottom: '4px' }}>
             {/* <div style={{ color: '#e2e8f0', fontWeight: 700 }}>Rental Snapshot</div> */}
-            <div style={{ fontSize: '9px', color: '#94a3b8' }}>{mrrDailyRateSource}</div>
+            <div style={{ fontSize: '8px', color: '#94a3b8' }}>{mrrDailyRateSource}</div>
           </div>
 
           <div style={{
-            marginBottom: '8px',
-            padding: '10px',
-            borderRadius: '12px',
+            marginBottom: '6px',
+            padding: '7px',
+            borderRadius: '10px',
             background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(16, 185, 129, 0.10))',
             border: '1px solid rgba(251, 191, 36, 0.20)'
           }}>
-            <div style={{ opacity: 0.72, textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.08em' }}>Actual Rental Paid</div>
-            <div style={{ color: '#fbbf24', fontWeight: 900, fontSize: '12px', lineHeight: 1.1, marginTop: '4px' }}>
+            <div style={{ opacity: 0.72, textTransform: 'uppercase', fontSize: '8px', letterSpacing: '0.08em' }}>Actual Rental Paid</div>
+            <div style={{ color: '#fbbf24', fontWeight: 900, fontSize: '11px', lineHeight: 1.1, marginTop: '3px' }}>
               {paidLabel || 'N/A'}
             </div>
             {paidBtcAmount > 0 && String(paidCurrency || '').toUpperCase() !== 'BTC' && (
-              <div style={{ color: '#86efac', fontWeight: 700, fontSize: '10px', marginTop: '4px' }}>
+              <div style={{ color: '#86efac', fontWeight: 700, fontSize: '9px', marginTop: '3px' }}>
                 ~= {paidBtcAmount.toFixed(8)} BTC
               </div>
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '6px', fontSize: '10px' }}>
-            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '5px', fontSize: '9px' }}>
+            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '6px' }}>
               <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>MRR Sold Rate</div>
               <div style={{ color: '#fbbf24', fontWeight: 800, marginTop: '3px' }}>
-                {mrrDailyRate > 0 ? `${mrrDailyRate.toFixed(8)} BTC/${mrrUnit}/Day` : 'N/A'}
+                {mrrDailyRate > 0 ? (
+                  <>
+                    {mrrDailyRate.toFixed(8)}
+                    <span style={{ opacity: 0.5 }}> BTC/{mrrUnit}/Day</span>
+                  </>
+                ) : 'N/A'}
               </div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px' }}>
+            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '6px' }}>
               <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>NiceHash Buy Order</div>
               <div style={{ color: '#60a5fa', fontWeight: 800, marginTop: '3px' }}>
-                {buyNhPriceWithFee > 0 ? `${buyNhPriceWithFee.toFixed(8)} BTC/${myNhUnit}/Day` : 'N/A'}
+                {buyNhPriceWithFee > 0 ? (
+                  <>
+                    {buyNhPriceWithFee.toFixed(8)}
+                    <span style={{ opacity: 0.5 }}> BTC/{myNhUnit}/Day</span>
+                  </>
+                ) : 'N/A'}
               </div>
             </div>
             
           </div>
 
-          <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#94a3b8' }}>
+          <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#94a3b8' }}>
             <span>Started: {formatRentalStartTime(rentalStartTime)}</span>
             <span>Remaining: <CountdownTimer endTime={info?.endTime || rig.end} /></span>
           </div>
         </section>
 
         <section style={sectionStyle}>
-          <div style={{ display: 'grid', gap: '8px' }}>
+          <div style={{ display: 'grid', gap: '6px' }}>
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '3px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', marginBottom: '2px' }}>
                 <span style={{ opacity: 0.55, textTransform: 'uppercase' }}>Efficiency</span>
                 <span style={{ color: effNum >= 100 ? '#22d3ee' : effNum > 90 ? '#10b981' : effNum > 70 ? '#fbbf24' : '#ef4444', fontWeight: 800 }}>{eff}%</span>
               </div>
-              <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
+              <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
                 <div style={{ width: `${Math.min(100, Math.max(0, effNum || 0))}%`, height: '100%', background: getRoiColor(effNum), borderRadius: '999px' }} />
               </div>
             </div>
 
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '3px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', marginBottom: '2px' }}>
                 <span style={{ opacity: 0.55, textTransform: 'uppercase' }}>Rental Progress</span>
                 <span style={{ color: timeProgress > 90 ? '#f87171' : '#8b5cf6', fontWeight: 800 }}>{timeProgress.toFixed(1)}%</span>
               </div>
-              <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
+              <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
                 <div style={{ width: `${Math.min(100, Math.max(0, timeProgress || 0))}%`, height: '100%', background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', borderRadius: '999px' }} />
               </div>
             </div>
@@ -350,26 +360,26 @@ const MrrRigCard = ({
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-              gap: '6px',
-              fontSize: '9px'
+              gap: '5px',
+              fontSize: '8px'
             }}>
-              <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px' }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '6px' }}>
                 <div style={{ opacity: 0.55, textTransform: 'uppercase' }}>Average</div>
                 <div style={{ color: '#e2e8f0', fontWeight: 700, marginTop: '3px' }}>{info?.average || '0 N/A'}</div>
               </div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px' }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '6px' }}>
                 <div style={{ opacity: 0.55, textTransform: 'uppercase' }}>Advertised</div>
                 <div style={{ color: '#e2e8f0', fontWeight: 700, marginTop: '3px' }}>{info?.advertised || '0 N/A'}</div>
               </div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px' }}>
+            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '6px' }}>
               <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>Efficiency</div>
               <div style={{ color: '#34d399', fontWeight: 800, marginTop: '3px' }}>{eff}%</div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px' }}>
+            <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '6px' }}>
               <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>Target</div>
               <div style={{ color: isBehind ? '#f87171' : '#34d399', fontWeight: 800, marginTop: '3px' }}>
-                {Math.max(0, targetHashrate).toFixed(2)} <small style={{ opacity: 0.7 }}>{String(hSuffix).toUpperCase()}</small>
+                {Math.max(0, targetHashrate).toFixed(2)} <small style={{ opacity: 0.5 }}>{String(hSuffix).toUpperCase()}</small>
               </div>
             </div>
           </div>

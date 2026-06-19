@@ -539,6 +539,24 @@ export async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
   const errors = [];
 
   const { ts: _t, client: _c, ...mrrQuery } = query || {};
+  const shouldFilterCurrent = !mrrQuery.history && !mrrQuery.includeInactive && !mrrQuery.all;
+
+  const parseRentalTime = (value) => {
+    if (!value) return 0;
+    if (typeof value === 'number') return value;
+    const raw = String(value);
+    const normalized = raw.endsWith('UTC') || raw.endsWith('Z') || raw.includes('+') ? raw : `${raw} UTC`;
+    const ts = new Date(normalized).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+  };
+
+  const isCurrentRental = (rental) => {
+    const statusRaw = rental?.status;
+    const status = String(typeof statusRaw === 'object' ? statusRaw.status : statusRaw || '').toLowerCase();
+    const rentedFlag = Boolean(statusRaw?.rented || rental?.rented);
+    const endTs = parseRentalTime(rental?.end || rental?.end_time || rental?.endTime || statusRaw?.end);
+    return (endTs > Date.now()) || rentedFlag || status.includes('rented') || status.includes('active') || status.includes('running');
+  };
 
   const fetchSingleAccount = async (clientName) => {
     const localRentals = [];
@@ -559,7 +577,9 @@ export async function fetchAggregatedRentals(query = {}, clientParam = 'BT') {
     }
 
     if (localRentals.length > 0) {
-      const uniqueList = Array.from(new Map(localRentals.map(r => [String(r.id), r])).values());
+      const uniqueListRaw = Array.from(new Map(localRentals.map(r => [String(r.id), r])).values());
+      const uniqueList = shouldFilterCurrent ? uniqueListRaw.filter(isCurrentRental) : uniqueListRaw;
+      if (uniqueList.length === 0) return [];
       uniqueList.forEach(r => r.mrrClient = clientName);
       
       const rentalIds = uniqueList.map(r => r.id).join(';');

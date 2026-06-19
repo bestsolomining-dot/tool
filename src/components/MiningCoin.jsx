@@ -35,7 +35,8 @@ const percentValue = (value) => {
 const normalizeKey = (algo) => normalizeAlgoForNiceHash(algo || '').toUpperCase();
 
 function normalizeMiningDutchRows(payload) {
-  const rows = Array.isArray(payload?.coinStats) ? payload.coinStats : [];
+  const source = payload?.miningpooldutch || payload || {};
+  const rows = Array.isArray(source?.coinStats) ? source.coinStats : [];
   return rows
     .map((row) => {
       const nicehashAlgo = normalizeKey(row.algorithm || row.algo);
@@ -55,7 +56,8 @@ function normalizeMiningDutchRows(payload) {
 }
 
 function normalizeHeroRows(payload) {
-  const rows = Array.isArray(payload?.coinStats) ? payload.coinStats : [];
+  const source = payload?.herominers_global || payload?.herominers || payload || {};
+  const rows = Array.isArray(source?.coinStats) ? source.coinStats : [];
   return rows
     .map((row) => {
       const nicehashAlgo = normalizeKey(row.algorithm || row.algo);
@@ -189,18 +191,28 @@ export default function MiningCoin({ onCall, nhClient = 'BT' }) {
     setError('');
 
     try {
-      const [hero, dutch] = await Promise.all([
+      const [heroResult, dutchResult] = await Promise.allSettled([
         fetchMiningStats('herominers_global', 'BT', null, null, 20000, force),
         fetchMiningStats('miningpooldutch', 'BT', null, null, 20000, force),
       ]);
 
-      setHeroStats(hero);
-      setDutchStats(dutch);
+      const hero = heroResult.status === 'fulfilled' ? heroResult.value : null;
+      const dutch = dutchResult.status === 'fulfilled' ? dutchResult.value : null;
+      const nextHero = hero || heroStats;
+      const nextDutch = dutch || dutchStats;
+
+      if (hero) setHeroStats(hero);
+      if (dutch) setDutchStats(dutch);
+
+      if (!hero && !dutch) {
+        throw new Error(heroResult.reason?.message || dutchResult.reason?.message || 'Failed to load mining coin profitability');
+      }
+
       setLastUpdated(new Date().toISOString());
 
       const algos = Array.from(new Set([
-        ...normalizeHeroRows(hero).map((row) => row.nicehashAlgo),
-        ...normalizeMiningDutchRows(dutch).map((row) => row.nicehashAlgo),
+        ...normalizeHeroRows(nextHero).map((row) => row.nicehashAlgo),
+        ...normalizeMiningDutchRows(nextDutch).map((row) => row.nicehashAlgo),
       ])).filter((algo) => algo && algo !== 'UNKNOWN');
 
       if (typeof onCall === 'function') {
@@ -223,7 +235,7 @@ export default function MiningCoin({ onCall, nhClient = 'BT' }) {
     } finally {
       setLoading(false);
     }
-  }, [nhClient, onCall]);
+  }, [heroStats, dutchStats, nhClient, onCall]);
 
   useEffect(() => {
     queueMicrotask(() => {

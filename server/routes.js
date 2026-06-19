@@ -285,6 +285,29 @@ export function registerRoutes(app) {
     res.json({ success: true, maxPrice, totalPaid: totalPaid.toFixed(8), count: matchingOrders.length, orders: matchingOrders });
   }));
 
+  app.get('/api/v2/hashpower/order/price', asyncHandler(async (req, res) => {
+    const clientParam = String(req.query.client || 'BT').toUpperCase();
+    const query = { ...req.query };
+    if (!query.ts) query.ts = Date.now().toString();
+
+    if (isAggregate(clientParam)) {
+      const nhAccounts = Object.keys(nhConfigs).filter(k => nhConfigs[k].apiKey && nhConfigs[k].apiSecret && !isAggregate(k));
+      for (const acct of nhAccounts) {
+        const { client, clientName } = resolveNhClient(acct);
+        if (!client || (acct !== 'BT' && clientName === 'BT')) continue;
+        try {
+          const data = await getNiceHashApp(client).hashpower.getOrderPrice(query);
+          if (data && !data.error) {
+            res.set('X-NH-Client', clientName);
+            return res.json(data);
+          }
+        } catch (e) { }
+      }
+    }
+
+    res.json(await req.nhApp.hashpower.getOrderPrice(query));
+  }));
+
   app.get('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => {
     const clientParam = String(req.query.client || 'BT').toUpperCase();
     if (isAggregate(clientParam)) {

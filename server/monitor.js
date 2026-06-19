@@ -928,11 +928,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
   const successfulAcctList = Array.from(new Set(successfulAccts));
 
-  if (currentActiveRentalIds.size > 0) {
-    const placeholders = Array.from(currentActiveRentalIds).map(() => '?').join(',');
+  if (currentActiveRentalIds.size > 0 && successfulAcctList.length > 0) {
+    const activePlaceholders = Array.from(currentActiveRentalIds).map(() => '?').join(',');
+    const clientPlaceholders = successfulAcctList.map(() => '?').join(',');
     await dbRunAsync(
-      `DELETE FROM rentals WHERE id NOT IN (${placeholders})`,
-      Array.from(currentActiveRentalIds)
+      `DELETE FROM rentals WHERE client IN (${clientPlaceholders}) AND id NOT IN (${activePlaceholders})`,
+      [...successfulAcctList, ...Array.from(currentActiveRentalIds)]
     ).catch((err) => console.warn(`[monitor:db] Failed to prune stale rentals: ${err.message}`));
   } else if (successfulAcctList.length > 0) {
     const placeholders = successfulAcctList.map(() => '?').join(',');

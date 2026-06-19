@@ -332,6 +332,13 @@ async function scrapeMiningDutchGlobal(force = false) {
     const htmlContent = await res.text();
     const $ = cheerio.load(htmlContent);
     const coinStats = [];
+
+    const pushUnique = (item) => {
+      if (!item?.algorithm) return;
+      const key = String(item.algorithm).trim().toLowerCase();
+      if (coinStats.some((row) => String(row.algorithm).trim().toLowerCase() === key)) return;
+      coinStats.push(item);
+    };
     
     const nowMiningTable = $('h4:contains("Currently Mining")').next('table');
     nowMiningTable.find('tbody > tr').each((i, el) => {
@@ -355,6 +362,33 @@ async function scrapeMiningDutchGlobal(force = false) {
         });
       }
     });
+
+    if (coinStats.length === 0) {
+      $('div[class]').each((_, el) => {
+        const root = $(el);
+        const title = root.find('strong').first().text().trim();
+        const buttonCount = root.find('button.btn.btn-info.btn-sm').length;
+        const metrics = root.find('h5').map((__, h) => $(h).text().replace(/\s+/g, ' ').trim()).get().filter(Boolean);
+        if (!title || !buttonCount || metrics.length === 0) return;
+
+        const slug = String(root.attr('class') || '').split(/\s+/)[0] || title;
+        const currentMetric = metrics[0] || '0';
+        const hashMetric = [...metrics].reverse().find((text) => /(?:EH|PH|TH|GH|MH|KH|H|SOL|hs)/i.test(text)) || metrics[metrics.length - 1] || 'N/A';
+        const coin = root.find('img[alt]').first().attr('alt') || title;
+        const percentMetric = metrics.find((text) => /%$/.test(text)) || '';
+
+        pushUnique({
+          algorithm: title,
+          coin,
+          miners: 0,
+          hashrate: hashMetric,
+          btcPerDay: Number.parseFloat(currentMetric) || 0,
+          usdPerDay: 0,
+          spread: percentMetric,
+          slug,
+        });
+      });
+    }
 
     coinStats.forEach(stat => {
       const btcPrice = coinPrices?.bitcoin?.btc || 1;

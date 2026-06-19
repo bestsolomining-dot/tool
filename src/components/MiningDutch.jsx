@@ -5,12 +5,45 @@ function parseMiningDutchHtml(html) {
   if (!html) return [];
 
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  const heading = Array.from(doc.querySelectorAll('h1, h2, h3, h4, h5, h6'))
-    .find((node) => /currently mining/i.test(node.textContent || ''));
-  const table = heading?.nextElementSibling?.tagName === 'TABLE'
-    ? heading.nextElementSibling
-    : heading?.parentElement?.querySelector('table');
+  const candidates = [];
 
+  doc.querySelectorAll('div[class]').forEach((node) => {
+    const className = (node.getAttribute('class') || '').trim();
+    const title = node.querySelector('strong')?.textContent?.trim();
+    const buttons = node.querySelectorAll('button.btn.btn-info.btn-sm');
+    const metrics = Array.from(node.querySelectorAll('h5'))
+      .map((h) => (h.textContent || '').replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+
+    if (!className || !title || buttons.length === 0 || metrics.length === 0) return;
+
+    const currentMetric = metrics[0] || '0';
+    const spreadMetric = metrics.find((text) => /%$/.test(text)) || '';
+    const hashrateMetric = [...metrics].reverse().find((text) => /(?:EH|PH|TH|GH|MH|KH|H|SOL|hs)/i.test(text)) || metrics[metrics.length - 1] || 'N/A';
+    const coin = node.querySelector('img[alt]')?.getAttribute('alt') || title;
+
+    candidates.push({
+      algorithm: title,
+      coin,
+      miners: '0',
+      btcPerDay: currentMetric,
+      usdPerDay: 0,
+      hashrate: hashrateMetric,
+      spread: spreadMetric,
+      slug: className.split(/\s+/)[0] || title,
+    });
+  });
+
+  if (candidates.length > 0) {
+    const unique = new Map();
+    candidates.forEach((item) => {
+      const key = String(item.slug || item.algorithm).toLowerCase();
+      if (!unique.has(key)) unique.set(key, item);
+    });
+    return Array.from(unique.values());
+  }
+
+  const table = doc.querySelector('#table_list, #poolloader table, table');
   if (!table) return [];
 
   return Array.from(table.querySelectorAll('tbody tr')).map((row) => {

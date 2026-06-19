@@ -1,5 +1,5 @@
 // NiceHash.jsx
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import Accounting from './Accounting';
 import { normalizeAlgoForNiceHash } from '../core/mapping.js';
 import { useRentedRigs } from './RentedRigContext';
@@ -244,12 +244,12 @@ export default function MiningRigNiceHash({ onCall, output, algorithm, market, n
             const showSeparator = isInactive && prevOrder && (prevOrder.status?.code || prevOrder.status) === 'ACTIVE';
 
             return (
-              <>
+              <React.Fragment key={id || `${label}-${index}`}>
                 {showSeparator && <option disabled>--- Recent Inactive ---</option>}
                 <option key={id || `${label}-${index}`} value={id}>
                   {label}{statusCode ? ` [${statusCode}]` : ''}{clientSuffix}
                 </option>
-              </>
+              </React.Fragment>
             );
           })}
         </select>

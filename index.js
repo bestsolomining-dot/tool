@@ -173,7 +173,7 @@ async function scrapeHeroMinersGlobal(force = false) {
     const htmlContent = await res.text();
     const $ = cheerio.load(htmlContent);
     const coinStats = [];
-    $('div.table-responsive > table > tbody > tr').each((i, el) => {
+    $('div.table-responsive > table.table-hover > tbody > tr').each((i, el) => {
       const tds = $(el).find('td');
       if (tds.length < 8) return;
       coinStats.push({

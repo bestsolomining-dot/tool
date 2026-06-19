@@ -58,7 +58,7 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
     try {
       // Fetch orders from NiceHash
       const data = await callApi('/api/v2/hashpower/myOrders', {
-        query: { op: 'LE', limit: 1000, client: nhClient },
+        query: { op: 'LE', limit: 100, client: nhClient },
         silent: true
       });
 
@@ -115,53 +115,19 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
         };
       });
 
-      // Get unique algorithm+market combinations
-      const priceKeys = [...new Set(tempProcessed.map(p => `${p.algo}:${p.market}`))];
-      const priceLookupClient = (nhClient === 'VN' || !nhClient) ? 'BT' : nhClient;
-
-      // Fetch market prices for all unique combos
-      const newMarketPrices = {};
-      await Promise.all(priceKeys.map(async (key) => {
-        const [algoName, marketName] = key.split(':');
-        if (!algoName) return;
-        try {
-          newMarketPrices[key] = await fetchMarketPrice(callApi, algoName, marketName, priceLookupClient);
-        } catch (e) {
-          newMarketPrices[key] = { value: 0, unit: 'TH' };
-        }
-      }));
-      setMarketPrices(newMarketPrices);
-
       // Process with market data
       const processed = tempProcessed.map(p => {
-        const nhAlgo = normalizeAlgoForNiceHash(p.algo);
-        const mktData = newMarketPrices[`${p.algo}:${p.market}`] || { value: 0, unit: getAlgorithmUnit(nhAlgo) };
-        
-        const cur = parseFloat(p.price) || 0;
-        const curUnit = getAlgorithmUnit(nhAlgo); // Use the centralized mapping for algorithm units
-        const mkt = mktData.value;
-
-        // Calculate price difference
-        let diff = null;
-        if (mkt > 0 && cur > 0) {
-          try {
-            diff = calculatePriceComparison(
-              cur,       // Your order price
-              curUnit,   // Your order price unit
-              mkt,       // Market benchmark price
-              mktData.unit, // Market benchmark unit
-              false      // isMrrVsNh = false
-            );
-          } catch (e) {
-            console.warn('Error calculating price comparison:', e);
-          }
-        }
+        // The server now provides marketPrice, marketUnit, and orderDiff directly
+        // in the rawOrder object if available.
+        const marketPrice = p.rawOrder?.marketPrice || 0;
+        const marketUnit = p.rawOrder?.marketUnit || getAlgorithmUnit(normalizeAlgoForNiceHash(p.algo));
+        const orderDiff = p.rawOrder?.orderDiff || null;
 
         return { 
           ...p, 
-          marketPrice: mkt, 
-          marketUnit: mktData.unit, 
-          orderDiff: diff 
+          marketPrice, 
+          marketUnit, 
+          orderDiff
         };
       }).sort((a, b) => parseFloat(b.speed || 0) - parseFloat(a.speed || 0));
 

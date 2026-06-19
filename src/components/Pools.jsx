@@ -1075,7 +1075,7 @@ export default function Pools({ onCall, poolData, niceHashData, mrrClient, setMr
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                         <button 
-                          className="text-button" 
+                          className="btn-pro secondary" 
                           style={{ color: '#10b981' }} 
                           onClick={() => {
                             setSelected(pool);

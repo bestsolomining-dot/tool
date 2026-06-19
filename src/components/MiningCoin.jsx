@@ -389,7 +389,7 @@ function SummaryTile({ label, value, tone }) {
   );
 }
 
-function HeaderCell({ children, align = 'right' }) {
+export function HeaderCell({ children, align = 'right' }) {
   return (
     <th style={{ padding: '9px 10px', textAlign: align, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
       {children}
@@ -397,7 +397,7 @@ function HeaderCell({ children, align = 'right' }) {
   );
 }
 
-function BodyCell({ children, align = 'right' }) {
+export function BodyCell({ children, align = 'right' }) {
   return (
     <td style={{ padding: '10px', textAlign: align, verticalAlign: 'top', color: '#cbd5e1' }}>
       {children}

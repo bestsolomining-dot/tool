@@ -153,7 +153,7 @@ export default function MiningDutch({ onCall }) {
           </div>
         </div>
         <button
-          className="text-button"
+          className="btn-pro secondary"
           onClick={() => void loadData(true)}
           disabled={loading}
           style={{

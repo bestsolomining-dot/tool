@@ -163,7 +163,7 @@ export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
           </label>
 
           <button
-            className="text-button"
+            className="btn-pro secondary"
             onClick={refreshData}
             disabled={loading}
             style={{

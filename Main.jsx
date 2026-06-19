@@ -344,7 +344,7 @@ export default function App() {
               </span>
             </div>
             <div style={{ marginTop: '10px' }}>
-              <button className="text-button" onClick={handleLogout} style={{ fontSize: '10px' }}>Logout</button>
+              <button className="btn-pro secondary" onClick={handleLogout} style={{ fontSize: '10px' }}>Logout</button>
             </div>
           </div>
         </div>

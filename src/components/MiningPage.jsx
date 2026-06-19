@@ -1,7 +1,8 @@
 import HeroMinersCard from './HeroMinersCard';
-import MiningCoin from './MiningCoin.jsx';
+import MiningCoin, { HeaderCell, BodyCell } from './MiningCoin.jsx';
+import TelegramManager from './TelegramManager.jsx';
 import { RentedRigProvider } from './RentedRigContext.jsx';
-import { MiningWorkspaceProvider, useMiningWorkspace } from './MiningWorkspaceProvider.jsx';
+import { MiningWorkspaceProvider, useMiningWorkspace } from './MiningWorkspaceProvider';
 import { btcValue, compactNumber, percentValue } from './miningWorkspaceData';
 
 function StatCard({ label, value, accent }) {
@@ -336,6 +337,10 @@ function MiningWorkspaceShell({ onNavigateHome, onCall, nhClient }) {
         }}>
           <MiningCoin onCall={onCall} nhClient={nhClient} />
         </aside>
+      </section>
+
+      <section style={{ marginTop: '18px' }}>
+        <TelegramManager onCall={onCall} mrrClient="VN" />
       </section>
     </div>
   );

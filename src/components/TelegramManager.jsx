@@ -123,7 +123,7 @@ export function useTelegram(onCall, mrrClient) {
     const roi = Number.isFinite(rawRoi) ? rawRoi.toFixed(1) : '0.0';
     const progress = totalMs > 0 ? Math.floor((elapsedMs / totalMs) * 100) : 0;
     const avg = Number.isFinite(parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0)) ? parseFloat(r.hashrate?.average?.hash || r.hashrate?.average || 0) : 0;
-    const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || '';
+    const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || r.hashrate?.unit || '';
     const paid = getPaidAmount(r);
 
     const msg = TelegramTemplates.manualNotice(r, account, avg, suffix, roi, remStr, progress, paid);

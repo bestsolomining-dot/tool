@@ -91,8 +91,8 @@ export default function VerificationResults({
                 {pending ? 'Waiting...' : ph.getVerifyMessage(item.result)}
               </div>
               <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                <button className="text-button" style={{ fontSize: '11px' }} onClick={() => setInspectData(item.result)}>Inspect</button>
-                <button className="text-button" style={{ fontSize: '11px' }} onClick={() => openPoolEditor(item)}>Edit</button>
+                <button className="btn-pro secondary" style={{ fontSize: '11px' }} onClick={() => setInspectData(item.result)}>Inspect</button>
+                <button className="btn-pro secondary" style={{ fontSize: '11px' }} onClick={() => openPoolEditor(item)}>Edit</button>
               </div>
             </div>
           );

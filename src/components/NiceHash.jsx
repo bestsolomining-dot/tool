@@ -349,7 +349,7 @@ export default function MiningRigNiceHash({ onCall, algorithm, nhClient, setNhCl
         <div className="order-detail-ui" style={{ marginTop: '20px', padding: '15px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h4 style={{ margin: 0, color: '#3b82f6', fontSize: '14px' }}>Order Info</h4>
-            <button className="text-button" style={{ fontSize: '11px' }} onClick={() => setOrderDetail(null)}>Close Info</button>
+            <button className="btn-pro secondary" style={{ fontSize: '11px' }} onClick={() => setOrderDetail(null)}>Close Info</button>
           </div>
           
           {/* Account Info */}
@@ -448,7 +448,7 @@ export default function MiningRigNiceHash({ onCall, algorithm, nhClient, setNhCl
         <div className="local-orders-list" style={{ marginTop: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <h4 style={{ margin: '1px', fontSize: '13px', opacity: 0.8 }}>My Orders List</h4>
-            <button className="text-button" style={{ fontSize: '10px' }} onClick={refreshSummary}>Refresh All</button>
+            <button className="btn-pro secondary" style={{ fontSize: '10px' }} onClick={refreshSummary}>Refresh All</button>
           </div>
           <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px' }}>
             <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse', textAlign: 'left' }}>

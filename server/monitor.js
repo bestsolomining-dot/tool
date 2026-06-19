@@ -600,8 +600,8 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
       const soldRentalsRaw = extractArray(soldRes.data || {}).map(r => ({ ...r, __rentalSide: 'sold' }));
       const boughtRentalsRaw = extractArray(boughtRes.data || {}).map(r => ({ ...r, __rentalSide: 'bought' }));
-      const allRentalsRaw = soldRentalsRaw;
-
+      // Correctly combine both bought and sold rentals for a complete picture.
+      const allRentalsRaw = [...boughtRentalsRaw, ...soldRentalsRaw];
       console.log(`[monitor:${acct}] rentals fetched: sold=${soldRentalsRaw.length}, bought=${boughtRentalsRaw.length}, rig-rented-flags=${harvestedRentalIds.size}`);
 
       if (boughtRentalsRaw.length > 0) {

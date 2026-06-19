@@ -188,10 +188,10 @@ function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
                 </td>
                 <td style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                    <button className="text-button" onClick={() => onOpenPools?.(r)} style={{ fontSize: '11px' }}>
+                    <button className="btn-pro secondary" onClick={() => onOpenPools?.(r)} style={{ fontSize: '11px' }}>
                       Pools
                     </button>
-                    <button className="text-button" onClick={() => onNotice?.(r, target)} style={{ fontSize: '11px', color: '#24A1DE' }}>
+                    <button className="btn-pro secondary" onClick={() => onNotice?.(r, target)} style={{ fontSize: '11px', color: '#24A1DE' }}>
                       Notice
                     </button>
                   </div>
@@ -301,8 +301,14 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
     try {
       const result = await onCall('/api/v2/mrr/rentals', { query: { client: mrrClient }, silent: true });
       if (result?.success) {
-        const newList = extractArray(result);
+        const rawList = extractArray(result);
         const now = Date.now();
+
+        // Filter for genuinely active rentals before processing
+        const newList = rawList.filter(r => {
+          const endTs = toUtcTimestamp(r.end || r.end_time);
+          return endTs > now;
+        });
 
         // Detect new rentals
         const fresh = newList.find(r => {

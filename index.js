@@ -96,20 +96,17 @@ function initDatabase() {
 }
 
 async function cleanAllCache() {
-  console.info('[init] Wiping persistent state for fresh start...');
+  console.info('[init] Wiping persistent cache for fresh start...');
   try {
     await new Promise((resolve, reject) => {
-      dbInstance.serialize(() => {
-        dbInstance.run("DELETE FROM rentals", (err) => {
-          if (err) console.warn(`[db] Failed to clear rentals: ${err.message}`);
-          resolve();
-        });
+      dbInstance.run("DELETE FROM stats_cache", (err) => {
+        if (err) return reject(err);
+        console.info('✨ Persistent cache (stats_cache) cleared.');
+        resolve();
       });
     });
-
-    console.info('✨ System state initialized (Cache & DB cleared).');
   } catch (err) {
-    console.error(`[init] Failed to clean cache: ${err.message}`);
+    console.error(`[init] Failed to clean persistent cache: ${err.message}`);
   }
 }
 
@@ -500,6 +497,7 @@ app.get('/api/v2/mining-dutch/html', async (req, res) => {
 async function startServer() {
   try {
     await initDatabase();
+    await cleanAllCache(); // Clean cache before loading anything
     await initMiningTrainingDb();
     await loadStats();
     await migrateOldCsvToDb(); // Run the migration after DB is initialized

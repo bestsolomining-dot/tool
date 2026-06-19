@@ -253,10 +253,10 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
               <h3 style={{ margin: 0, fontSize: '1rem', color: '#60a5fa' }}>{rig.name || (rig.isProfile ? 'Pool Profile' : 'Rig')} (ID: {rig.rigid || rig.id})</h3>
               {!rig.isProfile && (
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <button className="text-button" style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold' }} onClick={() => runWebSocketFetch('all', rig)}>Fetch All</button>
-                  <button className="text-button" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => runWebSocketFetch('herominers', rig)}>HM Stats</button>
-                  <button className="text-button" style={{ fontSize: '10px', color: '#34d399' }} onClick={() => runWebSocketFetch('herominers', rig)}>HM Global</button>
-                  <button className="text-button" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => runWebSocketFetch('miningpooldutch', rig)}>Fetch MiningPoolDutch</button>
+                  <button className="btn-pro secondary" style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold' }} onClick={() => runWebSocketFetch('all', rig)}>Fetch All</button>
+                  <button className="btn-pro secondary" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => runWebSocketFetch('herominers', rig)}>HM Stats</button>
+                  <button className="btn-pro secondary" style={{ fontSize: '10px', color: '#34d399' }} onClick={() => runWebSocketFetch('herominers', rig)}>HM Global</button>
+                  <button className="btn-pro secondary" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => runWebSocketFetch('miningpooldutch', rig)}>Fetch MiningPoolDutch</button>
                   <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.1)', margin: '0 5px' }}></div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <label style={{ fontSize: '10px', opacity: 0.6 }}>Price:</label>
@@ -269,7 +269,7 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
                     />
                   </div>
                   <button 
-                    className="text-button" 
+                    className="btn-pro secondary" 
                     style={{ color: rig.status === 'disabled' ? '#10b981' : '#f87171', fontSize: '11px' }}
                     onClick={() => updateRigConfig(rig.rigid || rig.id, { status: rig.status === 'disabled' ? 'available' : 'disabled' })}
                   >

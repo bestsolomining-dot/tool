@@ -316,7 +316,7 @@ const MrrRigCard = ({
               </div>
             </div>
             <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '6px' }}>
-              <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>NiceHash Buy Order</div>
+              <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>NiceHash</div>
               <div style={{ color: '#60a5fa', fontWeight: 800, marginTop: '3px' }}>
                 {buyNhPriceWithFee > 0 ? (
                   <>

@@ -91,8 +91,11 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
     const activeRentalLines = rigs
       .filter(rig => {
+        const endT = rig.end ? new Date(rig.end + (String(rig.end).endsWith('UTC') ? '' : ' UTC')).getTime() : 0;
+        const hasFutureEnd = endT > Date.now();
         const s = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
-        return s.includes('rented') || s.includes('active');
+        const isActiveStatus = s.includes('rented') || s.includes('active');
+        return isActiveStatus && hasFutureEnd;
       })
       .map(rig => {
         const info = enrichedInfo[rig.id];
@@ -120,7 +123,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         const elapsedMs = Math.max(0, Math.min(Date.now() - startT, totalMs));
         const rawCalcTarget = (remainingMs > 0 && totalMs > 0) ? ((ads * (totalMs / 1000) - avg * (elapsedMs / 1000)) / (remainingMs / 1000)) : 0;
         const rawTarget = info?.targetHashrate || rawCalcTarget || 0;
-        const target = Number.isFinite(parseFloat(rawTarget)) ? parseFloat(rawTarget) : 0;
+        const target = Number.isFinite(parseFloat(rawTarget)) ? parseFloat(rawTarget) : 0; // Ensure target is always a number
 
         const remaining = info?.remainingTimeStr || (info?.endTime ? calculateRemainingTime(info.endTime) : (rig.end ? calculateRemainingTime(rig.end) : ''));
         const account = rig.mrrClient || rig.client || mrrClient || 'ALL';
@@ -322,7 +325,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         : `/api/v2/mrr/rig/${encodeURIComponent(rigId || rig.id)}/info`;
 
       const data = await onCall(path, {
-        query: { client: effectiveClient },
+        query: { client: rig.mrrClient || mrrClient },
         silent: true,
         background: true // Use background mode to avoid interrupting the user
       });
@@ -386,7 +389,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
   useEffect(() => {
     if (mrrClient && endpoint) {
-      setEnrichedInfo({}); // Only clear cache when context (client/endpoint) actually changes
+      setEnrichedInfo({}); // Always clear cache when context (client/endpoint) actually changes
       fetchRigs();
     }
   }, [mrrClient, endpoint]);
@@ -563,10 +566,10 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                     <span style={{ fontSize: '10px', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: '10px', opacity: 0.7 }}>{rigsInGroup.length} Rigs</span>
                     {rigsInGroup.some(r => userRigIds.has(String(r.id))) && (
                       <div style={{ display: 'flex', gap: '8px', marginLeft: '10px' }} onClick={e => e.stopPropagation()}>
-                        <button className="text-button" style={{ fontSize: '10px', color: '#10b981', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'available')}>
+                        <button className="btn-pro secondary" style={{ fontSize: '10px', color: '#10b981', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'available')}>
                           Enable All
                         </button>
-                        {/* <button className="text-button" style={{ fontSize: '10px', color: '#f87171', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'disabled')}>
+                        {/* <button className="btn-pro secondary" style={{ fontSize: '10px', color: '#f87171', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'disabled')}>
                           Disable All
                         </button> */}
                       </div>
@@ -592,7 +595,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                         mrrClient={mrrClient}
                         nhOrders={nhOrders}
                         algoMarketPrices={algoMarketPrices}
-                        coinPrices={coinPrices}
+                        coinPrices={coinPrices} // Pass coin prices down to the card
                         onOpenPool={onOpenPool}
                         // onOpenCompletionCalculator={onOpenCompletionCalculator}
                         fetchRigDetailInfo={fetchRigDetailInfo}

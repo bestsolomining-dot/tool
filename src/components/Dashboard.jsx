@@ -37,24 +37,24 @@ export default function Dashboard({
               </span>
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
-              <button className="text-button" onClick={forceCheckStatus} style={{ fontSize: '10px' }}>
+              <button className="btn-pro secondary" onClick={forceCheckStatus} style={{ fontSize: '10px' }}>
                 Force Check
               </button>
-              <button className="text-button" onClick={() => dispatch({ type: 'SET_DEBUG_MODAL', payload: true })} style={{ fontSize: '10px' }}>
+              <button className="btn-pro secondary" onClick={() => dispatch({ type: 'SET_DEBUG_MODAL', payload: true })} style={{ fontSize: '10px' }}>
                 Debug Logs
               </button>
-              <button className="text-button" onClick={handleLogout} style={{ fontSize: '10px' }}>
+              <button className="btn-pro secondary" onClick={handleLogout} style={{ fontSize: '10px' }}>
                 Logout
               </button>
               <button
-                className="text-button"
+                className="btn-pro secondary"
                 onClick={() => dispatch({ type: 'SET_CALCULATOR_MODAL', payload: true })}
                 style={{ fontSize: '10px' }}
               >
                 Calculator
               </button>
           <button
-            className="text-button"
+            className="btn-pro secondary"
             onClick={() => {
               window.history.pushState({}, '', '/cryptorate');
               dispatch({ type: 'SET_VIEW', payload: 'cryptorate' });
@@ -64,7 +64,7 @@ export default function Dashboard({
             Live Rates
           </button>
           <button
-            className="text-button"
+            className="btn-pro secondary"
             onClick={() => {
               window.history.pushState({}, '', '/mining');
               window.dispatchEvent(new PopStateEvent('popstate'));

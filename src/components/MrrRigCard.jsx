@@ -127,8 +127,9 @@ const MrrRigCard = ({
   const mrrUnit = getMrrAlgorithmUnit(rawAlgo);
   const advertisedUnit = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || info?.hashrate?.suffix || info?.hashrate_unit || info?.unit || mrrUnit;
   const adsInMrrUnit = adsVal > 0 ? convertHashrateValue(adsVal, advertisedUnit, mrrUnit) : 0;
-  const mrrDailyRate = paidBtcAmount > 0 && adsInMrrUnit > 0 && durationHours > 0
-    ? paidBtcAmount / (durationHours / 24) / adsInMrrUnit
+  const durationDays = durationHours > 0 ? durationHours / 24 : 0;
+  const mrrDailyRate = paidBtcAmount > 0 && adsInMrrUnit > 0 && durationDays > 0 
+    ? (paidBtcAmount / durationDays) / adsInMrrUnit
     : 0;
   const mrrDailyRateSource = paidBtcAmount > 0 ? 'Calculated from MRR sold rental' : 'Waiting for paid BTC conversion';
   const roiFormulaLabel = 'MRR Sold Rate vs NiceHash Buy Order';

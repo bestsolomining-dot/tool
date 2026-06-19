@@ -12,7 +12,7 @@ function Sparkline({ data, width = 120, height = 40, color = '#60a5fa' }) {
   if (!data || !Array.isArray(data) || data.length < 2) {
     return (
       <div style={{ width, height, background: 'rgba(255,255,255,0.02)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: '8px', opacity: 0.2, fontWeight: 'bold', letterSpacing: '0.1em' }}>NO HISTORY</span>
+        {/* <span style={{ fontSize: '8px', opacity: 0.2, fontWeight: 'bold', letterSpacing: '0.1em' }}>NO HISTORY</span> */}
       </div>
     );
   }
@@ -202,104 +202,140 @@ export default function CryptoRatePage({ onCall }) {
   }, [prices, amounts, baseCoin]);
 
   return (
-    <div className="crypto-rate-page" style={{ padding: '16px 12px', color: '#f8fafc', background: '#0f172a', minHeight: '100vh', fontFamily: 'sans-serif' }}>
-      <header style={{ maxWidth: '1000px', margin: '0 auto 24px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '1.6rem', fontWeight: '800', letterSpacing: '-0.02em' }}>
-            LIVE <span style={{ color: '#60a5fa' }}>CONVERTER</span>
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: wsStatus === 'connected' ? '#10b981' : '#f59e0b', boxShadow: wsStatus === 'connected' ? '0 0 6px #10b981' : 'none' }}></div>
-            <p style={{ margin: 0, opacity: 0.6, fontSize: '0.65rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              {wsStatus === 'connected' ? 'Stream Active' : 'Polling fallback'}
-            </p>
-          </div>
-        </div>
-      </header>
+    <div className="crypto-rate-page" style={{
+      padding: '10px 14px',
+      color: '#f8fafc',
+      background: 'transparent',
+      fontFamily: 'sans-serif',
+      maxWidth: '100%',
+      overflow: 'hidden',
+      boxSizing: 'border-box'
+    }}>
 
-      {/* Reference USD - compact */}
-      <div style={{ maxWidth: '1000px', margin: '0 auto 24px', background: 'rgba(30, 41, 59, 0.5)', padding: '12px 20px', borderRadius: '16px', border: '1px solid rgba(96, 165, 250, 0.2)' }}>
-        <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.15em', display: 'block', marginBottom: '4px' }}>
-          Reference Value (USD)
-        </label>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <span style={{ position: 'absolute', left: '0', fontSize: '2rem', fontWeight: '300', opacity: 0.3 }}>$</span>
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '8px',
+        marginBottom: '12px',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        paddingBottom: '8px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '1rem', fontWeight: '800' }}>
+            LIVE <span style={{ color: '#60a5fa' }}>CONVERTER</span>
+          </span>
+          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: wsStatus === 'connected' ? '#10b981' : '#f59e0b' }}></div>
+          <span style={{ opacity: 0.4, fontSize: '0.6rem', fontWeight: '600', textTransform: 'uppercase' }}>
+            {wsStatus === 'connected' ? 'LIVE' : 'POLLING'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.6rem', color: '#60a5fa', fontWeight: '700' }}>USD</span>
           <input
             type="number"
             value={baseCoin === 'usd' ? amounts.usd : (results[0]?.usdValue || 0).toFixed(2)}
             onChange={(e) => onValueChange('usd', e.target.value)}
             style={{
-              width: '100%',
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
+              width: '80px',
+              background: 'rgba(30,41,59,0.3)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '0.75rem',
               color: '#fff',
-              fontSize: '2.2rem',
-              fontWeight: '700',
-              padding: '4px 4px 4px 28px',
               fontFamily: 'monospace',
-              letterSpacing: '-0.03em'
+              outline: 'none',
+              textAlign: 'right'
             }}
-            placeholder="0.00"
+            placeholder="0"
           />
+          <button onClick={() => { }} style={{
+            background: 'rgba(96,165,250,0.08)',
+            border: '1px solid rgba(96,165,250,0.1)',
+            borderRadius: '4px',
+            padding: '4px 10px',
+            color: '#60a5fa',
+            fontSize: '0.6rem',
+            fontWeight: '600',
+            cursor: 'pointer',
+            fontFamily: 'sans-serif',
+            whiteSpace: 'nowrap'
+          }}>⟳ Refresh</button>
         </div>
       </div>
 
-      {/* Coin grid - tighter */}
-      <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+      {/* Square Grid - No History */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+        gap: '8px'
+      }}>
         {results.map(coin => (
           <div key={coin.id} style={{
-            background: baseCoin === coin.id ? 'rgba(96, 165, 250, 0.08)' : 'rgba(30, 41, 59, 0.3)',
-            border: baseCoin === coin.id ? '1px solid #60a5fa' : '1px solid rgba(255,255,255,0.05)',
-            borderRadius: '16px',
-            padding: '12px',
+            aspectRatio: '1 / 1',
+            background: baseCoin === coin.id ? 'rgba(96,165,250,0.06)' : 'rgba(30,41,59,0.12)',
+            border: baseCoin === coin.id ? '1px solid rgba(96,165,250,0.15)' : '1px solid rgba(255,255,255,0.03)',
+            borderRadius: '10px',
+            padding: '14px 12px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
             transition: 'all 0.2s ease'
           }}>
-            {/* Decorative symbol */}
-            <div style={{ position: 'absolute', top: '-5px', right: '-5px', fontSize: '3rem', fontWeight: '900', opacity: 0.03, pointerEvents: 'none' }}>{coin.symbol}</div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontWeight: 'bold', color: '#60a5fa', letterSpacing: '0.05em', fontSize: '0.7rem' }}>{coin.name.toUpperCase()}</span>
-              <span style={{ color: coin.change >= 0 ? '#10b981' : '#f87171', fontWeight: 'bold', fontSize: '0.8rem' }}>
-                {coin.change >= 0 ? '▲' : '▼'} {Math.abs(coin.change).toFixed(2)}%
+            {/* Symbol + Change */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: '700', color: '#60a5fa', fontSize: '0.85rem' }}>
+                {coin.symbol}
+              </span>
+              <span style={{
+                color: coin.change >= 0 ? '#10b981' : '#f87171',
+                fontWeight: '600',
+                fontSize: '0.75rem'
+              }}>
+                {coin.change >= 0 ? '▲' : '▼'} {Math.abs(coin.change).toFixed(1)}%
               </span>
             </div>
 
-            {/* Sparkline - smaller */}
-            <div style={{ marginBottom: '8px', height: '40px' }}>
-              <Sparkline data={coin.history} color={coin.change >= 0 ? '#10b981' : '#f87171'} height={40} />
+            {/* Amount Input */}
+            <div style={{ margin: '8px 0' }}>
+              <input
+                type="number"
+                value={baseCoin === coin.id ? amounts[coin.id] : (coin.calculated > 0 ? coin.calculated.toFixed(6) : "0.000000")}
+                onChange={(e) => onValueChange(coin.id, e.target.value)}
+                style={{
+                  width: '100%',
+                  background: 'rgba(0,0,0,0.25)',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  borderRadius: '6px',
+                  padding: '6px 8px',
+                  fontSize: '0.8rem',
+                  color: '#fff',
+                  fontFamily: 'monospace',
+                  outline: 'none',
+                  textAlign: 'center',
+                  boxSizing: 'border-box'
+                }}
+              />
             </div>
 
-            {/* Input */}
-            <input
-              type="number"
-              value={baseCoin === coin.id ? amounts[coin.id] : (coin.calculated > 0 ? coin.calculated.toFixed(8) : "0.00000000")}
-              onChange={(e) => onValueChange(coin.id, e.target.value)}
-              style={{
-                width: '100%',
-                background: 'rgba(0,0,0,0.3)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '8px',
-                padding: '6px 8px',
-                fontSize: '0.85rem',
-                color: '#fff',
-                fontFamily: 'monospace',
-                outline: 'none',
-                textAlign: 'right',
-                fontWeight: '500'
-              }}
-            />
-
-            {/* Price info */}
-            <div style={{ fontSize: '0.7rem', fontWeight: '500', fontFamily: 'monospace', color: 'rgba(255,255,255,0.4)', textAlign: 'right', marginTop: '6px' }}>
-              {loading && !prices ? '...' : `1 ${coin.symbol} = $${coin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            {/* Price */}
+            <div style={{
+              fontSize: '0.75rem',
+              fontFamily: 'monospace',
+              color: 'rgba(255,255,255,0.35)',
+              textAlign: 'center'
+            }}>
+              $ {coin.price.toFixed(2)}
             </div>
           </div>
         ))}
       </div>
 
       {error && (
-        <div style={{ maxWidth: '1000px', margin: '16px auto', padding: '10px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', textAlign: 'center', fontSize: '0.8rem' }}>
+        <div style={{ fontSize: '0.75rem', color: '#f87171', textAlign: 'center', marginTop: '10px' }}>
           {error}
         </div>
       )}

@@ -91,6 +91,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
     const activeRentalLines = rigs
       .filter(rig => {
+        const info = enrichedInfo[rig.id] || {};
+        const rawAds = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0;
+        if (!info || rawAds <= 0) return false; // Ensure we have details and valid hashrate before including
         const endT = rig.end ? new Date(rig.end + (String(rig.end).endsWith('UTC') ? '' : ' UTC')).getTime() : 0;
         const hasFutureEnd = endT > Date.now();
         const s = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
@@ -594,10 +597,9 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                         isMine={rig.id && userRigIds.has(String(rig.id))}
                         mrrClient={mrrClient}
                         nhOrders={nhOrders}
-                        algoMarketPrices={algoMarketPrices}
+                        coinPrices={coinPrices}
                         coinPrices={coinPrices} // Pass coin prices down to the card
                         onOpenPool={onOpenPool}
-                        // onOpenCompletionCalculator={onOpenCompletionCalculator}
                         fetchRigDetailInfo={fetchRigDetailInfo}
                         loadingInfoIds={loadingInfoIds}
                         handleRigStatus={handleRigStatus}

@@ -2,6 +2,13 @@ import { useCallback, useMemo, useState, useEffect } from 'react';
 import MonitorDbEditor from './MonitorDbEditor';
 import { TelegramTemplates } from '../core/telegram.js';
 
+function decodeHtmlEntities(text) {
+  if (typeof text !== 'string') return text;
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
 function getTelegramAccount(r, mrrClient) {
   const account = r?.mrrClient || r?.client || r?.account || mrrClient;
   if (!account) return 'N/A';
@@ -92,7 +99,7 @@ export function useTelegram(onCall, mrrClient) {
     const currency = r?.price?.currency || r?.currency || 'BTC';
     const paidValue = String(paid).replace(new RegExp(`\\s*${currency}\\s*$`, 'i'), '');
     const ads = r.hashrate?.advertised?.nice || r.hashrate?.advertised?.hash || r.advertised || 'N/A';
-    const info = { price: { paid: paidValue, currency } };
+    const info = { price: { paid: paidValue, currency }, name: decodeHtmlEntities(r.name) };
     const algo = r?.rig?.type || r?.algorithm || r?.algo || r?.type || 'N/A';
     const msg = TelegramTemplates.completionSuccess(account, r, info, efficiency, ads, avg, suffix, algo);
     return sendTelegram(msg, { silent: true });
@@ -126,7 +133,7 @@ export function useTelegram(onCall, mrrClient) {
     const suffix = r.hashrate?.suffix || r.hashrate?.advertised?.type || r.hashrate?.unit || '';
     const paid = getPaidAmount(r);
 
-    const msg = TelegramTemplates.manualNotice(r, account, avg, suffix, roi, remStr, progress, paid);
+    const msg = TelegramTemplates.manualNotice({ ...r, name: decodeHtmlEntities(r.name) }, account, avg, suffix, roi, remStr, progress, paid);
 
     return sendTelegram(msg, { showModal: true });
   }, [sendTelegram, mrrClient]);

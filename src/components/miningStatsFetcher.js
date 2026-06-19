@@ -21,10 +21,9 @@ export function parseHeroMinerHtml(html) {
 }
 
 const ACTION_ALIASES = {
-  herominers_global: ["herominers_global", "herominers"],
   herominers: ["herominers"],
-  miningpooldutch: ["miningpooldutch", "miningDutch"],
-  all: ["all"],
+  miningpooldutch: ["miningDutch"],
+  all: ["herominers", "miningDutch"],
 };
 
 const MAX_ATTEMPTS = 5;
@@ -132,14 +131,13 @@ export async function fetchMiningStats(
 ) {
   let targetClient = client;
   const globalActions = [
-    "miningpooldutch",
+    "miningDutch",
     "herominers",
-    "herominers_global",
     "all",
   ];
 
   if (targetClient === "VN" && globalActions.includes(type)) {
-    targetClient = "BT";
+    targetClient = "VN";
   }
 
   const attempt = async () => {

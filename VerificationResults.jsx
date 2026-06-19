@@ -41,7 +41,7 @@ export default function VerificationResults({
   const skippedSummary = getAlgoCountsSummary(skippedResults)
 
   const lastRunVerified = lastRunSummary ? ` (Last: ${lastRunSummary.verified})` : ''
-  const lastRunSuccess = lastRunSummary ? ` (Last: ${lastRunSummary.success})` : ''
+  const lastRunSuccess = lastRunSummary ? ` (Last: ${lastRunSaummary.success})` : ''
   const lastRunFailed = lastRunSummary ? ` (Last: ${lastRunSummary.failed})` : ''
   const lastRunSkipped = lastRunSummary ? ` (Last: ${lastRunSummary.skipped})` : ''
 

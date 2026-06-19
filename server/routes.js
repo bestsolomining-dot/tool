@@ -13,6 +13,39 @@ import { getAlgorithmUnit } from '../src/core/mapping.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 
+/** In-memory cache for CoinGecko prices with TTL */
+const coinGeckoCache = new Map();
+const COINGECKO_CACHE_TTL = 60000; // 1 minute
+
+/** Hardcoded fallback BTC rates for common coins when APIs are unavailable (approximate, last updated) */
+const FALLBACK_BTC_RATES = {
+  bitcoin: 1,
+  ethereum: 0.052,    // ~$3100 ETH / $60000 BTC
+  'ethereum-classic': 0.00042,
+  litecoin: 0.00078,
+  dogecoin: 0.0000018,
+  ravencoin: 0.00000025,
+  monero: 0.0012,
+  kaspa: 0.000034,
+};
+
+/** Fallback CoinGecko price (USD, BTC) when API is unavailable */
+function buildFallbackPrices(ids) {
+  const result = {};
+  const coins = ids.split(',').map(s => s.trim());
+  for (const coin of coins) {
+    const btcRate = FALLBACK_BTC_RATES[coin];
+    if (btcRate !== undefined) {
+      result[coin] = { usd: 0, btc: btcRate };
+    } else {
+      result[coin] = { usd: 0, btc: 0 };
+    }
+  }
+  // Always ensure bitcoin has a valid rate
+  if (!result['bitcoin']) result['bitcoin'] = { usd: 0, btc: 1 };
+  return result;
+}
+
 /** Helper to save JSON data to SQLite database */
 async function saveToDatabase(filename, items) {
   if (!items || !Array.isArray(items) || items.length === 0) return;
@@ -373,7 +406,7 @@ export function registerRoutes(app) {
     res.json(await req.nhApp.hashpower.getOrderDetail(req.params.orderId));
   }));
 
-  app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.createOrder(req.body)))); // Corrected typo in comment
+  app.post('/api/v2/hashpower/order', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.createOrder(req.body))));
   app.get('/api/v2/hashpower/order-book', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.getOrderBook(req.query))));
 
   app.delete('/api/v2/hashpower/order/:orderId', asyncHandler(async (req, res) => res.json(await req.nhApp.hashpower.cancelOrder(req.params.orderId))));
@@ -397,7 +430,6 @@ export function registerRoutes(app) {
         try {
           const data = await getNiceHashApp(client).pools.getPools();
           const pools = (data?.list || []).map(p => ({ ...p, nhClient: clientName }));
-          // Persistence: Update database with pools from aggregate fetch
           if (pools.length > 0) {
             db.serialize(() => {
               db.run(`CREATE TABLE IF NOT EXISTS nh_pools (id TEXT, name TEXT, algorithm TEXT, stratumHostname TEXT, port TEXT, username TEXT, password TEXT, nhClient TEXT, last_updated DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id, nhClient))`);
@@ -571,7 +603,6 @@ export function registerRoutes(app) {
               const poolMap = new Map(poolItems.map(item => {
                 const id = String(item.rigId || item.rigid || item.id || item.rentalid || '');
 
-                // Persistence: Save individual rig pools to database
                 if (Array.isArray(item.pools) && item.pools.length > 0) {
                   db.serialize(() => {
                     db.run(`CREATE TABLE IF NOT EXISTS mrr_pools (id TEXT, name TEXT, algo TEXT, host TEXT, port TEXT, user TEXT, mrrClient TEXT, last_updated DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id, mrrClient))`);
@@ -1034,7 +1065,6 @@ export function registerRoutes(app) {
     });
   }));
 
-  // New endpoint to serve extracted_pools.json
   app.get('/api/v2/extracted-pools', asyncHandler(async (req, res) => {
     const filePath = path.resolve(process.cwd(), 'extracted_pools.json');
     try {
@@ -1044,7 +1074,6 @@ export function registerRoutes(app) {
       res.json(Array.isArray(data) ? data : []);
     } catch (err) {
       if (err.code === 'ENOENT') {
-        // Return empty list if file doesn't exist yet, instead of erroring
         return res.json([]);
       }
       res.status(500).json({ success: false, error: `Error reading extracted pools: ${err.message}` });
@@ -1063,21 +1092,61 @@ export function registerRoutes(app) {
 
   /**
    * Fetches current market prices for popular mining-related coins from CoinGecko.
-   * This allows the tool to compare rental costs against potential coin rewards.
+   * Implements caching and fallback rates to ensure reliability even when API is rate-limited.
    */
   app.get('/api/v2/prices/coingecko', asyncHandler(async (req, res) => {
-    // Default list of mineable coins to track
-    const defaultIds = 'bitcoin,ethereum-classic,litecoin,ravencoin,monero,kaspa,iron-fish,zephyr-protocol,clore-ai,dynex,conflux,ergo';
+    const defaultIds = 'bitcoin,ethereum,ethereum-classic,litecoin,ravencoin,monero,kaspa,iron-fish,zephyr-protocol,clore-ai,dynex,conflux,ergo';
     const ids = req.query.ids || defaultIds;
-    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd,btc&include_24hr_change=true`;
-    
-    const response = await fetch(url);
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      return res.status(response.status).json({ success: false, error: errorData.status?.error_message || 'CoinGecko API failure' });
+    const cacheKey = `coingecko:${ids}`;
+
+    // Check in-memory cache first
+    const cached = coinGeckoCache.get(cacheKey);
+    if (cached && Date.now() < cached.expires) {
+      return res.json({ success: true, data: cached.data, cached: true });
     }
 
-    const data = await response.json();
-    res.json({ success: true, data });
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd,btc&include_24hr_change=true`;
+
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData.status?.error_message || `CoinGecko API failure (HTTP ${response.status})`;
+
+        // Use fallback rates on any API failure
+        const fallback = buildFallbackPrices(ids);
+        coinGeckoCache.set(cacheKey, { data: fallback, expires: Date.now() + COINGECKO_CACHE_TTL });
+        console.warn(`[CoinGecko] ${errorMsg} - using fallback rates`);
+        return res.json({ success: true, data: fallback, fallback: true });
+      }
+
+      const data = await response.json();
+
+      // Fill in any missing coins with fallback rates
+      const coins = ids.split(',').map(s => s.trim());
+      for (const coin of coins) {
+        if (!data[coin]) {
+          const fallbackRate = FALLBACK_BTC_RATES[coin];
+          if (fallbackRate !== undefined) {
+            data[coin] = { usd: 0, btc: fallbackRate };
+          }
+        }
+        // Ensure `bitcoin` always has btc:1
+        if (coin === 'bitcoin' && data[coin]) {
+          data[coin].btc = 1;
+        }
+      }
+
+      coinGeckoCache.set(cacheKey, { data, expires: Date.now() + COINGECKO_CACHE_TTL });
+      res.json({ success: true, data });
+    } catch (err) {
+      // Network error - use fallback rates
+      const fallback = buildFallbackPrices(ids);
+      coinGeckoCache.set(cacheKey, { data: fallback, expires: Date.now() + COINGECKO_CACHE_TTL });
+      console.warn(`[CoinGecko] Network error: ${err.message} - using fallback rates`);
+      res.json({ success: true, data: fallback, fallback: true });
+    }
   }));
 }

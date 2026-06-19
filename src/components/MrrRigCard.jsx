@@ -39,17 +39,72 @@ const COINGECKO_BY_CURRENCY = {
   LTC: 'litecoin',
   DOGE: 'dogecoin',
   BCH: 'bitcoin-cash',
-  ETH: 'ethereum'
+  ETH: 'ethereum',
+  ETC: 'ethereum-classic'
 };
 
-const convertPaidToBtc = (amount, currency, coinPrices = {}) => {
+const PRICE_CURRENCIES = ['BTC', 'ETH', 'LTC', 'DOGE', 'BCH'];
+
+/** Client-side fallback BTC rates when CoinGecko API is unavailable */
+const FALLBACK_BTC_RATES = {
+  ETH: 0.052,
+  LTC: 0.00078,
+  DOGE: 0.0000018,
+  BCH: 0.00042,
+  ETC: 0.00042,
+};
+
+const resolvePaidPrice = (priceSource, convertedSource) => {
+  const source = priceSource && typeof priceSource === 'object' ? priceSource : {};
+
+  if (source.paid !== undefined || source.amount !== undefined) {
+    return {
+      amount: parsePriceValueLocal(source.paid ?? source.amount),
+      currency: String(source.currency || source.price_unit || source.unit || 'BTC').toUpperCase(),
+    };
+  }
+
+  for (const currency of PRICE_CURRENCIES) {
+    const nested = source[currency];
+    if (!nested || typeof nested !== 'object') continue;
+    const amount = parsePriceValueLocal(nested.paid ?? nested.price ?? nested.amount ?? nested.hour ?? nested.minhrs ?? nested.maxhrs);
+    if (amount > 0) {
+      return {
+        amount,
+        currency,
+      };
+    }
+  }
+
+  if (convertedSource && typeof convertedSource === 'object') {
+    const convertedAmount = parsePriceValueLocal(convertedSource.paid ?? convertedSource.price ?? convertedSource.amount ?? convertedSource.BTC ?? convertedSource.value);
+    if (convertedAmount > 0) {
+      return {
+        amount: convertedAmount,
+        currency: String(convertedSource.currency || convertedSource.price_unit || 'BTC').toUpperCase(),
+      };
+    }
+  }
+
+  return { amount: 0, currency: 'BTC' };
+};
+
+const convertPaidToBtc = (amount, currency, coinPrices = {}, fallbackBtc = 0) => {
   const upperCurrency = String(currency || 'BTC').toUpperCase();
   if (!amount || amount <= 0) return 0;
   if (upperCurrency === 'BTC') return amount;
 
+  // Try CoinGecko API price first
   const coinId = COINGECKO_BY_CURRENCY[upperCurrency];
-  const btcRate = coinId ? Number.parseFloat(coinPrices?.[coinId]?.btc || 0) : 0;
-  return btcRate > 0 ? amount * btcRate : 0;
+  const apiBtcRate = coinId ? Number.parseFloat(coinPrices?.[coinId]?.btc || 0) : 0;
+  if (apiBtcRate > 0) return amount * apiBtcRate;
+
+  // Fallback to hardcoded approximate rate
+  const fallbackRate = FALLBACK_BTC_RATES[upperCurrency];
+  if (fallbackRate !== undefined) return amount * fallbackRate;
+
+  // Last resort: use the fallbackBtc parameter from price data
+  return Number.isFinite(fallbackBtc) && fallbackBtc > 0 ? fallbackBtc : 0;
 };
 
 const cleanHashrateUnit = (unit) => {
@@ -120,11 +175,14 @@ const MrrRigCard = ({
   const eff = Number.isFinite(effNum) ? effNum.toFixed(2) : '0.00';
 
   const rawAlgo = info?.algo || rig.algo || rig.algorithm || rig.type || algoName;
-  const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid ?? info?.price?.amount ?? rig.price?.amount);
-  const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || '';
+  const normalizedAlgo = normalizeAlgoForNiceHash(rawAlgo || algoName);
+  const paidPrice = resolvePaidPrice(info?.price || rig.price, info?.price_converted || rig.price_converted);
+  const paidAmount = paidPrice.amount;
+  const paidCurrency = paidPrice.currency || info?.currency || rig.currency || 'BTC';
   const paidLabel = paidAmount > 0 && paidCurrency ? `${paidAmount.toFixed(8)} ${String(paidCurrency).toUpperCase()}` : null;
-  const paidBtcAmount = convertPaidToBtc(paidAmount, paidCurrency, coinPrices);
-  const mrrUnit = getMrrAlgorithmUnit(rawAlgo);
+  const fallbackBtc = parsePriceValueLocal(info?.price_converted?.price ?? rig.price_converted?.price ?? 0);
+  const paidBtcAmount = convertPaidToBtc(paidAmount, paidCurrency, coinPrices, fallbackBtc);
+  const mrrUnit = getMrrAlgorithmUnit(normalizedAlgo || rawAlgo);
   const advertisedUnit = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || info?.hashrate?.suffix || info?.hashrate_unit || info?.unit || mrrUnit;
   const adsInMrrUnit = adsVal > 0 ? convertHashrateValue(adsVal, advertisedUnit, mrrUnit) : 0;
   const durationDays = durationHours > 0 ? durationHours / 24 : 0;
@@ -134,7 +192,7 @@ const MrrRigCard = ({
   const mrrDailyRateSource = paidBtcAmount > 0 ? 'Calculated from MRR sold rental' : 'Waiting for paid BTC conversion';
   const roiFormulaLabel = 'MRR Sold Rate vs NiceHash Buy Order';
 
-  const normalizedCardAlgo = normalizeAlgoForNiceHash(algoName);
+  const normalizedCardAlgo = normalizeAlgoForNiceHash(algoName || rawAlgo);
   const nhOrder = [...(nhOrders || [])]
     .sort((a, b) => Number(Boolean(b?.isActive || b?.rawOrder?.status?.code === 'ACTIVE' || b?.rawOrder?.status === 'ACTIVE')) - Number(Boolean(a?.isActive || a?.rawOrder?.status?.code === 'ACTIVE' || a?.rawOrder?.status === 'ACTIVE')))
     .find((order) => normalizeOrderAlgo(order) === normalizedCardAlgo);
@@ -146,13 +204,13 @@ const MrrRigCard = ({
       ? Number.parseFloat(nhOrder.add_fee ?? nhOrder.priceWithFee)
       : buyNhPrice * 1.04)
     : 0;
-  const myNhUnit = getAlgorithmUnit(normalizeAlgoForNiceHash(algoName));
+  const myNhUnit = getAlgorithmUnit(normalizeAlgoForNiceHash(algoName || rawAlgo));
 
   const roiPercent = buyNhPriceWithFee > 0 && mrrDailyRate > 0
     ? calculatePriceComparison(mrrDailyRate, mrrUnit, buyNhPriceWithFee, myNhUnit)
     : null;
   const roiLabel = roiPercent !== null ? formatPercent(roiPercent) : (buyNhPriceWithFee > 0 ? 'Waiting for MRR sold rate' : 'Waiting for NiceHash buy order');
-  const displayAlgo = getAlgoDisplayName(rawAlgo);
+  const displayAlgo = getAlgoDisplayName(normalizedAlgo || rawAlgo);
 
   const elapsedMs = nowMs > 0 && totalMs > 0 ? Math.max(0, Math.min(nowMs - startT, totalMs)) : 0;
   const timeProgress = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;

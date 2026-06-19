@@ -189,7 +189,13 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   useEffect(() => {
     const fetchCoinPrices = async () => {
       try {
-        const res = await onCall('/api/v2/prices/coingecko', { silent: true });
+        const res = await onCall('/api/v2/prices/coingecko', {
+          query: {
+            ids: 'bitcoin,ethereum,ethereum-classic,litecoin,dogecoin,ravencoin,monero,kaspa,iron-fish,zephyr-protocol,clore-ai,dynex,conflux,ergo',
+            vs_currencies: 'usd,btc',
+          },
+          silent: true,
+        });
         if (res?.success) setCoinPrices(res.data);
       } catch (err) {
         console.warn('[CoinGecko] Price fetch failed:', err.message);
@@ -598,7 +604,6 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                         mrrClient={mrrClient}
                         nhOrders={nhOrders}
                         coinPrices={coinPrices}
-                        coinPrices={coinPrices} // Pass coin prices down to the card
                         onOpenPool={onOpenPool}
                         fetchRigDetailInfo={fetchRigDetailInfo}
                         loadingInfoIds={loadingInfoIds}

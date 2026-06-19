@@ -1038,7 +1038,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
       let enriched = { ...fr };
       try {
-        const res = await mrrApiCall({ endpoint: `/rental/${fr.id}`, clientNameRaw: fr.client });
+        const res = await mrrApiCall({ endpoint: `/rental/${fr.id}`, clientNameRaw: fr.client, silent: true });
         if (res && res.statusCode === 200 && res.data) {
           const d = res.data.data || res.data;
           if (d && typeof d === 'object') enriched = { ...enriched, ...d };

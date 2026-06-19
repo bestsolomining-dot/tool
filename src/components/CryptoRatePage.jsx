@@ -202,15 +202,15 @@ export default function CryptoRatePage({ onCall }) {
   }, [prices, amounts, baseCoin]);
 
   return (
-    <div className="crypto-rate-page" style={{ padding: '24px 16px', color: '#f8fafc', background: '#0f172a', minHeight: '100vh', fontFamily: 'sans-serif' }}>
-      <header style={{ maxWidth: '1000px', margin: '0 auto 32px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
+    <div className="crypto-rate-page" style={{ padding: '16px 12px', color: '#f8fafc', background: '#0f172a', minHeight: '100vh', fontFamily: 'sans-serif' }}>
+      <header style={{ maxWidth: '1000px', margin: '0 auto 24px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.8rem', fontWeight: '800', letterSpacing: '-0.02em' }}>
+          <h1 style={{ margin: 0, fontSize: '1.6rem', fontWeight: '800', letterSpacing: '-0.02em' }}>
             LIVE <span style={{ color: '#60a5fa' }}>CONVERTER</span>
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: wsStatus === 'connected' ? '#10b981' : '#f59e0b', boxShadow: wsStatus === 'connected' ? '0 0 6px #10b981' : 'none' }}></div>
-            <p style={{ margin: 0, opacity: 0.6, fontSize: '0.7rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <p style={{ margin: 0, opacity: 0.6, fontSize: '0.65rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               {wsStatus === 'connected' ? 'Stream Active' : 'Polling fallback'}
             </p>
           </div>
@@ -218,8 +218,8 @@ export default function CryptoRatePage({ onCall }) {
       </header>
 
       {/* Reference USD - compact */}
-      <div style={{ maxWidth: '1000px', margin: '0 auto 32px', background: 'rgba(30, 41, 59, 0.5)', padding: '16px 24px', borderRadius: '24px', border: '1px solid rgba(96, 165, 250, 0.2)' }}>
-        <label style={{ fontSize: '0.7rem', fontWeight: '800', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.15em', display: 'block', marginBottom: '6px' }}>
+      <div style={{ maxWidth: '1000px', margin: '0 auto 24px', background: 'rgba(30, 41, 59, 0.5)', padding: '12px 20px', borderRadius: '16px', border: '1px solid rgba(96, 165, 250, 0.2)' }}>
+        <label style={{ fontSize: '0.65rem', fontWeight: '800', color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.15em', display: 'block', marginBottom: '4px' }}>
           Reference Value (USD)
         </label>
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -234,9 +234,9 @@ export default function CryptoRatePage({ onCall }) {
               border: 'none',
               outline: 'none',
               color: '#fff',
-              fontSize: '2.5rem',
+              fontSize: '2.2rem',
               fontWeight: '700',
-              padding: '6px 6px 6px 32px',
+              padding: '4px 4px 4px 28px',
               fontFamily: 'monospace',
               letterSpacing: '-0.03em'
             }}
@@ -246,19 +246,19 @@ export default function CryptoRatePage({ onCall }) {
       </div>
 
       {/* Coin grid - tighter */}
-      <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+      <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
         {results.map(coin => (
           <div key={coin.id} style={{
             background: baseCoin === coin.id ? 'rgba(96, 165, 250, 0.08)' : 'rgba(30, 41, 59, 0.3)',
             border: baseCoin === coin.id ? '1px solid #60a5fa' : '1px solid rgba(255,255,255,0.05)',
-            borderRadius: '20px',
-            padding: '16px',
+            borderRadius: '16px',
+            padding: '12px',
             transition: 'all 0.2s ease'
           }}>
             {/* Decorative symbol */}
-            <div style={{ position: 'absolute', top: '-5px', right: '-5px', fontSize: '3rem', fontWeight: '900', opacity: 0.03, pointerEvents: 'none' }}>{coin.symbol}</div>
+            <div style={{ position: 'relative', top: '-5px', right: '-5px', fontSize: '3rem', fontWeight: '900', opacity: 0.03, pointerEvents: 'none' }}>{coin.symbol}</div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span style={{ fontWeight: 'bold', color: '#60a5fa', letterSpacing: '0.05em', fontSize: '0.7rem' }}>{coin.name.toUpperCase()}</span>
               <span style={{ color: coin.change >= 0 ? '#10b981' : '#f87171', fontWeight: 'bold', fontSize: '0.8rem' }}>
                 {coin.change >= 0 ? '▲' : '▼'} {Math.abs(coin.change).toFixed(2)}%
@@ -266,8 +266,8 @@ export default function CryptoRatePage({ onCall }) {
             </div>
 
             {/* Sparkline - smaller */}
-            <div style={{ marginBottom: '12px', height: '48px' }}>
-              <Sparkline data={coin.history} color={coin.change >= 0 ? '#10b981' : '#f87171'} height={48} />
+            <div style={{ marginBottom: '8px', height: '40px' }}>
+              <Sparkline data={coin.history} color={coin.change >= 0 ? '#10b981' : '#f87171'} height={40} />
             </div>
 
             {/* Input */}
@@ -279,9 +279,9 @@ export default function CryptoRatePage({ onCall }) {
                 width: '100%',
                 background: 'rgba(0,0,0,0.3)',
                 border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '12px',
-                padding: '8px 10px',
-                fontSize: '0.9rem',
+                borderRadius: '8px',
+                padding: '6px 8px',
+                fontSize: '0.85rem',
                 color: '#fff',
                 fontFamily: 'monospace',
                 outline: 'none',
@@ -291,7 +291,7 @@ export default function CryptoRatePage({ onCall }) {
             />
 
             {/* Price info */}
-            <div style={{ fontSize: '0.7rem', fontWeight: '500', fontFamily: 'monospace', color: 'rgba(255,255,255,0.4)', textAlign: 'right', marginTop: '8px' }}>
+            <div style={{ fontSize: '0.7rem', fontWeight: '500', fontFamily: 'monospace', color: 'rgba(255,255,255,0.4)', textAlign: 'right', marginTop: '6px' }}>
               {loading && !prices ? '...' : `1 ${coin.symbol} = $${coin.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
           </div>
@@ -299,7 +299,7 @@ export default function CryptoRatePage({ onCall }) {
       </div>
 
       {error && (
-        <div style={{ maxWidth: '1000px', margin: '20px auto', padding: '12px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', textAlign: 'center', fontSize: '0.8rem' }}>
+        <div style={{ maxWidth: '1000px', margin: '16px auto', padding: '10px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', textAlign: 'center', fontSize: '0.8rem' }}>
           {error}
         </div>
       )}

@@ -504,12 +504,12 @@ export default function App() {
   if (state.view === 'cryptorate') {
     return (
       <div className="app-shell" style={{ background: '#0f172a', minHeight: '100vh' }}>
-        <div style={{ padding: '20px' }}>
+        <div style={{ padding: '16px 20px' }}>
           <button 
             className="btn-pro secondary" 
             onClick={() => {
               window.history.pushState({}, '', '/');
-              dispatch({ type: 'SET_VIEW', payload: 'dashboard' });
+              dispatch({ type: 'SET_VIEW', payload: 'dashboard' }); // Navigate home
             }}
           >
             ← Back to Dashboard

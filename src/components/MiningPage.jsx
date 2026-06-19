@@ -8,14 +8,14 @@ import { btcValue, compactNumber, percentValue } from './miningWorkspaceData';
 function StatCard({ label, value, accent }) {
   return (
     <div style={{
-      padding: '14px 16px',
-      borderRadius: '14px',
+      padding: '12px 14px',
+      borderRadius: '12px',
       border: '1px solid rgba(148,163,184,0.12)',
       background: 'rgba(15,23,42,0.74)',
       boxShadow: '0 12px 24px rgba(0,0,0,0.15)',
     }}>
-      <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
-      <div style={{ color: accent, fontSize: '24px', lineHeight: 1.1, fontWeight: 900, marginTop: '6px' }}>{value}</div>
+      <div style={{ color: '#64748b', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
+      <div style={{ color: accent, fontSize: '22px', lineHeight: 1.1, fontWeight: 900, marginTop: '5px' }}>{value}</div>
     </div>
   );
 }
@@ -28,7 +28,7 @@ function MiningRouteHero() {
   const bestOpportunity = opportunities[0] || null;
 
   return (
-    <section style={{ display: 'grid', gap: '14px', marginBottom: '18px' }}>
+    <section style={{ display: 'grid', gap: '12px', marginBottom: '16px' }}>
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
@@ -43,19 +43,19 @@ function MiningRouteHero() {
       <div style={{
         display: 'grid',
         gridTemplateColumns: '1.1fr 0.9fr',
-        gap: '14px',
+        gap: '12px',
       }}>
         <div style={{
-          padding: '18px',
-          borderRadius: '18px',
+          padding: '16px',
+          borderRadius: '16px',
           border: '1px solid rgba(148,163,184,0.12)',
           background: 'linear-gradient(135deg, rgba(15,23,42,0.9), rgba(15,23,42,0.55))',
           boxShadow: '0 18px 40px rgba(0,0,0,0.20)',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
             <div>
               <div style={{ color: '#38bdf8', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Route Intel</div>
-              <div style={{ color: '#f8fafc', fontSize: '18px', fontWeight: 800 }}>Best current route</div>
+              <div style={{ color: '#f8fafc', fontSize: '16px', fontWeight: 800 }}>Best current route</div>
             </div>
             <button className="btn-pro secondary" onClick={() => void refresh(true)} disabled={loading}>
               {loading ? 'Refreshing...' : 'Refresh routes'}
@@ -67,16 +67,16 @@ function MiningRouteHero() {
           {bestRoute ? (
             <div style={{
               display: 'grid',
-              gap: '8px',
-              padding: '14px',
-              borderRadius: '14px',
+              gap: '6px',
+              padding: '12px',
+              borderRadius: '12px',
               background: 'rgba(2,6,23,0.45)',
               border: '1px solid rgba(148,163,184,0.10)',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
                 <div>
-                  <div style={{ color: '#e2e8f0', fontSize: '22px', fontWeight: 800 }}>{bestRoute.label}</div>
-                  <div style={{ color: '#94a3b8', fontSize: '12px' }}>{bestRoute.bestSource} to NiceHash / MRR mapping</div>
+                  <div style={{ color: '#e2e8f0', fontSize: '20px', fontWeight: 800 }}>{bestRoute.label}</div>
+                  <div style={{ color: '#94a3b8', fontSize: '11px' }}>{bestRoute.bestSource} to NiceHash / MRR mapping</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ color: '#34d399', fontSize: '18px', fontWeight: 800 }}>{btcValue(bestRoute.miningDutchBtcPerDay)}</div>
@@ -102,13 +102,13 @@ function MiningRouteHero() {
         </div>
 
         <div style={{
-          padding: '18px',
-          borderRadius: '18px',
+          padding: '16px',
+          borderRadius: '16px',
           border: '1px solid rgba(148,163,184,0.12)',
           background: 'linear-gradient(135deg, rgba(15,23,42,0.82), rgba(2,6,23,0.78))',
           boxShadow: '0 18px 40px rgba(0,0,0,0.20)',
         }}>
-          <div style={{ color: '#f8fafc', fontSize: '15px', fontWeight: 800, marginBottom: '10px' }}>
+          <div style={{ color: '#f8fafc', fontSize: '14px', fontWeight: 800, marginBottom: '8px' }}>
             Top Route Candidates
           </div>
           <div style={{ display: 'grid', gap: '8px', maxHeight: '170px', overflow: 'auto' }}>
@@ -117,8 +117,8 @@ function MiningRouteHero() {
                 display: 'flex',
                 justifyContent: 'space-between',
                 gap: '10px',
-                padding: '10px 12px',
-                borderRadius: '12px',
+                padding: '8px 10px',
+                borderRadius: '10px',
                 background: 'rgba(255,255,255,0.02)',
                 border: '1px solid rgba(148,163,184,0.08)',
               }}>
@@ -140,16 +140,16 @@ function MiningRouteHero() {
       </div>
 
       <div style={{
-        padding: '18px',
-        borderRadius: '18px',
+        padding: '16px',
+        borderRadius: '16px',
         border: '1px solid rgba(148,163,184,0.12)',
         background: 'rgba(15,23,42,0.72)',
         boxShadow: '0 18px 40px rgba(0,0,0,0.20)',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
           <div>
             <div style={{ color: '#38bdf8', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>Opportunity Finder</div>
-            <div style={{ color: '#f8fafc', fontSize: '18px', fontWeight: 800 }}>Pool revenue vs NiceHash / MRR market price</div>
+            <div style={{ color: '#f8fafc', fontSize: '16px', fontWeight: 800 }}>Pool revenue vs NiceHash / MRR market price</div>
           </div>
           <div style={{ color: '#94a3b8', fontSize: '12px' }}>
             Compare the same algo/day across all three sources
@@ -159,22 +159,22 @@ function MiningRouteHero() {
         {bestOpportunity ? (
           <div style={{
             display: 'grid',
-            gap: '10px',
-            marginBottom: '14px',
-            padding: '14px',
-            borderRadius: '14px',
+            gap: '8px',
+            marginBottom: '12px',
+            padding: '12px',
+            borderRadius: '12px',
             border: '1px solid rgba(148,163,184,0.10)',
             background: 'linear-gradient(135deg, rgba(2,6,23,0.45), rgba(15,23,42,0.88))',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
               <div>
-                <div style={{ color: '#e2e8f0', fontSize: '22px', fontWeight: 900 }}>{bestOpportunity.label}</div>
-                <div style={{ color: '#94a3b8', fontSize: '12px' }}>
+                <div style={{ color: '#e2e8f0', fontSize: '20px', fontWeight: 900 }}>{bestOpportunity.label}</div>
+                <div style={{ color: '#94a3b8', fontSize: '11px' }}>
                   Winner: {bestOpportunity.winner} · NiceHash {bestOpportunity.nicehashAlgo} · MRR {bestOpportunity.mrrAlgo}
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ color: bestOpportunity.opportunityScore >= 0 ? '#34d399' : '#f87171', fontSize: '18px', fontWeight: 900 }}>
+                <div style={{ color: bestOpportunity.opportunityScore >= 0 ? '#34d399' : '#f87171', fontSize: '16px', fontWeight: 900 }}>
                   {btcValue(bestOpportunity.opportunityScore)}
                 </div>
                 <div style={{ color: '#94a3b8', fontSize: '11px' }}>Opportunity BTC/day</div>
@@ -255,13 +255,13 @@ function MiningRouteHero() {
 function MiniStat({ label, value, tone }) {
   return (
     <div style={{
-      padding: '12px',
-      borderRadius: '12px',
+      padding: '10px',
+      borderRadius: '10px',
       background: 'rgba(255,255,255,0.02)',
       border: '1px solid rgba(148,163,184,0.08)',
     }}>
       <div style={{ color: '#64748b', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
-      <div style={{ color: tone, fontSize: '17px', fontWeight: 900, marginTop: '4px' }}>{value}</div>
+      <div style={{ color: tone, fontSize: '16px', fontWeight: 900, marginTop: '4px' }}>{value}</div>
     </div>
   );
 }
@@ -271,7 +271,7 @@ function MiningWorkspaceShell({ onNavigateHome, onCall, nhClient }) {
     <div
       className="app-shell mining-shell"
       style={{
-        padding: '0 20px 40px',
+        padding: '0 16px 32px',
         maxWidth: '1600px',
         margin: '0 auto',
         background: 'radial-gradient(circle at top left, rgba(56,189,248,0.16), transparent 32%), radial-gradient(circle at top right, rgba(16,185,129,0.14), transparent 28%), linear-gradient(180deg, rgba(2,6,23,0.95), rgba(15,23,42,0.96))',
@@ -279,8 +279,8 @@ function MiningWorkspaceShell({ onNavigateHome, onCall, nhClient }) {
       }}
     >
       <header style={{
-        padding: '36px 0 18px',
-        marginBottom: '18px',
+        padding: '24px 0 16px',
+        marginBottom: '16px',
         borderBottom: '1px solid rgba(148,163,184,0.10)',
         display: 'flex',
         justifyContent: 'space-between',
@@ -289,13 +289,13 @@ function MiningWorkspaceShell({ onNavigateHome, onCall, nhClient }) {
         flexWrap: 'wrap',
       }}>
         <div style={{ flex: 1, minWidth: '260px' }}>
-          <div style={{ color: '#38bdf8', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.16em', marginBottom: '8px' }}>
+          <div style={{ color: '#38bdf8', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.16em', marginBottom: '6px' }}>
             Mining Workspace
           </div>
-          <h2 style={{ margin: 0, fontSize: '34px', lineHeight: 1.05, color: '#f8fafc' }}>
+          <h2 style={{ margin: 0, fontSize: '28px', lineHeight: 1.05, color: '#f8fafc' }}>
             HeroMiners + Mining-Dutch
           </h2>
-          <p className="subtitle" style={{ margin: '8px 0 0', maxWidth: '760px' }}>
+          <p className="subtitle" style={{ margin: '6px 0 0', maxWidth: '760px', fontSize: '13px' }}>
             Dedicated profitability routing view with live route intelligence, current pool stats, and profitability comparison.
           </p>
         </div>
@@ -315,31 +315,31 @@ function MiningWorkspaceShell({ onNavigateHome, onCall, nhClient }) {
       <section style={{
         display: 'grid',
         gridTemplateColumns: '1.15fr 0.85fr',
-        gap: '18px',
+        gap: '16px',
         alignItems: 'start',
       }}>
         <article style={{
-          padding: '18px',
+          padding: '16px',
           background: 'rgba(15,23,42,0.72)',
           border: '1px solid rgba(148,163,184,0.12)',
-          borderRadius: '18px',
+          borderRadius: '16px',
           boxShadow: '0 18px 40px rgba(0,0,0,0.20)',
         }}>
           <HeroMinersCard onCall={onCall} />
         </article>
 
         <aside style={{
-          padding: '18px',
+          padding: '16px',
           background: 'rgba(15,23,42,0.72)',
           border: '1px solid rgba(148,163,184,0.12)',
-          borderRadius: '18px',
+          borderRadius: '16px',
           boxShadow: '0 18px 40px rgba(0,0,0,0.20)',
         }}>
           <MiningCoin onCall={onCall} nhClient={nhClient} />
         </aside>
       </section>
 
-      <section style={{ marginTop: '18px' }}>
+      <section style={{ marginTop: '16px' }}>
         <TelegramManager onCall={onCall} mrrClient="VN" />
       </section>
     </div>

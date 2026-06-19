@@ -307,12 +307,39 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       message: text,
       label: options.label || 'Monitor',
       type: options.type || options.label || 'Monitor',
+      summary: options.summary || null,
       onSuccess: options.onSuccess,
       onFailure: options.onFailure,
     });
   };
 
   const buildGroupedTelegramMessages = (items, typeLabel = 'Grouped Monitor') => {
+    if (typeLabel === 'RENTAL FINISHED') {
+      const title = `📦 <b>Grouped Monitor Messages</b> [${new Date().toLocaleTimeString()}]\n` +
+        `━━━━━━━━━━━━━━\n` +
+        `<b>Type:</b> ${escapeHtml(typeLabel)}\n` +
+        `<b>Total:</b> ${items.length}\n\n`;
+      const chunks = [];
+      let current = title;
+
+      items.forEach((item, index) => {
+        const s = item.summary || {};
+        const line1 = `${index + 1}. ${escapeHtml(item.label)}\n` +
+          `🏁 ${escapeHtml(s.account || 'N/A')} | ${escapeHtml(s.rig || 'N/A')}\n` +
+          `Algo: <code>${escapeHtml(s.algo || 'N/A')}</code> | Paid: <b>${escapeHtml(s.paid || '0.00000000 BTC')}</b>\n` +
+          `Avg: <code>${escapeHtml(s.avg || '0.00')}</code> | Adv: <code>${escapeHtml(s.ads || 'N/A')}</code> | Eff: <b>${escapeHtml(s.eff || '0%')}</b>\n\n` +
+          `━━━━━━━━━━━━━━\n`;
+        if (current.length > title.length && current.length + line1.length > 3500) {
+          chunks.push(current);
+          current = title;
+        }
+        current += line1;
+      });
+
+      if (current.length > title.length) chunks.push(current);
+      return chunks;
+    }
+
     const title = `📦 <b>Grouped Monitor Messages</b> [${new Date().toLocaleTimeString()}]\n` +
       `━━━━━━━━━━━━━━\n` +
       `<b>Type:</b> ${escapeHtml(typeLabel)}\n` +
@@ -984,10 +1011,20 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       }
 
       const info = extractRentalInfo(enriched);
-      const finishMsg = TelegramTemplates.finished(enriched, info, resolveRentalAlgo(enriched, info));
+      const finishAds = info.niceAdvertisedHashrate || info.hashrate?.advertised?.nice || info.hashrate?.advertised || info.hashrate?.suffix || 'N/A';
+      const finishMsg = TelegramTemplates.finished(enriched, info, resolveRentalAlgo(enriched, info), finishAds);
       queueTelegramMessage(finishMsg, {
         type: 'RENTAL FINISHED',
         label: `Finished ${fr.client} ${fr.id}`,
+        summary: {
+          account: fr.client,
+          rig: enriched.name || enriched.id,
+          algo: resolveRentalAlgo(enriched, info),
+          paid: `${info.price.paid} ${info.price.currency}`,
+          avg: info.niceAverageHashrate,
+          ads: finishAds,
+          eff: `${parseFloat(info.percent || 0).toFixed(2)}%`,
+        },
         onSuccess: async () => {
           notifications.push({ id: fr.id, client: fr.client, status: 'Sent', type: 'Finished', telegram: 'ok' });
           await dbRunAsync(`DELETE FROM rentals WHERE id = ?`, [fr.id]);
@@ -1023,10 +1060,39 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
       .sort((a, b) => b[1] - a[1])
       .map(([algo, count]) => `• ${getAlgoDisplayName(algo)}: <b>${count}</b>`);
 
-    const allSummaryMsg = TelegramTemplates.heartbeatSummary(barChart, onlineAll, rentedAll, offlineAll, disabledAll, totalAll, activeRentalLines, finishTime, rented24hCount, onlineAlgoLines);
-
     try {
-      await sendTelegramInternal(allSummaryMsg);
+      const summaryBase = (linesSubset) => TelegramTemplates.heartbeatSummary(
+        barChart,
+        onlineAll,
+        rentedAll,
+        offlineAll,
+        disabledAll,
+        totalAll,
+        linesSubset,
+        finishTime,
+        rented24hCount,
+        onlineAlgoLines
+      );
+
+      const summaryChunks = [];
+      let currentLines = [];
+      for (const line of activeRentalLines) {
+        const nextLines = [...currentLines, line];
+        const nextMsg = summaryBase(nextLines);
+        if (currentLines.length > 0 && nextMsg.length > 3600) {
+          summaryChunks.push(summaryBase(currentLines));
+          currentLines = [line];
+        } else {
+          currentLines = nextLines;
+        }
+      }
+      if (currentLines.length > 0 || activeRentalLines.length === 0) {
+        summaryChunks.push(summaryBase(currentLines));
+      }
+
+      for (const msg of summaryChunks) {
+        await sendTelegramInternal(msg);
+      }
       lastAlertTimes.set('global_summary', now);
     } catch (e) {
       console.error(`[${new Date().toLocaleTimeString()}] [monitor] Summary send failed: ${e.message}`);

@@ -241,18 +241,18 @@ const MrrRigCard = ({
           </strong>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', color: '#94a3b8', fontSize: '9px' }}>
             <span style={{ fontSize: '14px', fontWeight: 900, color: '#38bdf8', textShadow: '0 0 18px rgba(56, 189, 248, 0.22)' }}>{displayAlgo}</span>
-            <span style={{ opacity: 0.35 }}>|</span>
-            <span>{roiFormulaLabel}</span>
+            |
+            {/* <span>{roiFormulaLabel}</span> */}
             {paidLabel && (
               <>
                 {/* <span style={{ opacity: 0.35 }}>•</span> */}
-                <span style={{ color: '#fbbf24', fontWeight: 900, fontSize: '11px' }}>Sold {paidLabel}</span>
+                <span style={{ color: '#fbbf24', fontWeight: 900, fontSize: '11px' }}>Paid {paidLabel}</span>
               </>
             )}
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: '4px', minWidth: '142px', textAlign: 'right' }}>
+        <div style={{ display: 'flex', gap: '4px', minWidth: '142px', textAlign: 'right', marginLeft: 'auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <div style={{
             padding: '6px 8px',
             borderRadius: '10px',
@@ -263,18 +263,18 @@ const MrrRigCard = ({
             <div style={{ fontSize: '18px', lineHeight: 1, fontWeight: 900, color: getRoiColor(roiPercent ?? 0) }}>
               {roiLabel}
             </div>
-            <div style={{ fontSize: '8px', opacity: 0.7, marginTop: '2px' }}>
+            {/* <div style={{ fontSize: '8px', opacity: 0.7, marginTop: '2px' }}>
               {roiFormulaLabel}
-            </div>
-            <div style={{ fontSize: '7px', opacity: 0.5, marginTop: '1px' }}>
+            </div> */}
+            {/* <div style={{ fontSize: '7px', opacity: 0.5, marginTop: '1px' }}>
               (MRR Sold Rate - NiceHash Buy Order) / NiceHash Buy Order
-            </div>
+            </div> */}
           </div>
-          {isRented && (
+          {/* {isRented && (
             <div style={{ fontSize: '9px', opacity: 0.7 }}>
               {formatRentalStartTime(rentalStartTime)}
             </div>
-          )}
+          )} */}
         </div>
       </div>
 
@@ -326,12 +326,19 @@ const MrrRigCard = ({
                 ) : 'N/A'}
               </div>
             </div>
-            
+
           </div>
 
-          <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#94a3b8' }}>
-            <span>Started: {formatRentalStartTime(rentalStartTime)}</span>
-            <span>Remaining: <CountdownTimer endTime={info?.endTime || rig.end} /></span>
+          <div style={{
+            marginTop: '6px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: '9px',
+            color: '#94a3b8',
+            padding: '4px 0',
+          }}>
+            <span>🕐 {formatRentalStartTime(rentalStartTime)}</span>
+            <span>⏳ <CountdownTimer endTime={info?.endTime || rig.end} /></span>
           </div>
         </section>
 
@@ -346,7 +353,6 @@ const MrrRigCard = ({
                 <div style={{ width: `${Math.min(100, Math.max(0, effNum || 0))}%`, height: '100%', background: getRoiColor(effNum), borderRadius: '999px' }} />
               </div>
             </div>
-
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', marginBottom: '2px' }}>
                 <span style={{ opacity: 0.55, textTransform: 'uppercase' }}>Rental Progress</span>

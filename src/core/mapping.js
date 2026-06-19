@@ -2,11 +2,14 @@
 
 export const ALGO_DISPLAY_NAMES = {
   'SHA256': 'SHA256',
+  'SHA256ASICBOOST': 'SHA256AsicBoost',
+  'SHA256AB': 'SHA256AsicBoost',
   'SCRYPT': 'Scrypt',
   'ETHASH': 'Ethash',
   'DAGGERHASHIMOTO': 'DaggerHashimoto',
   'ETCHASH': 'Etchash',
   'EQUIHASH': 'Equihash',
+  'ZHASH': 'ZHash',
   'KAWPOW': 'KawPow',
   'AUTOLYKOSV2': 'Autolykos v2',
   'AUTOLYKOS': 'Autolykos',
@@ -14,6 +17,9 @@ export const ALGO_DISPLAY_NAMES = {
   'RANDOMXMONERO': 'RandomXMonero',
   'OCTOPUS': 'Octopus',
   'KHEAVYHASH': 'KHeavyHash',
+  'EAGLESONG': 'Eaglesong',
+  'VERUSHASH': 'VerusHash',
+  'NEXAPOW': 'NexaPow',
   'FISHHASH': 'FishHash',
   'DYNEXSOLVE': 'DynexSolve',
   'BEAMHASHIII': 'BeamHash III',
@@ -39,10 +45,14 @@ export const ALGO_DISPLAY_NAMES = {
 // NiceHash algorithm normalization
 export const NICEHASH_ALGO_MAP = {
   'SHA256': 'SHA256',
+  'SHA256AB': 'SHA256ASICBOOST',
+  'SHA256ASICBOOST': 'SHA256ASICBOOST',
+  'SHA256ASICSBOOST': 'SHA256ASICBOOST',
   'SCRYPT': 'SCRYPT',
   'ETHASH': 'DAGGERHASHIMOTO',
   'DAGGERHASHIMOTO': 'DAGGERHASHIMOTO',
   'EQUIHASH': 'EQUIHASH',
+  'ZHASH': 'ZHASH',
   'ETCHASH': 'ETCHASH',
   'KAWPOW': 'KAWPOW',
   'AUTOLYKOSV2': 'AUTOLYKOS',
@@ -51,6 +61,9 @@ export const NICEHASH_ALGO_MAP = {
   'RANDOMXMONERO': 'RANDOMXMONERO',
   'OCTOPUS': 'OCTOPUS',
   'KHEAVYHASH': 'KHEAVYHASH',
+  'EAGLESONG': 'EAGLESONG',
+  'VERUSHASH': 'VERUSHASH',
+  'NEXAPOW': 'NEXAPOW',
   'FISHHASH': 'FISHHASH',
   'DYNEXSOLVE': 'DYNEXSOLVE',
   'BEAMHASHIII': 'BEAMV3',
@@ -69,10 +82,13 @@ export const NICEHASH_ALGO_MAP = {
 // MRR algorithm mapping
 export const MRR_ALGO_MAP = {
   'SHA256': 'sha256',
+  'SHA256AB': 'sha256ab',
+  'SHA256ASICBOOST': 'sha256ab',
   'SCRYPT': 'scrypt',
   'ETHASH': 'ethash',
   'DAGGERHASHIMOTO': 'ethash',
   'EQUIHASH': 'equihash',
+  'ZHASH': 'zhash',
   'ETCHASH': 'etchash',
   'KAWPOW': 'kawpow',
   'AUTOLYKOSV2': 'autolykos_v2',
@@ -81,6 +97,9 @@ export const MRR_ALGO_MAP = {
   'RANDOMXMONERO': 'randomx',
   'OCTOPUS': 'octopus',
   'KHEAVYHASH': 'kheavyhash',
+  'EAGLESONG': 'eaglesong',
+  'VERUSHASH': 'verushash',
+  'NEXAPOW': 'nexapow',
   'FISHHASH': 'fishhash',
   'DYNEXSOLVE': 'dynexsolve',
   'BEAMHASHIII': 'beamhash_iii',
@@ -102,6 +121,8 @@ export const HASHRATE_SUFFIXES = {
   'MH': 1e6,
   'KH': 1e3,
   'H': 1,
+  'GSOL': 1e9,
+  'MSOL': 1e6,
   'KSol': 1e3,
   'Sol': 1,
   'KSOL': 1e3,
@@ -111,31 +132,58 @@ export const HASHRATE_SUFFIXES = {
 // Algorithm market units (NiceHash Market Standards)
 export const ALGO_UNITS = {
   'SHA256': 'EH',
+  'SHA256AB': 'EH',
+  'SHA256ASICBOOST': 'EH',
   'SCRYPT': 'TH',
   'X11': 'PH',
+  'NEOSCRYPT': 'TH',
   'DAGGERHASHIMOTO': 'TH',
   'ETHASH': 'TH',
   'ETCHASH': 'TH',
   'KAWPOW': 'TH',
-  'EQUIHASH': 'TH',
+  'EQUIHASH': 'GSOL',
+  'ZHASH': 'MSOL',
   'AUTOLYKOSV2': 'TH',
   'AUTOLYKOS': 'TH',
-  'RANDOMX': 'TH',
-  'RANDOMXMONERO': 'TH',
+  'RANDOMX': 'GH',
+  'RANDOMXMONERO': 'GH',
+  'EAGLESONG': 'EH',
   'OCTOPUS': 'TH',
-  'KHEAVYHASH': 'TH',
+  'KHEAVYHASH': 'EH',
   'FISHHASH': 'TH',
   'DYNEXSOLVE': 'TH',
-  'BEAMHASHIII': 'TH',
-  'BEAMV3': 'TH',
-  'BLAKE3_ALPH': 'TH',
-  'BLAKE3': 'TH',
+  'BEAMHASHIII': 'MSOL',
+  'BEAMV3': 'MSOL',
+  'VERUSHASH': 'TH',
+  'NEXAPOW': 'TH',
+  'BLAKE3_ALPH': 'PH',
+  'BLAKE3': 'PH',
   'JANUSHASH': 'TH',
   'XELISHASHV3': 'TH',
   'PROGPOWZ': 'TH',
   'PEARLHASH': 'TH',
   'IRONFISH': 'TH',
-  'ALEPHIUM': 'TH'
+  'ALEPHIUM': 'PH'
+};
+
+// MiningRigRentals marketplace price units (shown as Price/<unit>/Day on MRR).
+export const MRR_ALGO_UNITS = {
+  'SHA256': 'PH',
+  'SHA256AB': 'PH',
+  'SHA256ASICBOOST': 'PH',
+  'SCRYPT': 'GH',
+  'X11': 'TH',
+  'DAGGERHASHIMOTO': 'GH',
+  'HASHIMOTOS': 'GH',
+  'ETHASH': 'GH',
+  'ETCHASH': 'GH',
+  'KAWPOW': 'GH',
+  'EQUIHASH': 'GH',
+  'ZHASH': 'GH',
+  'RANDOMX': 'MH',
+  'RANDOMXMONERO': 'MH',
+  'OCTOPUS': 'GH',
+  'KHEAVYHASH': 'TH',
 };
 
 // Factors relative to TH/s (Used for pricing math in MrrRigCard)
@@ -161,6 +209,7 @@ export function normalizeAlgoForNiceHash(algo) {
   }
   
   // Handle common variations
+  if (normalized.includes('SHA256AB') || normalized.includes('ASICBOOST')) return 'SHA256ASICBOOST';
   if (normalized.includes('SHA256')) return 'SHA256';
   if (normalized.includes('SCRYPT')) return 'SCRYPT';
   if (normalized.includes('ETHASH')) return 'DAGGERHASHIMOTO';
@@ -169,6 +218,10 @@ export function normalizeAlgoForNiceHash(algo) {
   if (normalized.includes('RANDOMX')) return 'RANDOMXMONERO';
   if (normalized.includes('OCTOPUS')) return 'OCTOPUS';
   if (normalized.includes('KHEAVYHASH')) return 'KHEAVYHASH';
+  if (normalized.includes('ZHASH')) return 'ZHASH';
+  if (normalized.includes('EAGLESONG')) return 'EAGLESONG';
+  if (normalized.includes('VERUSHASH')) return 'VERUSHASH';
+  if (normalized.includes('NEXAPOW')) return 'NEXAPOW';
   if (normalized.includes('FISHHASH')) return 'FISHHASH';
   if (normalized.includes('DYNEXSOLVE')) return 'DYNEXSOLVE';
   if (normalized.includes('BEAMHASH')) return 'BEAMHASHIII';
@@ -191,6 +244,13 @@ export function getAlgorithmUnit(algo) {
   if (!algo) return 'H/s';
   const normalized = String(algo).toUpperCase().trim();
   return ALGO_UNITS[normalized] || 'H/s';
+}
+
+export function getMrrAlgorithmUnit(algo) {
+  if (!algo) return 'TH';
+  const normalized = String(algo).toUpperCase().trim();
+  const niceHashAlgo = normalizeAlgoForNiceHash(normalized);
+  return MRR_ALGO_UNITS[normalized] || MRR_ALGO_UNITS[niceHashAlgo] || 'TH';
 }
 
 export const getAlgoDisplayName = (algo) => getAlgorithmDisplayName(algo);

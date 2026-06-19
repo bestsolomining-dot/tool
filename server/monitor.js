@@ -3,14 +3,24 @@ import { mrrApiCall, mrrConfigs } from './mrr.js';
 import { resolveNhClient, getNiceHashApp, isAggregate } from './nh.js';
 import { extractRentalInfo, extractRigInfo } from './utils.js';
 import { TELEGRAM_CONFIG, TelegramTemplates } from '../src/core/telegram.js';
-import { ALGO_DISPLAY_NAMES, normalizeAlgoForNiceHash, calculatePriceComparison } from '../src/core/mapping.js';
-import { clean } from '../src/core/mrrUtils.js';
+import { ALGO_DISPLAY_NAMES, HASHRATE_SUFFIXES, normalizeAlgoForNiceHash, getMrrAlgorithmUnit, calculatePriceComparison } from '../src/core/mapping.js';
 import { getBtcPriceData } from '../src/core/priceUtils.js';
 
 const getAlgoDisplayName = (code) => {
   if (!code) return 'N/A';
   const uc = String(code).toUpperCase();
   return ALGO_DISPLAY_NAMES[uc] || code;
+};
+
+const cleanHashrateUnit = (unit) => {
+  const match = String(unit || '').toUpperCase().match(/GSOL|MSOL|KSOL|SOL|EH|PH|TH|GH|MH|KH|H/);
+  return match?.[0] || 'H';
+};
+
+const convertHashrateValue = (value, fromUnit, toUnit) => {
+  const fromMultiplier = HASHRATE_SUFFIXES[cleanHashrateUnit(fromUnit)] || 1;
+  const toMultiplier = HASHRATE_SUFFIXES[cleanHashrateUnit(toUnit)] || 1;
+  return value * fromMultiplier / toMultiplier;
 };
 
 const resolveRentalAlgo = (r, info) =>
@@ -285,6 +295,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   const accountMetrics = [];
   const allRentedRigs = [];
   const successfulAccts = [];
+  const currentActiveRentalIds = new Set();
   const globalRentalsMap = new Map();
   const globalOnlineAlgos = new Map();
   const queuedTelegramMessages = [];
@@ -619,6 +630,9 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           continue;
         }
 
+        const activeRentalId = String(r.id || r.rentalid || r.rental_id || '').trim();
+        if (activeRentalId) currentActiveRentalIds.add(activeRentalId);
+
         const advertised = parseFloat(info.hashrate.advertised);
         const average = parseFloat(info.hashrate.average);
         const totalExpectedHashes = advertised * (totalDurationMs / 1000);
@@ -662,11 +676,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           }
 
           const mrrBtcData = getBtcPriceData(r.price || info.price);
-          const mrrUnit = clean(info.hashrate.suffix || 'TH');
+          const mrrUnit = getMrrAlgorithmUnit(info.algo);
+          const advertisedInMrrUnit = convertHashrateValue(advertised, info.hashrate.suffix || mrrUnit, mrrUnit);
           const durationHours = Number.parseFloat(info.duration) || 0;
           const mrrPriceNorm =
-            Number.isFinite(advertised) && advertised > 0 && Number.isFinite(durationHours) && durationHours > 0
-              ? mrrBtcData.value / (durationHours / 24) / advertised
+            Number.isFinite(advertisedInMrrUnit) && advertisedInMrrUnit > 0 && Number.isFinite(durationHours) && durationHours > 0
+              ? mrrBtcData.value / (durationHours / 24) / advertisedInMrrUnit
               : mrrBtcData.value;
 
           if (nhP.price > 0 && mrrPriceNorm > 0) {
@@ -911,6 +926,22 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
     if (!metric.error) successfulAccts.push(acct);
   }));
 
+  const successfulAcctList = Array.from(new Set(successfulAccts));
+
+  if (currentActiveRentalIds.size > 0) {
+    const placeholders = Array.from(currentActiveRentalIds).map(() => '?').join(',');
+    await dbRunAsync(
+      `DELETE FROM rentals WHERE id NOT IN (${placeholders})`,
+      Array.from(currentActiveRentalIds)
+    ).catch((err) => console.warn(`[monitor:db] Failed to prune stale rentals: ${err.message}`));
+  } else if (successfulAcctList.length > 0) {
+    const placeholders = successfulAcctList.map(() => '?').join(',');
+    await dbRunAsync(
+      `DELETE FROM rentals WHERE client IN (${placeholders})`,
+      successfulAcctList
+    ).catch((err) => console.warn(`[monitor:db] Failed to clear stale rentals: ${err.message}`));
+  }
+
   const rented24hRow = await dbGetAsync(
     "SELECT COUNT(*) as count FROM rental_history WHERE start_time >= ?",
     [todayStartTs]
@@ -920,12 +951,12 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   // ------------------------------------------------------------------
   //  Detect and notify finished rentals (no longer present in API)
   // ------------------------------------------------------------------
-  if (successfulAccts.length > 0) {
+  if (successfulAcctList.length > 0) {
     // Parameterised query to prevent SQL injection
-    const placeholders = successfulAccts.map(() => '?').join(',');
+    const placeholders = successfulAcctList.map(() => '?').join(',');
     const finishedRentals = await dbAllAsync(
       `SELECT * FROM rentals WHERE last_updated < ? AND client IN (${placeholders})`,
-      [now, ...successfulAccts]
+      [now, ...successfulAcctList]
     );
 
     for (const fr of finishedRentals) {

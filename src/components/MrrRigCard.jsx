@@ -9,7 +9,7 @@ import {
   getRoiColor,
   getNiceHashPriceValue
 } from '../core/mrrUtils.js';
-import { getAlgoDisplayName, normalizeAlgoForNiceHash, getAlgorithmUnit, calculatePriceComparison } from '../core/mapping.js';
+import { HASHRATE_SUFFIXES, getAlgoDisplayName, normalizeAlgoForNiceHash, getAlgorithmUnit, getMrrAlgorithmUnit, calculatePriceComparison } from '../core/mapping.js';
 
 const formatPercent = (value) => {
   const num = Number(value);
@@ -50,6 +50,17 @@ const convertPaidToBtc = (amount, currency, coinPrices = {}) => {
   const coinId = COINGECKO_BY_CURRENCY[upperCurrency];
   const btcRate = coinId ? Number.parseFloat(coinPrices?.[coinId]?.btc || 0) : 0;
   return btcRate > 0 ? amount * btcRate : 0;
+};
+
+const cleanHashrateUnit = (unit) => {
+  const match = String(unit || '').toUpperCase().match(/GSOL|MSOL|KSOL|SOL|EH|PH|TH|GH|MH|KH|H/);
+  return match?.[0] || 'H';
+};
+
+const convertHashrateValue = (value, fromUnit, toUnit) => {
+  const fromMultiplier = HASHRATE_SUFFIXES[cleanHashrateUnit(fromUnit)] || 1;
+  const toMultiplier = HASHRATE_SUFFIXES[cleanHashrateUnit(toUnit)] || 1;
+  return value * fromMultiplier / toMultiplier;
 };
 
 const MrrRigCard = ({
@@ -108,15 +119,19 @@ const MrrRigCard = ({
   const effNum = Number.parseFloat(rawEffValue);
   const eff = Number.isFinite(effNum) ? effNum.toFixed(2) : '0.00';
 
+  const rawAlgo = info?.algo || rig.algo || rig.algorithm || rig.type || algoName;
   const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid ?? info?.price?.amount ?? rig.price?.amount);
   const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || '';
   const paidLabel = paidAmount > 0 && paidCurrency ? `${paidAmount.toFixed(8)} ${String(paidCurrency).toUpperCase()}` : null;
   const paidBtcAmount = convertPaidToBtc(paidAmount, paidCurrency, coinPrices);
-  const mrrUnit = getAlgorithmUnit(algoName);
-  const mrrDailyRate = paidBtcAmount > 0 && adsVal > 0 && durationHours > 0
-    ? paidBtcAmount / (durationHours / 24) / adsVal
+  const mrrUnit = getMrrAlgorithmUnit(rawAlgo);
+  const advertisedUnit = rig.hashrate?.suffix || rig.hashrate?.advertised?.type || info?.hashrate?.suffix || info?.hashrate_unit || info?.unit || mrrUnit;
+  const adsInMrrUnit = adsVal > 0 ? convertHashrateValue(adsVal, advertisedUnit, mrrUnit) : 0;
+  const mrrDailyRate = paidBtcAmount > 0 && adsInMrrUnit > 0 && durationHours > 0
+    ? paidBtcAmount / (durationHours / 24) / adsInMrrUnit
     : 0;
-  const mrrDailyRateSource = paidBtcAmount > 0 ? 'Actual rental paid' : 'Waiting for paid BTC conversion';
+  const mrrDailyRateSource = paidBtcAmount > 0 ? 'Calculated from MRR sold rental' : 'Waiting for paid BTC conversion';
+  const roiFormulaLabel = 'MRR Sold Rate vs NiceHash Buy Order';
 
   const normalizedCardAlgo = normalizeAlgoForNiceHash(algoName);
   const nhOrder = [...(nhOrders || [])]
@@ -135,8 +150,8 @@ const MrrRigCard = ({
   const roiPercent = buyNhPriceWithFee > 0 && mrrDailyRate > 0
     ? calculatePriceComparison(mrrDailyRate, mrrUnit, buyNhPriceWithFee, myNhUnit)
     : null;
-  const roiLabel = roiPercent !== null ? formatPercent(roiPercent) : (buyNhPriceWithFee > 0 ? 'Waiting for rental paid' : 'Waiting for NiceHash order');
-  const displayAlgo = getAlgoDisplayName(info?.algo || rig.algo || rig.algorithm || rig.type || algoName);
+  const roiLabel = roiPercent !== null ? formatPercent(roiPercent) : (buyNhPriceWithFee > 0 ? 'Waiting for MRR sold rate' : 'Waiting for NiceHash buy order');
+  const displayAlgo = getAlgoDisplayName(rawAlgo);
 
   const elapsedMs = nowMs > 0 && totalMs > 0 ? Math.max(0, Math.min(nowMs - startT, totalMs)) : 0;
   const timeProgress = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
@@ -226,8 +241,8 @@ const MrrRigCard = ({
           </strong>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', color: '#94a3b8', fontSize: '10px' }}>
             <span style={{ fontSize: '16px', fontWeight: 900, color: '#38bdf8', textShadow: '0 0 18px rgba(56, 189, 248, 0.22)' }}>{displayAlgo}</span>
-            {/* <span style={{ opacity: 0.35 }}>•</span>
-            <span>NiceHash order vs rental paid</span> */}
+            <span style={{ opacity: 0.35 }}>|</span>
+            <span>{roiFormulaLabel}</span>
             {paidLabel && (
               <>
                 {/* <span style={{ opacity: 0.35 }}>•</span> */}
@@ -249,7 +264,10 @@ const MrrRigCard = ({
               {roiLabel}
             </div>
             <div style={{ fontSize: '9px', opacity: 0.7, marginTop: '3px' }}>
-              sold paid vs NiceHash order
+              {roiFormulaLabel}
+            </div>
+            <div style={{ fontSize: '8px', opacity: 0.48, marginTop: '2px' }}>
+              (MRR Sold Rate - NiceHash Buy Order) / NiceHash Buy Order
             </div>
           </div>
           {isRented && (
@@ -263,7 +281,7 @@ const MrrRigCard = ({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.9fr', gap: '8px' }}>
         <section style={sectionStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px', marginBottom: '6px' }}>
-            <div style={{ color: '#e2e8f0', fontWeight: 700 }}>Rental Snapshot</div>
+            {/* <div style={{ color: '#e2e8f0', fontWeight: 700 }}>Rental Snapshot</div> */}
             <div style={{ fontSize: '9px', color: '#94a3b8' }}>{mrrDailyRateSource}</div>
           </div>
 
@@ -287,13 +305,13 @@ const MrrRigCard = ({
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '6px', fontSize: '10px' }}>
             <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px' }}>
-              <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>Rental Rate</div>
+              <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>MRR Sold Rate</div>
               <div style={{ color: '#fbbf24', fontWeight: 800, marginTop: '3px' }}>
                 {mrrDailyRate > 0 ? `${mrrDailyRate.toFixed(8)} BTC/${mrrUnit}/Day` : 'N/A'}
               </div>
             </div>
             <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px' }}>
-              <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>NiceHash Order</div>
+              <div style={{ opacity: 0.6, textTransform: 'uppercase', fontSize: '8px' }}>NiceHash Buy Order</div>
               <div style={{ color: '#60a5fa', fontWeight: 800, marginTop: '3px' }}>
                 {buyNhPriceWithFee > 0 ? `${buyNhPriceWithFee.toFixed(8)} BTC/${myNhUnit}/Day` : 'N/A'}
               </div>

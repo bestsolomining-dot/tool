@@ -97,9 +97,9 @@ export default function Dashboard({
       <main className="dashboard">
         <div className="column-stack" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-          {/* NICEHASH SECTION */}
-          <article className="panel">
-            <NiceHashOrderProvider nhClient={state.nhOrderClient} callApi={callApi}>
+          <NiceHashOrderProvider nhClient={state.nhOrderClient} callApi={callApi}>
+            {/* NICEHASH SECTION */}
+            <article className="panel">
               <NiceHash
                 key={state.nhOrderClient}
                 onCall={handleMiningCall}
@@ -109,53 +109,53 @@ export default function Dashboard({
                 nhClient={state.nhOrderClient}
                 setNhClient={setNhOrderClient}
               />
-            </NiceHashOrderProvider>
-          </article>
+            </article>
 
-          {/* QUICK ACTIONS */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px',
-            gap: '12px',
-            flexWrap: 'wrap'
-          }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
-              <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>
-                Open the hashrate calculator or view live rates.
-              </p>
+            {/* QUICK ACTIONS */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '16px',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>Quick Actions</h3>
+                <p style={{ margin: '4px 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>
+                  Open the hashrate calculator or view live rates.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  className="btn-pro secondary"
+                  onClick={() => dispatch({ type: 'SET_CALCULATOR_MODAL', payload: true })}
+                >
+                  Open Calculator
+                </button>
+                <button
+                  className="btn-pro secondary"
+                  onClick={() => {
+                    window.history.pushState({}, '', '/cryptorate');
+                    dispatch({ type: 'SET_VIEW', payload: 'cryptorate' });
+                  }}
+                >
+                  Live Rates
+                </button>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button
-                className="btn-pro secondary"
-                onClick={() => dispatch({ type: 'SET_CALCULATOR_MODAL', payload: true })}
-              >
-                Open Calculator
-              </button>
-              <button
-                className="btn-pro secondary"
-                onClick={() => {
-                  window.history.pushState({}, '', '/cryptorate');
-                  dispatch({ type: 'SET_VIEW', payload: 'cryptorate' });
-                }}
-              >
-                Live Rates
-              </button>
-            </div>
-          </div>
 
-          {/* MINING RIG SECTION */}
-          <article className="panel">
-            <MiningRigSection
-              onCall={handleMiningCall}
-              rigsData={state.rigsData}
-              mrrClient={state.mrrClient}
-              setMrrClient={setMrrClient}
-              onOpenMrrPools={handleOpenMrrPools}
-            />
-          </article>
+            {/* MINING RIG SECTION */}
+            <article className="panel">
+              <MiningRigSection
+                onCall={handleMiningCall}
+                rigsData={state.rigsData}
+                mrrClient={state.mrrClient}
+                setMrrClient={setMrrClient}
+                onOpenMrrPools={handleOpenMrrPools}
+              />
+            </article>
+          </NiceHashOrderProvider>
 
           {/* HERO MINERS CARD */}
           <article className="panel">

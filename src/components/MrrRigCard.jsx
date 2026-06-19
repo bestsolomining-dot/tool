@@ -111,11 +111,28 @@ const MrrRigCard = ({
 
   const mrrUnit = getAlgorithmUnit(algoName); // Use the centralized mapping for MRR unit
 
-  const nhOrder = nhOrders?.find(o => normalizeAlgoForNiceHash(o.algo || o.algorithm || o.type || o.market) === normalizeAlgoForNiceHash(algoName));
+  const normalizedCardAlgo = normalizeAlgoForNiceHash(algoName);
+  const getNhOrderAlgo = (order) => {
+    const rawOrder = order?.rawOrder || order;
+    const pickAlgorithm = (value) => {
+      if (!value) return '';
+      if (typeof value === 'object') return value.algorithm || value.displayName || value.name || '';
+      return value;
+    };
+    const rawAlgo = order?.algo
+      || pickAlgorithm(order?.algorithm)
+      || rawOrder?.algo
+      || pickAlgorithm(rawOrder?.algorithm)
+      || rawOrder?.type;
+    return normalizeAlgoForNiceHash(rawAlgo);
+  };
+  const nhOrder = [...(nhOrders || [])]
+    .sort((a, b) => Number(Boolean(b?.isActive || b?.rawOrder?.status?.code === 'ACTIVE' || b?.rawOrder?.status === 'ACTIVE')) - Number(Boolean(a?.isActive || a?.rawOrder?.status?.code === 'ACTIVE' || a?.rawOrder?.status === 'ACTIVE')))
+    .find(o => getNhOrderAlgo(o) === normalizedCardAlgo);
 
   // Fallback to market price (nhData) if no active user order is found
   const marketNhPrice = getNiceHashPriceValue(nhBase);
-  const orderNhPrice = getNiceHashPriceValue(nhOrder);
+  const orderNhPrice = getNiceHashPriceValue(nhOrder?.price ?? nhOrder?.rawOrder?.price ?? nhOrder);
   const buyNhPrice = nhOrder && orderNhPrice > 0 ? orderNhPrice : marketNhPrice;
   const nhFeeOverride = parseFloat(nhOrder?.add_fee ?? nhOrder?.priceWithFee ?? 0);
   const buyNhPriceWithFee = buyNhPrice > 0 ? (nhFeeOverride > 0 ? nhFeeOverride : (buyNhPrice * 1.04)) : 0;

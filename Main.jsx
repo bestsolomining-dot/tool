@@ -10,6 +10,7 @@ import HashCompletionCalculator from './src/components/HashCompletionCalculator'
 import MrrPoolsManager from './src/components/MrrManager';
 import Login from './src/components/Login';
 import HeroMinersCard from './src/components/HeroMinersCard';
+import MiningCoin from './src/components/MiningCoin.jsx';
 import { HASHRATE_SUFFIXES, normalizeAlgoForNiceHash, getAlgorithmUnit } from './src/core/mapping';
 import { RentedRigProvider } from './src/components/NiceHashContext';
 import './src/App.css';
@@ -171,6 +172,7 @@ export default function App() {
     }
 
     const requestPromise = (async () => {
+      let data = null;
       try {
         const res = await fetch(finalPath, {
           ...fetchOptions,
@@ -186,7 +188,6 @@ export default function App() {
           return null;
         }
 
-        let data = null;
         if (res.status !== 204) {
           const text = await res.text();
           try { data = text ? JSON.parse(text) : null; } catch { data = text; }
@@ -234,23 +235,34 @@ export default function App() {
           setModalContent(null);
           setResponseModalOpen(false);
         }
+        return data;
+      } catch (err) {
+        if (!options.silent) {
+          setError(err.message || String(err));
+          setLastCall((prev) => ({
+            ...prev,
+            status: 'Failed',
+            durationMs: Math.round(performance.now() - startedAt),
+          }));
+        }
+        throw err;
+      } finally {
+        if (!options.silent) setLoading(false);
       }
-      return data;
-    } catch (err) {
-      if (!options.silent) {
-        setError(err.message || String(err));
-        setLastCall((prev) => ({
-          ...prev,
-          status: 'Failed',
-          durationMs: Math.round(performance.now() - startedAt),
-        }));
-      }
-      throw err;
-    } finally {
-      if (!options.silent) setLoading(false);
+    })();
+
+    if (method === 'GET') {
+      inFlightRequests.current.set(cacheKey, requestPromise);
     }
 
-  }, [nhClient]);
+    try {
+      return await requestPromise;
+    } finally {
+      if (method === 'GET') {
+        inFlightRequests.current.delete(cacheKey);
+      }
+    }
+  }, [authToken, handleLogout, nhClient]);
 
   // Clear output when switching accounts to prevent showing stale data
   useEffect(() => {
@@ -411,6 +423,9 @@ export default function App() {
           </article>
           <article className="panel">
             <HeroMinersCard mrrClient={mrrClient} onCall={callApi} />
+          </article>
+          <article className="panel">
+            <MiningCoin onCall={callApi} nhClient={nhClient} />
           </article>
         </section>
       </main>

@@ -16,6 +16,50 @@ const getAlgoDisplayName = (code) => {
 const resolveRentalAlgo = (r, info) =>
   info?.algo || r?.algo || r?.algorithm || r?.miningAlgorithm || r?.rig?.type || r?.rig?.algo || r?.type || 'N/A';
 
+function getRentalIdFromRig(rig) {
+  const candidates = [
+    rig?.status?.rentalid,
+    rig?.status?.rental_id,
+    rig?.status?.rentalId,
+    rig?.rentalid,
+    rig?.rental_id,
+    rig?.rentalId,
+    rig?.current_rental_id,
+    rig?.currentRentalId,
+    rig?.rental?.id,
+  ];
+
+  const found = candidates.find(value => value !== undefined && value !== null && String(value).trim() !== '' && String(value).trim() !== '0');
+  return found === undefined ? '' : String(found).trim();
+}
+
+function getRigLookupKeys(rental, fallbackId = '') {
+  return [
+    rental?.id,
+    rental?.rentalid,
+    rental?.rental_id,
+    rental?.rentalId,
+    rental?.rigid,
+    rental?.rig_id,
+    rental?.rigId,
+    rental?.rig?.id,
+    fallbackId,
+  ]
+    .map(value => String(value || '').trim())
+    .filter(Boolean);
+}
+
+function isRentalFinished(now, endTs, sourceRig) {
+  if (endTs > 0) return now >= endTs;
+
+  const statusRaw = sourceRig?.status;
+  const status = String(typeof statusRaw === 'object' ? statusRaw.status : statusRaw || '').toLowerCase();
+  const hasLiveRentalId = Boolean(getRentalIdFromRig(sourceRig));
+  const rentedFlag = Boolean(sourceRig?.status?.rented);
+
+  return !(rentedFlag || hasLiveRentalId || status.includes('rented') || status.includes('active'));
+}
+
 // ==========================
 //  Global State (Persisted in DB)
 // ==========================
@@ -293,7 +337,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
           const statusRaw = rig.status;
           const status = String(typeof statusRaw === 'object' ? statusRaw.status : statusRaw || '').toLowerCase();
           const rentedFlag = Boolean(rig?.status?.rented);
-          const rentalId = String(rig?.status?.rentalid || rig?.status?.rental_id || rig?.rentalid || rig?.rental_id || '').trim();
+          const rentalId = getRentalIdFromRig(rig);
           const onlineFlag = typeof rig?.status?.online === 'boolean' ? rig.status.online : Boolean(rig?.online);
 
           const isRented = rentedFlag || status.includes('rented') || status.includes('active') ||
@@ -330,9 +374,11 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
           if (isRented) {
             rentedRigs.push(rig);
-            const detailKey = rentalId && rentalId !== '0' ? String(rentalId) : `rig-${rig.id}`;
+            const detailKey = rentalId || String(rig.id || '').trim();
+            if (!detailKey) continue;
             harvestedRentalIds.add(detailKey);
             rigLookupByRentalId.set(detailKey, rig);
+            rigLookupByRentalId.set(String(rig.id), rig);
           }
           if (isAvailable) availableCount++;
           if (isOffline) offlineCount++;
@@ -386,6 +432,10 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         if (r && r.id) {
           rentalsMap.set(String(r.id), r);
           globalRentalsMap.set(String(r.id), r);
+          for (const key of getRigLookupKeys(r)) {
+            if (!rentalsMap.has(key)) rentalsMap.set(key, r);
+            if (!globalRentalsMap.has(key)) globalRentalsMap.set(key, r);
+          }
         }
       });
 
@@ -413,18 +463,20 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             name: rig.name,
             status: rig.status,
             hashrate: { current: rig.hashrate || 0 },
-            rig: { type: rig.algo || rig.type }
+            rig: { id: rig.id, type: rig.algo || rig.type }
           });
           globalRentalsMap.set(rid, rentalsMap.get(rid));
         }
       }
 
-      const rentals = Array.from(rentalsMap.values());
+      const rentals = Array.from(new Map(
+        Array.from(rentalsMap.values()).map(r => [String(r?.id || r?.rentalid || r?.rental_id || ''), r])
+      ).values()).filter(r => r && (r.id || r.rentalid || r.rental_id));
 
       // 3) Process each rental (alerts, DB update)
       for (const r of rentals) {
         // Inject current hashrate if missing
-        const liveRig = rigLookupByRentalId.get(String(r.id));
+        const liveRig = getRigLookupKeys(r).map(key => rigLookupByRentalId.get(key)).find(Boolean);
         if (liveRig) {
           if (!r.hashrate || typeof r.hashrate !== 'object') r.hashrate = {};
           const liveVal = parseFloat(liveRig.hashrate || liveRig.status?.hashrate || 0);
@@ -499,7 +551,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
             priceRoi = calculatePriceComparison(mrrPriceNorm, mrrUnit, nhP.price, nhP.unit);
           }
         } 
-        catch (i) { console.warn(`[monitor] ${r.id}: ${e.message}`); }
+        catch (err) { console.warn(`[monitor] ${r.id}: ${err.message}`); }
 
         const orderDiff = (priceRoi !== null && !isNaN(priceRoi)) ? priceRoi : (100 - (parseFloat(efficiency) || 0)).toFixed(1);
 
@@ -631,7 +683,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
         // Build line for summary heartbeat
         const hasEndTime = endT > 0;
-        const isFinished_s = hasEndTime && now >= endT;
+        const isFinished_s = isRentalFinished(now, endT, liveRig);
         const remD_s = Math.floor(remainingMs / 86400000);
         const remH_s = Math.floor((remainingMs % 86400000) / 3600000);
         const remM_s = Math.floor((remainingMs % 3600000) / 60000);
@@ -747,8 +799,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
   //  Send combined summary heartbeat
   // ------------------------------------------------------------------
   const shouldSendCombinedSummary = forceNotify || (now - (lastAlertTimes.get('global_summary') || 0) >= RENTED_HEARTBEAT_MS);
-  // Ensure rentedAll matches the actual list count
-  rentedAll = activeRentalLines.length;
+  rentedAll = accountMetrics.reduce((sum, metric) => sum + (Number(metric.rented) || 0), 0);
   if (shouldSendCombinedSummary && (accountMetrics.length > 0 || activeRentalLines.length > 0)) {
     const maxBarLen = 14;
     const barChart = accountMetrics.map(am => {

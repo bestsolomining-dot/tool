@@ -1,4 +1,3 @@
-import React from 'react';
 import Pools from './Pools';
 import Modal from './Modal';
 import NiceHash from './NiceHash';
@@ -6,6 +5,7 @@ import MiningRigSection from './MiningRigSection';
 import { NiceHashOrderProvider } from './NiceHashContext.jsx';
 import HashrateCalculator from './HashrateCalculator';
 import HeroMinersCard from './HeroMinersCard';
+import MiningCoin from './MiningCoin.jsx';
 
 export default function Dashboard({
   state,
@@ -160,6 +160,10 @@ export default function Dashboard({
           {/* HERO MINERS CARD */}
           <article className="panel">
             <HeroMinersCard mrrClient={state.mrrClient} onCall={callApi} />
+          </article>
+
+          <article className="panel">
+            <MiningCoin onCall={callApi} nhClient={state.nhOrderClient} />
           </article>
         </div>
       </main>

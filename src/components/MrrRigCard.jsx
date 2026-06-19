@@ -31,8 +31,8 @@ const MrrRigCard = ({
   setEnrichedInfo
 }) => {
   const statusStr = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
-  const isRented = statusStr.includes('rented');
   const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id;
+  const isRented = statusStr.includes('rented') || statusStr.includes('active') || Boolean(rentalId);
   const displayId = (isRented && rentalId) ? rentalId : rig.id;
   const idLabel = (isRented && rentalId) ? 'Rental' : 'Rig';
   const [nowMs, setNowMs] = useState(0);
@@ -97,17 +97,16 @@ const MrrRigCard = ({
     : 0;
   const baseListRate = listBtcData.isTotalCost ? 0 : listBtcData.value;
   const effectiveListRate = baseListRate > 0 ? baseListRate : derivedDailyRate;
-  // Simplified ROI Logic: Use List Rate and adjust by Efficiency (Effect)
-  const mrrPriceNum = (() => {
+  // MRR rental is sold revenue. Adjust by delivery efficiency so under-delivery lowers effective revenue.
+  const soldMrrPriceNum = (() => {
     const listRate = effectiveListRate;
     if (isRented && effNum > 0 && Number.isFinite(listRate) && listRate > 0) {
-      // "ROI is dependence of effect": If efficiency is 50%, effective price paid for hashes delivered is doubled.
-      return listRate / (effNum / 100);
+      return listRate * (effNum / 100);
     }
     return listRate;
   })();
 
-  const mrrComparePriceValue = mrrPriceNum;
+  const soldMrrPriceValue = soldMrrPriceNum;
   const isMrrBtc = listBtcData.currency === 'BTC' && listBtcData.value > 0;
 
   const mrrUnit = getAlgorithmUnit(algoName); // Use the centralized mapping for MRR unit
@@ -117,25 +116,24 @@ const MrrRigCard = ({
   // Fallback to market price (nhData) if no active user order is found
   const marketNhPrice = getNiceHashPriceValue(nhBase);
   const orderNhPrice = getNiceHashPriceValue(nhOrder);
-  const myNhPrice = nhOrder && orderNhPrice > 0 ? orderNhPrice : marketNhPrice;
+  const buyNhPrice = nhOrder && orderNhPrice > 0 ? orderNhPrice : marketNhPrice;
   const nhFeeOverride = parseFloat(nhOrder?.add_fee ?? nhOrder?.priceWithFee ?? 0);
-  const nhPriceWithFee = myNhPrice > 0 ? (nhFeeOverride > 0 ? nhFeeOverride : (myNhPrice * 1.04)) : 0;
+  const buyNhPriceWithFee = buyNhPrice > 0 ? (nhFeeOverride > 0 ? nhFeeOverride : (buyNhPrice * 1.04)) : 0;
 
   const myNhUnit = getAlgorithmUnit(normalizeAlgoForNiceHash(algoName)); // Use the centralized mapping for NiceHash unit
   const mrrRateUnit = listBtcData.unit || mrrUnit;
 
-  // ROI Logic: Only show price-based ROI if we have valid price data from NiceHash
-  const myOrderDiffRaw = (myNhPrice > 0 && mrrComparePriceValue > 0) ? calculatePriceComparison(
-    mrrComparePriceValue,
+  // Profit ROI: sold MRR revenue vs bought NiceHash cost.
+  const profitDiffRaw = (buyNhPriceWithFee > 0 && soldMrrPriceValue > 0) ? calculatePriceComparison(
+    soldMrrPriceValue,
     mrrRateUnit,
-    nhPriceWithFee,
-    myNhUnit,
-    true // isMrrVsNh = true, for MRR card ROI
+    buyNhPriceWithFee,
+    myNhUnit
   ) : null;
-  const myOrderDiff = myOrderDiffRaw; // myOrderDiffRaw now directly gives the desired percentage
-  const roiStatusText = myOrderDiff !== null
-    ? `${myOrderDiff > 0 ? '+' : ''}${myOrderDiff.toFixed(2)}%`
-    : (myNhPrice <= 0 ? 'Waiting for NiceHash price' : 'Waiting for MRR rate');
+  const profitDiff = profitDiffRaw;
+  const roiStatusText = profitDiff !== null
+    ? `${profitDiff > 0 ? '+' : ''}${profitDiff.toFixed(2)}%`
+    : (buyNhPrice <= 0 ? 'Waiting for NiceHash buy price' : 'Waiting for MRR sold rate');
 
   // 3. Time and Consumption tracking
   const elapsedMs = nowMs > 0 ? Math.max(0, Math.min(nowMs - startT, totalMs)) : 0;
@@ -204,26 +202,26 @@ const MrrRigCard = ({
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                <span style={{ opacity: 0.75 }}>Paid</span>
+                <span style={{ opacity: 0.75 }}>Sold</span>
                 <strong style={{ color: paidLabel ? '#34d399' : '#94a3b8' }}>{paidLabel || 'N/A'}</strong>
               </div>
 
               <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'grid', gap: '4px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                  <span style={{ opacity: 0.65 }}>{nhOrder ? 'NH order' : 'NH market'}</span>
-                  <strong style={{ color: myNhPrice > 0 ? '#fbbf24' : '#94a3b8' }}>
-                    {myNhPrice > 0 ? `${myNhPrice.toFixed(8)} BTC/${myNhUnit}/Day` : 'N/A'}
+                  <span style={{ opacity: 0.65 }}>{nhOrder ? 'Buy NH order' : 'Buy NH market'}</span>
+                  <strong style={{ color: buyNhPriceWithFee > 0 ? '#fbbf24' : '#94a3b8' }}>
+                    {buyNhPriceWithFee > 0 ? `${buyNhPriceWithFee.toFixed(8)} BTC/${myNhUnit}/Day` : 'N/A'}
                   </strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                  <span style={{ opacity: 0.65 }}>{baseListRate > 0 ? 'MRR rate' : 'MRR derived'}</span>
-                  <strong style={{ color: mrrComparePriceValue > 0 ? '#93c5fd' : '#94a3b8' }}>
-                    {mrrComparePriceValue > 0 ? `${mrrComparePriceValue.toFixed(8)} BTC/${mrrRateUnit}/Day` : 'N/A'}
+                  <span style={{ opacity: 0.65 }}>{baseListRate > 0 ? 'Sold MRR rate' : 'Sold MRR derived'}</span>
+                  <strong style={{ color: soldMrrPriceValue > 0 ? '#93c5fd' : '#94a3b8' }}>
+                    {soldMrrPriceValue > 0 ? `${soldMrrPriceValue.toFixed(8)} BTC/${mrrRateUnit}/Day` : 'N/A'}
                   </strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                  <span style={{ opacity: 0.65 }}>{myOrderDiff !== null ? 'ROI' : 'ROI status'}</span>
-                  <strong style={{ color: myOrderDiff !== null ? getRoiColor(myOrderDiff) : '#cbd5e1' }}>{roiStatusText}</strong>
+                  <span style={{ opacity: 0.65 }}>{profitDiff !== null ? 'Profit diff' : 'ROI status'}</span>
+                  <strong style={{ color: profitDiff !== null ? getRoiColor(profitDiff) : '#cbd5e1' }}>{roiStatusText}</strong>
                 </div>
               </div>
 

@@ -210,7 +210,7 @@ export default function TelegramManager({ onCall, mrrClient }) {
         body: { client: scopeLabel },
         silent: true
       });
-      const accounts = Array.isArray(res?.accounts) ? res.accounts.length : null;
+      const accounts = Array.isArray(res?.summary?.accounts) ? res.summary.accounts.length : null;
       const suffix = accounts !== null ? ` across ${accounts} account${accounts === 1 ? '' : 's'}` : '';
       setHeartbeatStatus(res?.success ? `Heartbeat sent${suffix}` : 'Heartbeat request finished');
     } catch (err) {

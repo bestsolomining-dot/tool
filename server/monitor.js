@@ -60,6 +60,28 @@ function isRentalFinished(now, endTs, sourceRig) {
   return !(rentedFlag || hasLiveRentalId || status.includes('rented') || status.includes('active'));
 }
 
+function hasInactiveRentalStatus(rental) {
+  const statusCandidates = [
+    rental?.status,
+    rental?.state,
+    rental?.rental_status,
+    rental?.rentalStatus,
+    rental?.rig?.status,
+  ];
+  const status = statusCandidates
+    .map(value => String(typeof value === 'object' ? value?.status : value || '').toLowerCase())
+    .find(Boolean) || '';
+
+  return ['finished', 'complete', 'completed', 'cancelled', 'canceled', 'expired', 'ended'].some(token => status.includes(token));
+}
+
+function isRentalActive(now, endTs, sourceRig, rental) {
+  if (hasInactiveRentalStatus(rental)) return false;
+  if (endTs > 0) return now < endTs;
+  if (rental?.__rentalSide === 'sold') return true;
+  return !isRentalFinished(now, endTs, sourceRig);
+}
+
 // ==========================
 //  Global State (Persisted in DB)
 // ==========================
@@ -422,10 +444,15 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
         metric.error = true;
       }
 
-      const allRentalsRaw = [
-        ...extractArray(boughtRes.data || {}),
-        ...extractArray(soldRes.data || {})
-      ];
+      const soldRentalsRaw = extractArray(soldRes.data || {}).map(r => ({ ...r, __rentalSide: 'sold' }));
+      const boughtRentalsRaw = extractArray(boughtRes.data || {}).map(r => ({ ...r, __rentalSide: 'bought' }));
+      const allRentalsRaw = soldRentalsRaw;
+
+      console.log(`[monitor:${acct}] rentals fetched: sold=${soldRentalsRaw.length}, bought=${boughtRentalsRaw.length}, rig-rented-flags=${harvestedRentalIds.size}`);
+
+      if (boughtRentalsRaw.length > 0) {
+        console.log(`[monitor:${acct}] Ignoring ${boughtRentalsRaw.length} bought rental(s) for seller heartbeat; only sold rentals affect ROI/active detail.`);
+      }
 
       const rentalsMap = new Map();
       allRentalsRaw.forEach(r => {
@@ -683,7 +710,7 @@ export async function runRentalMonitor(forceNotify = false, clientScope = 'ALL')
 
         // Build line for summary heartbeat
         const hasEndTime = endT > 0;
-        const isFinished_s = isRentalFinished(now, endT, liveRig);
+        const isFinished_s = !isRentalActive(now, endT, liveRig, r);
         const remD_s = Math.floor(remainingMs / 86400000);
         const remH_s = Math.floor((remainingMs % 86400000) / 3600000);
         const remM_s = Math.floor((remainingMs % 3600000) / 60000);

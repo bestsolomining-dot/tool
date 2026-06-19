@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchMiningStats } from './miningStatsFetcher';
 
 function parseMiningDutchHtml(html) {
   if (!html) return [];
@@ -18,9 +19,23 @@ function parseMiningDutchHtml(html) {
       algorithm: cells[0]?.textContent?.trim() || 'N/A',
       miners: cells[1]?.textContent?.trim() || '0',
       btcPerDay: cells[2]?.textContent?.trim() || '0',
+      usdPerDay: 0,
       hashrate: cells[4]?.textContent?.trim() || 'N/A',
     };
   }).filter((item) => item.algorithm !== 'N/A');
+}
+
+function normalizeMiningDutchRows(payload) {
+  if (payload?.html) return parseMiningDutchHtml(payload.html);
+
+  const rows = Array.isArray(payload?.coinStats) ? payload.coinStats : [];
+  return rows.map((row) => ({
+    algorithm: row.algorithm || row.algo || 'N/A',
+    miners: row.miners || 0,
+    btcPerDay: row.btcPerDay || 0,
+    usdPerDay: row.usdPerDay || 0,
+    hashrate: row.hashrate || 'N/A',
+  })).filter((item) => item.algorithm !== 'N/A');
 }
 
 function StatsTable({ rows }) {
@@ -34,6 +49,7 @@ function StatsTable({ rows }) {
         <tr style={{ color: '#64748b', borderBottom: '1px solid #334155' }}>
           <th style={{ padding: '6px 4px', textAlign: 'left' }}>Algorithm</th>
           <th style={{ padding: '6px 4px', textAlign: 'right' }}>Miners</th>
+          <th style={{ padding: '6px 4px', textAlign: 'right' }}>USD/Day</th>
           <th style={{ padding: '6px 4px', textAlign: 'right' }}>BTC/Day</th>
           <th style={{ padding: '6px 4px', textAlign: 'left' }}>Hashrate</th>
         </tr>
@@ -43,7 +59,8 @@ function StatsTable({ rows }) {
           <tr key={`${row.algorithm || 'dutch'}-${idx}`} style={{ borderBottom: '1px solid #1e293b' }}>
             <td style={{ padding: '6px 4px', color: '#e2e8f0' }}>{row.algorithm}</td>
             <td style={{ padding: '6px 4px', textAlign: 'right' }}>{row.miners}</td>
-            <td style={{ padding: '6px 4px', textAlign: 'right' }}>{row.btcPerDay}</td>
+            <td style={{ padding: '6px 4px', textAlign: 'right' }}>${Number(row.usdPerDay || 0).toFixed(2)}</td>
+            <td style={{ padding: '6px 4px', textAlign: 'right' }}>{Number(row.btcPerDay || 0).toFixed(8)}</td>
             <td style={{ padding: '6px 4px', color: '#94a3b8' }}>{row.hashrate}</td>
           </tr>
         ))}
@@ -53,29 +70,33 @@ function StatsTable({ rows }) {
 }
 
 export default function MiningDutch({ onCall }) {
-  const [html, setHtml] = useState('');
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [lastFetchedAt, setLastFetchedAt] = useState('');
 
   const loadData = useCallback(async (force = false) => {
-    if (typeof onCall !== 'function') return;
     setLoading(true);
     setError('');
     try {
-      const response = await onCall('/api/v2/mining-dutch/html', {
-        query: force ? { force: 1 } : undefined,
-        silent: true,
-      });
+      let response = await fetchMiningStats('miningpooldutch', 'BT', null, null, 20000, force);
+
+      if (!response?.success && typeof onCall === 'function') {
+        response = await onCall('/api/v2/mining-dutch/html', {
+          query: force ? { force: 1 } : undefined,
+          silent: true,
+        });
+      }
+
       if (response?.success) {
-        setHtml(response.html || '');
-        setLastFetchedAt(response.fetchedAt || '');
+        setStats(response);
+        setLastFetchedAt(response.fetchedAt || new Date().toISOString());
       } else {
-        throw new Error(response?.error || 'Failed to fetch Mining-Dutch HTML');
+        throw new Error(response?.error || 'Failed to fetch Mining-Dutch stats');
       }
     } catch (err) {
-      setError(err.message || 'Failed to fetch Mining-Dutch HTML');
-      setHtml('');
+      setError(err.message || 'Failed to fetch Mining-Dutch stats');
+      setStats(null);
     } finally {
       setLoading(false);
     }
@@ -87,7 +108,7 @@ export default function MiningDutch({ onCall }) {
     });
   }, [loadData]);
 
-  const rows = useMemo(() => parseMiningDutchHtml(html), [html]);
+  const rows = useMemo(() => normalizeMiningDutchRows(stats), [stats]);
 
   return (
     <section style={{ padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.015)' }}>
@@ -95,7 +116,7 @@ export default function MiningDutch({ onCall }) {
         <div>
           <h4 style={{ margin: 0, color: '#fbbf24' }}>Mining-Dutch</h4>
           <div style={{ fontSize: '11px', opacity: 0.6 }}>
-            HTML snapshot fetched server-side with a browser user-agent
+            Global pool profitability snapshot
           </div>
         </div>
         <button

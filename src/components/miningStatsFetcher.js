@@ -18,6 +18,13 @@ export function parseHeroMinerHtml(html) {
   return { title, description, length: html.length };
 }
 
+const ACTION_ALIASES = {
+  herominers_global: ['herominers_global', 'herominers'],
+  herominers: ['herominers'],
+  miningpooldutch: ['miningpooldutch', 'miningDutch'],
+  all: ['all'],
+};
+
 const MAX_ATTEMPTS = 5;
 const REQUEST_TIMEOUT = 20000;
 const BASE_DELAY = 1000;
@@ -56,7 +63,9 @@ function initSocket() {
       pendingRequests.delete(requestId);
 
       if (success) {
-        pending.resolve(data[action] || data);
+        const aliases = ACTION_ALIASES[action] || [action];
+        const actionData = aliases.map((key) => data?.[key]).find(Boolean);
+        pending.resolve(actionData || data);
       } else {
         pending.reject(new Error(error || `Request "${action}" failed`));
       }
@@ -97,7 +106,7 @@ async function waitForSocket(socket) {
 
 export async function fetchMiningStats(type, client, rigId = null, coin = null, customTimeout = REQUEST_TIMEOUT, force = false) {
   let targetClient = client;
-  const globalActions = ['miningpooldutch', 'herominers', 'all'];
+  const globalActions = ['miningpooldutch', 'herominers', 'herominers_global', 'all'];
   
   if (targetClient === 'VN' && globalActions.includes(type)) {
     targetClient = 'BT';

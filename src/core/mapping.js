@@ -110,8 +110,8 @@ export const HASHRATE_SUFFIXES = {
 
 // Algorithm market units (NiceHash Market Standards)
 export const ALGO_UNITS = {
-  'SHA256': 'PH',
-  'SCRYPT': 'PH',
+  'SHA256': 'EH',
+  'SCRYPT': 'TH',
   'X11': 'PH',
   'DAGGERHASHIMOTO': 'TH',
   'ETHASH': 'TH',
@@ -203,19 +203,25 @@ export function getAlgorithmDisplayName(algo) {
 
 export function calculatePriceComparison(yourPrice, yourUnit, marketPrice, marketUnit, isMrrVsNh = false) {
   if (!yourPrice || !marketPrice || yourPrice <= 0 || marketPrice <= 0) return null;
-  
-  // Convert to same unit (H/s)
-  const yourH = parseFloat(yourPrice) * getUnitMultiplier(yourUnit);
-  const marketH = parseFloat(marketPrice) * getUnitMultiplier(marketUnit);
-  
-  if (yourH === 0 || marketH === 0) return null;
-  
-  // Calculate percentage difference
-  const diff = ((yourH - marketH) / marketH) * 100;
-  return isMrrVsNh ? -diff : diff;
+
+  const yourMultiplier = getUnitMultiplier(yourUnit);
+  const marketMultiplier = getUnitMultiplier(marketUnit);
+  if (yourMultiplier <= 0 || marketMultiplier <= 0) return null;
+
+  // Prices are quoted per unit per day. Normalize both to price per H/s/day.
+  const yourPerHash = parseFloat(yourPrice) / yourMultiplier;
+  const marketPerHash = parseFloat(marketPrice) / marketMultiplier;
+
+  if (yourPerHash <= 0 || marketPerHash <= 0) return null;
+
+  if (isMrrVsNh) {
+    return ((marketPerHash - yourPerHash) / yourPerHash) * 100;
+  }
+
+  return ((yourPerHash - marketPerHash) / marketPerHash) * 100;
 }
 
 function getUnitMultiplier(unit) {
-  const normalized = String(unit || '').toUpperCase().trim();
+  const normalized = String(unit || '').toUpperCase().replace(/\/S$/i, '').trim();
   return HASHRATE_SUFFIXES[normalized] || 1;
 };

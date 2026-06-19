@@ -1,31 +1,23 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
 import { CountdownTimer } from './MiningRigRental';
 import {
-  clean,
   getClientBadgeStyle,
   getRawHashrate,
   getPriceDataLocal,
   parsePriceValueLocal,
-  getNiceHashPriceValue,
   formatRentalStartTime, // Keep this, it's used
-  getRentalAlgorithm,
-  getRentalEfficiency,
-  getRentalAdvertisedHashrate,
-  getRentalAverageHashrate,
   getStatusClass,
   getRoiColor
 } from '../core/mrrUtils.js';
 import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils.js';
-import { getAlgoDisplayName, normalizeAlgoForNiceHash, calculatePriceComparison, UNIT_FACTORS, getAlgorithmUnit } from '../core/mapping.js';
+import { getAlgoDisplayName, normalizeAlgoForNiceHash, calculatePriceComparison, getAlgorithmUnit } from '../core/mapping.js';
 
 const MrrRigCard = ({
   rig,
   algoName,
   info,
   isMine,
-  mrrClient,
   nhOrders,
-  coinPrices,
   algoMarketPrices,
   onOpenPool,
   onOpenCompletionCalculator,
@@ -42,6 +34,16 @@ const MrrRigCard = ({
   const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id;
   const displayId = (isRented && rentalId) ? rentalId : rig.id;
   const idLabel = (isRented && rentalId) ? 'Rental' : 'Rig';
+  const [nowMs, setNowMs] = useState(0);
+
+  useEffect(() => {
+    if (!isRented) return undefined;
+
+    const updateNow = () => setNowMs(Date.now());
+    updateNow();
+    const timer = setInterval(updateNow, 30000);
+    return () => clearInterval(timer);
+  }, [isRented]);
 
   const rawNhData = algoMarketPrices[algoName.toUpperCase()] || info?.nicehashPrice;
   const nhBase = Array.isArray(rawNhData) ? rawNhData[0] : rawNhData;
@@ -88,7 +90,7 @@ const MrrRigCard = ({
     return listRate;
   })();
 
-  const mrrComparePriceValue = listBtcData.value;
+  const mrrComparePriceValue = mrrPriceNum;
   const isMrrBtc = listBtcData.currency === 'BTC' && listBtcData.value > 0;
   const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid);
   const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || ''; // Keep this
@@ -106,18 +108,13 @@ const MrrRigCard = ({
 
   // ROI Logic: Only show price-based ROI if we have valid price data from NiceHash
   const myOrderDiffRaw = (myNhPrice > 0 && mrrComparePriceValue > 0) ? calculatePriceComparison(
-    mrrComparePriceValue, // Use the raw list price for ROI comparison, not efficiency adjusted
-    mrrUnit, // Pass mrrUnit directly; calculatePriceComparison should handle conversion
+    mrrComparePriceValue,
+    listBtcData.unit || mrrUnit,
     nhPriceWithFee,
     myNhUnit,
     true // isMrrVsNh = true, for MRR card ROI
   ) : null;
   const myOrderDiff = myOrderDiffRaw; // myOrderDiffRaw now directly gives the desired percentage
-
-  // For Worth (NH) calculation, use efficiency-adjusted MRR price
-  const mrrPricePerThForWorth = mrrPriceNum / (UNIT_FACTORS[String(mrrUnit).toUpperCase()] || 1);
-  const nhPricePerThForWorth = nhPriceWithFee / (UNIT_FACTORS[String(myNhUnit).toUpperCase()] || 1);
-  const nhPriceRatio = mrrPricePerThForWorth > 0 ? (nhPricePerThForWorth / mrrPricePerThForWorth) : 0;
 
   // 3. Time and Consumption tracking
   const rentalStartTime = info?.startTime || rig.start;
@@ -125,13 +122,11 @@ const MrrRigCard = ({
   const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end || '').endsWith('UTC') ? '' : ' UTC')).getTime();
   const totalMs = (isNaN(startT) || isNaN(endT)) ? 0 : endT - startT;
 
-  const elapsedMs = Math.max(0, Math.min(Date.now() - startT, totalMs));
+  const elapsedMs = nowMs > 0 ? Math.max(0, Math.min(nowMs - startT, totalMs)) : 0;
   const timeProgress = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
   const timeProgressFactor = Math.max(0, Math.min(1, timeProgress / 100));
   const currentPayValue = paidAmount > 0 ? (paidAmount * timeProgressFactor) : 0;
   const realizedPayValue = currentPayValue * (effNum / 100);
-  const nhValueEquivalent = realizedPayValue * nhPriceRatio;
-  const worthDiff = realizedPayValue > 0 ? ((nhValueEquivalent - realizedPayValue) / realizedPayValue * 100) : 0;
 
   const targetHashrate = (totalMs - elapsedMs) > 0 ? ((adsVal * (totalMs / 1000) - avgVal * (elapsedMs / 1000)) / ((totalMs - elapsedMs) / 1000)) : 0;
   const isBehind = targetHashrate > adsVal;
@@ -196,17 +191,6 @@ const MrrRigCard = ({
                     <span>Value (Effect):</span>
                     <strong>{realizedPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
                   </div>
-                  {/* <div style={{ fontSize: '9px', color: '#60a5fa', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Worth (NH):</span>
-                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        {nhPriceRatio > 0 && (
-                          <span style={{ color: worthDiff >= 0 ? '#10b981' : '#f87171', fontWeight: 'bold', fontSize: '8px' }}>
-                            ({worthDiff >= 0 ? '+' : ''}{worthDiff.toFixed(1)}%)
-                          </span>
-                        )}
-                        <strong>{nhValueEquivalent.toFixed(8)} <small>{paidCurrency}</small></strong>
-                      </div>
-                    </div> */}
                 </div>
               )}
               {myNhPrice > 0 && myOrderDiff !== null && (

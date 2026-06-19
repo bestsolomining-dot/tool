@@ -74,7 +74,9 @@ export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
   const { rentedRigs } = useRentedRigs();
 
   const activeAlgos = useMemo(
-    () => new Set(rentedRigs.map((r) => String(r.algo || '').toUpperCase()).filter(Boolean)),
+    () => new Set(rentedRigs
+      .map((r) => String(r.algo || r.algorithm || r.type || '').toUpperCase())
+      .filter(Boolean)),
     [rentedRigs]
   );
 

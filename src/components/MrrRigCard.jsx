@@ -7,7 +7,8 @@ import {
   parsePriceValueLocal,
   formatRentalStartTime, // Keep this, it's used
   getStatusClass,
-  getRoiColor
+  getRoiColor,
+  getNiceHashPriceValue
 } from '../core/mrrUtils.js';
 import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils.js';
 import { getAlgoDisplayName, normalizeAlgoForNiceHash, calculatePriceComparison, getAlgorithmUnit } from '../core/mapping.js';
@@ -47,9 +48,16 @@ const MrrRigCard = ({
 
   const rawNhData = algoMarketPrices[algoName.toUpperCase()] || info?.nicehashPrice;
   const nhBase = Array.isArray(rawNhData) ? rawNhData[0] : rawNhData;
-  const nhData = nhBase?.price || nhBase;
   const adsVal = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0;
   const avgVal = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash) || 0;
+  const rentalStartTime = info?.startTime || rig.start;
+  const rentalEndTime = info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null);
+  const startT = new Date(rentalStartTime + (String(rentalStartTime || '').endsWith('UTC') ? '' : ' UTC')).getTime();
+  const endT = new Date(rentalEndTime + (String(rentalEndTime || '').endsWith('UTC') ? '' : ' UTC')).getTime();
+  const totalMs = (isNaN(startT) || isNaN(endT)) ? 0 : endT - startT;
+  const durationHoursFromDates = totalMs > 0 ? totalMs / 3600000 : 0;
+  const durationHoursExplicit = parseFloat(info?.duration ?? info?.hours ?? rig.duration ?? rig.hours ?? rig.length ?? 0);
+  const durationHours = durationHoursExplicit > 0 ? durationHoursExplicit : durationHoursFromDates;
 
   // 1. Efficiency and Styling initialization (Fixed ReferenceErrors)
   const rawEffValue = info?.percent ?? rig.hashrate?.average?.percent ?? rig.percent ?? (adsVal > 0 ? (avgVal / adsVal * 100) : 0);
@@ -80,10 +88,19 @@ const MrrRigCard = ({
   // which breaks the daily-rate comparison logic for ROI.
   const listPriceSource = rig.price_converted || rig?.price?.BTC || rig.price || info?.price_converted || info?.price?.BTC || info?.price || rig.min_price; // Keep this
   const listBtcData = getBtcPriceDataUtils(listPriceSource); // Keep this
+  const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid ?? info?.price?.amount ?? rig.price?.amount);
+  const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || ''; // Keep this
+  const paidLabel = paidAmount > 0 && paidCurrency ? `${paidAmount.toFixed(8)} ${paidCurrency}` : null;
+  const canDeriveFromPaid = !paidCurrency || String(paidCurrency).toUpperCase() === 'BTC';
+  const derivedDailyRate = canDeriveFromPaid && paidAmount > 0 && adsVal > 0 && durationHours > 0
+    ? paidAmount / (durationHours / 24) / adsVal
+    : 0;
+  const baseListRate = listBtcData.isTotalCost ? 0 : listBtcData.value;
+  const effectiveListRate = baseListRate > 0 ? baseListRate : derivedDailyRate;
   // Simplified ROI Logic: Use List Rate and adjust by Efficiency (Effect)
   const mrrPriceNum = (() => {
-    const listRate = listBtcData.value;
-    if (isRented && effNum > 0 && Number.isFinite(listRate)) {
+    const listRate = effectiveListRate;
+    if (isRented && effNum > 0 && Number.isFinite(listRate) && listRate > 0) {
       // "ROI is dependence of effect": If efficiency is 50%, effective price paid for hashes delivered is doubled.
       return listRate / (effNum / 100);
     }
@@ -92,36 +109,35 @@ const MrrRigCard = ({
 
   const mrrComparePriceValue = mrrPriceNum;
   const isMrrBtc = listBtcData.currency === 'BTC' && listBtcData.value > 0;
-  const paidAmount = parsePriceValueLocal(info?.price?.paid ?? rig.price?.paid);
-  const paidCurrency = info?.price?.currency || info?.price?.price_unit || rig.price?.currency || rig.price?.price_unit || rig.currency || info?.currency || ''; // Keep this
-  const paidLabel = paidAmount > 0 && paidCurrency ? `${paidAmount.toFixed(8)} ${paidCurrency}` : null;
 
   const mrrUnit = getAlgorithmUnit(algoName); // Use the centralized mapping for MRR unit
 
-  const nhOrder = nhOrders?.find(o => normalizeAlgoForNiceHash(o.algo) === normalizeAlgoForNiceHash(algoName));
+  const nhOrder = nhOrders?.find(o => normalizeAlgoForNiceHash(o.algo || o.algorithm || o.type || o.market) === normalizeAlgoForNiceHash(algoName));
 
   // Fallback to market price (nhData) if no active user order is found
-  const myNhPrice = nhOrder ? parseFloat(nhOrder.price) : parseFloat(nhData || 0);
-  const nhPriceWithFee = myNhPrice > 0 ? (nhOrder?.add_fee ? parseFloat(nhOrder.add_fee) : (myNhPrice * 1.04)) : 0;
+  const marketNhPrice = getNiceHashPriceValue(nhBase);
+  const orderNhPrice = getNiceHashPriceValue(nhOrder);
+  const myNhPrice = nhOrder && orderNhPrice > 0 ? orderNhPrice : marketNhPrice;
+  const nhFeeOverride = parseFloat(nhOrder?.add_fee ?? nhOrder?.priceWithFee ?? 0);
+  const nhPriceWithFee = myNhPrice > 0 ? (nhFeeOverride > 0 ? nhFeeOverride : (myNhPrice * 1.04)) : 0;
 
   const myNhUnit = getAlgorithmUnit(normalizeAlgoForNiceHash(algoName)); // Use the centralized mapping for NiceHash unit
+  const mrrRateUnit = listBtcData.unit || mrrUnit;
 
   // ROI Logic: Only show price-based ROI if we have valid price data from NiceHash
   const myOrderDiffRaw = (myNhPrice > 0 && mrrComparePriceValue > 0) ? calculatePriceComparison(
     mrrComparePriceValue,
-    listBtcData.unit || mrrUnit,
+    mrrRateUnit,
     nhPriceWithFee,
     myNhUnit,
     true // isMrrVsNh = true, for MRR card ROI
   ) : null;
   const myOrderDiff = myOrderDiffRaw; // myOrderDiffRaw now directly gives the desired percentage
+  const roiStatusText = myOrderDiff !== null
+    ? `${myOrderDiff > 0 ? '+' : ''}${myOrderDiff.toFixed(2)}%`
+    : (myNhPrice <= 0 ? 'Waiting for NiceHash price' : 'Waiting for MRR rate');
 
   // 3. Time and Consumption tracking
-  const rentalStartTime = info?.startTime || rig.start;
-  const startT = new Date(rentalStartTime + (String(rentalStartTime || '').endsWith('UTC') ? '' : ' UTC')).getTime();
-  const endT = new Date((info?.endTime || rig.end || (typeof rig.status === 'object' ? rig.status.end : null)) + (String(info?.endTime || rig.end || '').endsWith('UTC') ? '' : ' UTC')).getTime();
-  const totalMs = (isNaN(startT) || isNaN(endT)) ? 0 : endT - startT;
-
   const elapsedMs = nowMs > 0 ? Math.max(0, Math.min(nowMs - startT, totalMs)) : 0;
   const timeProgress = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
   const timeProgressFactor = Math.max(0, Math.min(1, timeProgress / 100));
@@ -176,35 +192,51 @@ const MrrRigCard = ({
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {isRented && paidLabel && (
-            <div style={{ fontSize: '10px', color: '#10b981', marginTop: '5px', background: 'rgba(19, 173, 122, 0.06)', padding: '4px', borderRadius: '4px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Paid: <strong>{paidLabel}</strong></span>
+          {isRented && (
+            <div style={{
+              fontSize: '10px',
+              color: '#dbeafe',
+              marginTop: '5px',
+              background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.14), rgba(16, 185, 129, 0.08))',
+              padding: '8px',
+              borderRadius: '10px',
+              border: '1px solid rgba(125, 211, 252, 0.16)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                <span style={{ opacity: 0.75 }}>Paid</span>
+                <strong style={{ color: paidLabel ? '#34d399' : '#94a3b8' }}>{paidLabel || 'N/A'}</strong>
               </div>
+
+              <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'grid', gap: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                  <span style={{ opacity: 0.65 }}>{nhOrder ? 'NH order' : 'NH market'}</span>
+                  <strong style={{ color: myNhPrice > 0 ? '#fbbf24' : '#94a3b8' }}>
+                    {myNhPrice > 0 ? `${myNhPrice.toFixed(8)} BTC/${myNhUnit}/Day` : 'N/A'}
+                  </strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                  <span style={{ opacity: 0.65 }}>{baseListRate > 0 ? 'MRR rate' : 'MRR derived'}</span>
+                  <strong style={{ color: mrrComparePriceValue > 0 ? '#93c5fd' : '#94a3b8' }}>
+                    {mrrComparePriceValue > 0 ? `${mrrComparePriceValue.toFixed(8)} BTC/${mrrRateUnit}/Day` : 'N/A'}
+                  </strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                  <span style={{ opacity: 0.65 }}>{myOrderDiff !== null ? 'ROI' : 'ROI status'}</span>
+                  <strong style={{ color: myOrderDiff !== null ? getRoiColor(myOrderDiff) : '#cbd5e1' }}>{roiStatusText}</strong>
+                </div>
+              </div>
+
               {currentPayValue > 0 && (
-                <div style={{ marginTop: '3px', paddingTop: '3px', borderTop: '1px solid rgba(16, 185, 129, 0.1)' }}>
-                  <div style={{ fontSize: '9px', opacity: 0.8, display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Spent (Time):</span>
+                <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ fontSize: '9px', opacity: 0.82, display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Spent by time</span>
                     <strong>{currentPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
                   </div>
                   <div style={{ fontSize: '9px', color: effNum < 100 ? '#f87171' : '#34d399', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Value (Effect):</span>
+                    <span>Value by effect</span>
                     <strong>{realizedPayValue.toFixed(8)} <small>{paidCurrency}</small></strong>
                   </div>
-                </div>
-              )}
-              {myNhPrice > 0 && myOrderDiff !== null && (
-                <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', padding: '6px', background: 'rgba(0,0,0,0.2)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ opacity: 0.7, fontSize: '8px' }}>{nhOrder ? 'Order' : 'Market'}: </span>
-                    <span style={{ fontWeight: 'bold', color: '#fbbf24' }}>{myNhPrice.toFixed(8)}</span>
-                  </div>
-                  {myOrderDiff !== null && (
-                    <div>
-                      <span style={{ opacity: 0.7, fontSize: '10px' }}>{nhOrder ? 'ROI' : 'VS Market'}: </span>
-                      <span style={{ fontWeight: 'bold', color: getRoiColor(myOrderDiff) }}>{myOrderDiff > 0 ? '+' : ''}{myOrderDiff.toFixed(2)}%</span>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

@@ -160,6 +160,7 @@ const MrrRigCard = ({
   isMine,
   nhOrders,
   coinPrices,
+  algoMarketPrices,   // <-- NEW: market prices from parent
   onOpenPool,
   onOpenCompletionCalculator,
   fetchRigDetailInfo,
@@ -264,6 +265,24 @@ const MrrRigCard = ({
     coinPrices,
     fallbackBtc,
   );
+
+  // --- 🆕 DIRECT USDT CONVERSION (no BTC bridge) ---
+  const getUsdtAmountDirect = (amount, currency, coinPrices) => {
+    const upperCurrency = String(currency || "").toUpperCase();
+    if (upperCurrency === "USDT") return 0; // will be hidden anyway
+    const coinId = COINGECKO_BY_CURRENCY[upperCurrency];
+    if (!coinId) return 0;
+    const usdPrice = coinPrices?.[coinId]?.usd;
+    if (typeof usdPrice !== "number" || usdPrice <= 0) return 0;
+    return amount * usdPrice;
+  };
+
+  const paidUsdtAmount = useMemo(
+    () => getUsdtAmountDirect(paidAmount, paidCurrency, coinPrices),
+    [paidAmount, paidCurrency, coinPrices],
+  );
+  // ------------------------------------------------
+
   const mrrUnit = getMrrAlgorithmUnit(normalizedAlgo || rawAlgo);
   const advertisedUnit =
     rig.hashrate?.suffix ||
@@ -319,6 +338,21 @@ const MrrRigCard = ({
   const myNhUnit = getAlgorithmUnit(
     normalizeAlgoForNiceHash(algoName || rawAlgo),
   );
+
+  // --- 🆕 Use market price from parent (algoMarketPrices) ---
+  const marketPriceData = algoMarketPrices?.[algoName];
+  const marketPriceValue = marketPriceData ? getNiceHashPriceValue(marketPriceData) : 0;
+
+  // Choose source: market price if available, else user's order
+  const niceHashSourcePrice = marketPriceValue > 0 ? marketPriceValue : buyNhPriceWithFee;
+
+  // Convert to MRR unit for display
+  const fromMultiplier = HASHRATE_SUFFIXES[cleanHashrateUnit(myNhUnit)] || 1;
+  const toMultiplier = HASHRATE_SUFFIXES[cleanHashrateUnit(mrrUnit)] || 1;
+  const niceHashPriceInMrrUnit = niceHashSourcePrice > 0
+    ? niceHashSourcePrice * (toMultiplier / fromMultiplier)
+    : 0;
+  // -------------------------------------------------
 
   const roiPercent =
     buyNhPriceWithFee > 0 && mrrDailyRate > 0
@@ -553,18 +587,7 @@ const MrrRigCard = ({
             >
               {roiLabel}
             </div>
-            {/* <div style={{ fontSize: '8px', opacity: 0.7, marginTop: '2px' }}>
-              {roiFormulaLabel}
-            </div> */}
-            {/* <div style={{ fontSize: '7px', opacity: 0.5, marginTop: '1px' }}>
-              (MRR Sold Rate - NiceHash Buy Order) / NiceHash Buy Order
-            </div> */}
           </div>
-          {/* {isRented && (
-            <div style={{ fontSize: '9px', opacity: 0.7 }}>
-              {formatRentalStartTime(rentalStartTime)}
-            </div>
-          )} */}
         </div>
       </div>
 
@@ -585,7 +608,6 @@ const MrrRigCard = ({
               marginBottom: "4px",
             }}
           >
-            {/* <div style={{ color: '#e2e8f0', fontWeight: 700 }}>Rental Snapshot</div> */}
             <div style={{ fontSize: "8px", color: "#94a3b8" }}>
               {mrrDailyRateSource}
             </div>
@@ -609,7 +631,7 @@ const MrrRigCard = ({
                 letterSpacing: "0.08em",
               }}
             >
-              Actual Rental Paid
+              Rental Paid
             </div>
             <div
               style={{
@@ -622,6 +644,8 @@ const MrrRigCard = ({
             >
               {paidLabel || "N/A"}
             </div>
+
+            {/* --- BTC equivalent (only if currency is not BTC) --- */}
             {paidBtcAmount > 0 &&
               String(paidCurrency || "").toUpperCase() !== "BTC" && (
                 <div
@@ -632,7 +656,22 @@ const MrrRigCard = ({
                     marginTop: "3px",
                   }}
                 >
-                  ~= {paidBtcAmount.toFixed(8)} BTC
+                  ~ {paidBtcAmount.toFixed(8)} BTC
+                </div>
+              )}
+
+            {/* --- USDT equivalent (direct conversion, no bridge) --- */}
+            {String(paidCurrency || "").toUpperCase() !== "USDT" &&
+              paidUsdtAmount > 0 && (
+                <div
+                  style={{
+                    color: "#86efac",
+                    fontWeight: 700,
+                    fontSize: "9px",
+                    marginTop: "3px",
+                  }}
+                >
+                  ~ {paidUsdtAmount.toFixed(2)} USDT
                 </div>
               )}
           </div>
@@ -693,10 +732,10 @@ const MrrRigCard = ({
               <div
                 style={{ color: "#60a5fa", fontWeight: 800, marginTop: "3px" }}
               >
-                {buyNhPriceWithFee > 0 ? (
+                {niceHashPriceInMrrUnit > 0 ? (
                   <>
-                    {buyNhPriceWithFee.toFixed(8)}
-                    <span style={{ opacity: 0.5 }}> BTC/{myNhUnit}/Day</span>
+                    {niceHashPriceInMrrUnit.toFixed(8)}
+                    <span style={{ opacity: 0.5 }}> BTC/{mrrUnit}/Day</span>
                   </>
                 ) : (
                   "N/A"

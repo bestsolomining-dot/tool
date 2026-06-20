@@ -1,3 +1,4 @@
+// HeroMinersCard.jsx
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { fetchMiningStats } from "./miningStatsFetcher";
 import { useRentedRigs } from "./RentedRigContext.jsx";

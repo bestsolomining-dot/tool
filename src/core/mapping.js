@@ -1,4 +1,5 @@
 // mapping.js - Core algorithm mapping for NiceHash and MRR
+// Enhanced for external use across the application
 
 export const ALGO_DISPLAY_NAMES = {
   SHA256: "SHA256",
@@ -112,6 +113,19 @@ export const MRR_ALGO_MAP = {
   PEARLHASH: "pearlhash",
 };
 
+// Reverse mappings for lookup
+export const NICEHASH_REVERSE_MAP = Object.entries(NICEHASH_ALGO_MAP).reduce((acc, [key, value]) => {
+  if (!acc[value]) acc[value] = [];
+  acc[value].push(key);
+  return acc;
+}, {});
+
+export const MRR_REVERSE_MAP = Object.entries(MRR_ALGO_MAP).reduce((acc, [key, value]) => {
+  if (!acc[value]) acc[value] = [];
+  acc[value].push(key);
+  return acc;
+}, {});
+
 // Hashrate suffixes for display
 export const HASHRATE_SUFFIXES = {
   EH: 1e18,
@@ -200,6 +214,28 @@ export const UNIT_FACTORS = {
   SOL: 1e-12,
 };
 
+// Algorithm categories for filtering
+export const ALGO_CATEGORIES = {
+  ASIC: ["SHA256", "SHA256ASICBOOST", "SCRYPT", "X11", "EAGLESONG", "KHEAVYHASH", "BLAKE3", "BLAKE3_ALPH"],
+  GPU: ["DAGGERHASHIMOTO", "ETCHASH", "KAWPOW", "AUTOLYKOS", "OCTOPUS", "FISHHASH", "DYNEXSOLVE", "NEXAPOW", "PROGPOWZ", "PEARLHASH", "IRONFISH", "ALEPHIUM"],
+  CPU: ["RANDOMXMONERO", "VERUSHASH"],
+  HYBRID: ["EQUIHASH", "ZHASH", "BEAMV3", "JANUSHASH", "XELISHASHV3"]
+};
+
+// Profitability tiers for quick reference
+export const PROFITABILITY_TIERS = {
+  EXTREME: { min: 50, emoji: "🚀", color: "#ff0000" },
+  HIGH: { min: 25, emoji: "🔥", color: "#ff6600" },
+  GOOD: { min: 10, emoji: "💰", color: "#ffcc00" },
+  MODERATE: { min: 5, emoji: "✅", color: "#00cc00" },
+  LOW: { min: 0, emoji: "📊", color: "#0099ff" }
+};
+
+/**
+ * Normalize algorithm name for NiceHash API
+ * @param {string} algo - Raw algorithm name
+ * @returns {string} Normalized algorithm name or "UNKNOWN"
+ */
 export function normalizeAlgoForNiceHash(algo) {
   if (!algo) return "UNKNOWN";
   const normalized = String(algo).toUpperCase().trim();
@@ -236,18 +272,47 @@ export function normalizeAlgoForNiceHash(algo) {
   return "UNKNOWN";
 }
 
+/**
+ * Map NiceHash algorithm to MRR format
+ * @param {string} nicehashAlgo - NiceHash algorithm name
+ * @returns {string} MRR algorithm name
+ */
 export function mapNiceHashToMRR(nicehashAlgo) {
   if (!nicehashAlgo) return "unknown";
   const normalized = String(nicehashAlgo).toUpperCase().trim();
   return MRR_ALGO_MAP[normalized] || normalized.toLowerCase();
 }
 
+/**
+ * Map MRR algorithm back to NiceHash format
+ * @param {string} mrrAlgo - MRR algorithm name
+ * @returns {string} NiceHash algorithm name or original if not found
+ */
+export function mapMRRToNiceHash(mrrAlgo) {
+  if (!mrrAlgo) return "unknown";
+  const normalized = String(mrrAlgo).toLowerCase().trim();
+  for (const [niceHash, mrr] of Object.entries(MRR_ALGO_MAP)) {
+    if (mrr === normalized) return niceHash;
+  }
+  return mrrAlgo;
+}
+
+/**
+ * Get the standard unit for an algorithm
+ * @param {string} algo - Algorithm name
+ * @returns {string} Unit string (e.g., "TH", "MH", "SOL")
+ */
 export function getAlgorithmUnit(algo) {
   if (!algo) return "H/s";
   const normalized = String(algo).toUpperCase().trim();
   return ALGO_UNITS[normalized] || "H/s";
 }
 
+/**
+ * Get MRR-specific unit for an algorithm
+ * @param {string} algo - Algorithm name
+ * @returns {string} MRR unit string
+ */
 export function getMrrAlgorithmUnit(algo) {
   if (!algo) return "TH";
   const normalized = String(algo).toUpperCase().trim();
@@ -255,6 +320,11 @@ export function getMrrAlgorithmUnit(algo) {
   return MRR_ALGO_UNITS[normalized] || MRR_ALGO_UNITS[niceHashAlgo] || "TH";
 }
 
+/**
+ * Get display name for algorithm
+ * @param {string} algo - Algorithm name
+ * @returns {string} Human-readable algorithm name
+ */
 export const getAlgoDisplayName = (algo) => getAlgorithmDisplayName(algo);
 
 export function getAlgorithmDisplayName(algo) {
@@ -263,6 +333,52 @@ export function getAlgorithmDisplayName(algo) {
   return ALGO_DISPLAY_NAMES[normalized] || algo;
 }
 
+/**
+ * Get algorithm category
+ * @param {string} algo - Algorithm name
+ * @returns {string} Category (ASIC, GPU, CPU, HYBRID, UNKNOWN)
+ */
+export function getAlgorithmCategory(algo) {
+  if (!algo) return "UNKNOWN";
+  const normalized = normalizeAlgoForNiceHash(algo);
+  for (const [category, algos] of Object.entries(ALGO_CATEGORIES)) {
+    if (algos.includes(normalized)) return category;
+  }
+  return "UNKNOWN";
+}
+
+/**
+ * Get all algorithms in a specific category
+ * @param {string} category - Category name
+ * @returns {string[]} Array of algorithm names
+ */
+export function getAlgorithmsByCategory(category) {
+  return ALGO_CATEGORIES[category] || [];
+}
+
+/**
+ * Get profitability tier for a spread percentage
+ * @param {number} spreadPct - Spread percentage
+ * @returns {Object} Tier information
+ */
+export function getProfitabilityTier(spreadPct) {
+  if (spreadPct === null || spreadPct === undefined) return null;
+  const tiers = Object.entries(PROFITABILITY_TIERS).sort((a, b) => b[1].min - a[1].min);
+  for (const [name, tier] of tiers) {
+    if (spreadPct >= tier.min) return { name, ...tier };
+  }
+  return null;
+}
+
+/**
+ * Calculate price comparison between two marketplaces
+ * @param {number} yourPrice - Your price
+ * @param {string} yourUnit - Your price unit
+ * @param {number} marketPrice - Market price
+ * @param {string} marketUnit - Market price unit
+ * @param {boolean} isMrrVsNh - Whether comparing MRR vs NiceHash
+ * @returns {number|null} Percentage difference
+ */
 export function calculatePriceComparison(
   yourPrice,
   yourUnit,
@@ -290,6 +406,47 @@ export function calculatePriceComparison(
   return ((yourPerHash - marketPerHash) / marketPerHash) * 100;
 }
 
+/**
+ * Format hashrate with appropriate unit
+ * @param {number} hashrate - Hashrate in H/s
+ * @param {string} algo - Algorithm name
+ * @returns {string} Formatted hashrate (e.g., "1.5 TH/s")
+ */
+export function formatHashrate(hashrate, algo) {
+  if (!hashrate || hashrate <= 0) return "0 H/s";
+  
+  const unit = getAlgorithmUnit(algo);
+  const factor = UNIT_FACTORS[unit] || 1;
+  const value = hashrate / factor;
+  
+  return `${value.toFixed(2)} ${unit}/s`;
+}
+
+/**
+ * Get all supported algorithms
+ * @returns {string[]} Array of supported algorithm names
+ */
+export function getAllSupportedAlgorithms() {
+  return [...new Set([
+    ...Object.keys(NICEHASH_ALGO_MAP),
+    ...Object.values(NICEHASH_ALGO_MAP)
+  ])].filter(algo => algo !== "UNKNOWN").sort();
+}
+
+/**
+ * Check if algorithm is supported
+ * @param {string} algo - Algorithm name
+ * @returns {boolean} Whether the algorithm is supported
+ */
+export function isSupportedAlgorithm(algo) {
+  return normalizeAlgoForNiceHash(algo) !== "UNKNOWN";
+}
+
+/**
+ * Get unit multiplier
+ * @param {string} unit - Unit string
+ * @returns {number} Multiplier value
+ */
 function getUnitMultiplier(unit) {
   const normalized = String(unit || "")
     .toUpperCase()
@@ -297,3 +454,4 @@ function getUnitMultiplier(unit) {
     .trim();
   return HASHRATE_SUFFIXES[normalized] || 1;
 }
+export const normalizeAlgo = normalizeAlgoForNiceHash;

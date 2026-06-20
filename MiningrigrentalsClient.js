@@ -105,7 +105,7 @@ export class MiningRigRentalsClient {
     if (isBadNonce && retryCount < 3) {
       // NUCLEAR JUMP: If we get a Bad Nonce, jump forward by 90 days worth of nanoseconds
       // to get ahead of any server-side clock issues or previous high nonces.
-      const jumpValue = (BigInt(Date.now()) + 7776000000n) * 1000000n;
+      const jumpValue = (BigInt(Date.now()) + 9976000000n) * 1000000n;
       console.log(
         `[mrr:${this.clientName}] ☢️ NUCLEAR JUMP: Recovering from Bad Nonce. New baseline: ${jumpValue} (+90d)`,
       );

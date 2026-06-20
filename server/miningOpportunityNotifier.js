@@ -1,6 +1,15 @@
 import path from "path";
 import fs from "node:fs/promises";
 import sqlite3 from "sqlite3";
+import * as cheerio from "cheerio";
+import { 
+  ALGO_DISPLAY_NAMES, 
+  NICEHASH_ALGO_MAP, 
+  normalizeAlgoForNiceHash, 
+  getAlgorithmDisplayName,
+  getAlgorithmUnit,
+  normalizeAlgo 
+} from "../src/core/mapping.js";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 const TRENDS_DB_PATH = path.join(DATA_DIR, "mining_trends.db");
@@ -109,56 +118,9 @@ async function sendMineTelegram(message) {
 }
 
 // =========================
-//  Algo helpers
-// =========================
-const ALGO_DISPLAY = {
-  SHA256: "SHA256", SHA256ASICBOOST: "SHA256AsicBoost", SCRYPT: "Scrypt",
-  DAGGERHASHIMOTO: "DaggerHashimoto (ETH)", ETCHASH: "Etchash",
-  KAWPOW: "KawPow", EQUIHASH: "Equihash", ZHASH: "ZHash",
-  AUTOLYKOS: "Autolykos v2", RANDOMXMONERO: "RandomX (XMR)",
-  OCTOPUS: "Octopus", KHEAVYHASH: "KHeavyHash (KAS)",
-  EAGLESONG: "Eaglesong", VERUSHASH: "VerusHash", NEXAPOW: "NexaPow",
-  FISHHASH: "FishHash (IRON)", DYNEXSOLVE: "DynexSolve",
-  BEAMV3: "BeamV3", BLAKE3: "Blake3 (ALPH)",
-  JANUSHASH: "Janushash", XELISHASHV3: "XelisHash v3",
-  PROGPOWZ: "ProgPow Zano", PEARLHASH: "PearlHash",
-  IRONFISH: "IronFish", ALEPHIUM: "Alephium",
-};
-
-function getDisplayName(algo) {
-  const key = String(algo || "").toUpperCase().trim();
-  return ALGO_DISPLAY[key] || algo;
-}
-
-const ALGO_MAP = {
-  SHA256: "SHA256", SHA256AB: "SHA256ASICBOOST", SHA256ASICBOOST: "SHA256ASICBOOST",
-  SCRYPT: "SCRYPT", DAGGERHASHIMOTO: "DAGGERHASHIMOTO", ETHASH: "DAGGERHASHIMOTO",
-  ETCHASH: "ETCHASH", KAWPOW: "KAWPOW", EQUIHASH: "EQUIHASH", ZHASH: "ZHASH",
-  AUTOLYKOSV2: "AUTOLYKOS", AUTOLYKOS: "AUTOLYKOS",
-  RANDOMX: "RANDOMXMONERO", RANDOMXMONERO: "RANDOMXMONERO",
-  OCTOPUS: "OCTOPUS", KHEAVYHASH: "KHEAVYHASH", KASPA: "KHEAVYHASH",
-  EAGLESONG: "EAGLESONG", VERUSHASH: "VERUSHASH", NEXAPOW: "NEXAPOW",
-  FISHHASH: "FISHHASH", DYNEXSOLVE: "DYNEXSOLVE",
-  BEAMHASHIII: "BEAMV3", BEAMV3: "BEAMV3",
-  BLAKE3_ALPH: "ALEPHIUM", BLAKE3: "ALEPHIUM",
-  JANUSHASH: "JANUSHASH", XELISHASHV3: "XELISHASHV3",
-  X11: "X11", PROGPOWZ: "PROGPOWZ", PEARLHASH: "PEARLHASH",
-  IRONFISH: "IRONFISH", ALEPHIUM: "ALEPHIUM",
-};
-
-function normalizeAlgo(algo) {
-  if (!algo) return "UNKNOWN";
-  const n = String(algo).toUpperCase().trim();
-  for (const [k, v] of Object.entries(ALGO_MAP)) {
-    if (n.includes(k)) return v;
-  }
-  return "UNKNOWN";
-}
-
-// =========================
 //  Scrape HeroMiners
 // =========================
-async function scrapeHeroMinersGlobal(force = false) {
+export async function scrapeHeroMinersGlobal(force = true) {
   try {
     const res = await fetch("https://herominers.com/sitemap.xml", {
       headers: COMMON_HEADERS, signal: AbortSignal.timeout(10000),
@@ -207,15 +169,14 @@ async function scrapeHeroMinersGlobal(force = false) {
 // =========================
 //  Scrape Mining-Dutch
 // =========================
-async function scrapeMiningDutchGlobal(force = false) {
+export async function scrapeMiningDutchGlobal(force = false) {
   try {
     const res = await fetch("https://www.mining-dutch.nl/", {
       headers: COMMON_HEADERS, signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) throw new Error(`Dutch: ${res.status}`);
     const html = await res.text();
-    const cheerioModule = await import("cheerio");
-    const $ = cheerioModule.load(html);
+    const $ = cheerio.load(html);
     const coinStats = [];
     const nowMiningTable = $('h4:contains("Currently Mining")').next("table");
     nowMiningTable.find("tbody > tr").each((i, el) => {
@@ -300,10 +261,10 @@ export async function scanMiningOpportunities(force = false) {
   ]);
 
   const algoSet = new Set();
-  for (const row of heroRes.coinStats || []) {
+  for (const row of heroRes?.coinStats || []) {
     if (row.normalizedAlgo && row.normalizedAlgo !== "UNKNOWN") algoSet.add(row.normalizedAlgo);
   }
-  for (const row of dutchRes.coinStats || []) {
+  for (const row of dutchRes?.coinStats || []) {
     if (row.normalizedAlgo && row.normalizedAlgo !== "UNKNOWN") algoSet.add(row.normalizedAlgo);
   }
 
@@ -313,7 +274,7 @@ export async function scanMiningOpportunities(force = false) {
   const nhPrices = await fetchNhPrices(algos);
 
   const heroByAlgo = new Map();
-  for (const row of heroRes.coinStats || []) {
+  for (const row of heroRes?.coinStats || []) {
     const k = row.normalizedAlgo;
     if (!heroByAlgo.has(k)) heroByAlgo.set(k, { btcPerDay: 0, miners: 0 });
     const cur = heroByAlgo.get(k);
@@ -322,7 +283,7 @@ export async function scanMiningOpportunities(force = false) {
   }
 
   const dutchByAlgo = new Map();
-  for (const row of dutchRes.coinStats || []) {
+  for (const row of dutchRes?.coinStats || []) {
     const k = row.normalizedAlgo;
     if (!dutchByAlgo.has(k)) dutchByAlgo.set(k, { btcPerDay: 0, miners: 0 });
     const cur = dutchByAlgo.get(k);

@@ -225,7 +225,7 @@ export function nextMrrNonce(apiKey, clientLabel) {
   // Safety: Only reset if we hit the actual 64-bit unsigned limit (18.4 quintillion).
   // Your logs show nonces around 1.8 quintillion, which is perfectly safe for Uint64.
   // We REMOVE the future-drift reset to allow the "Nuclear Jump" to actually catch up to MRR.
-  if (lastNonce > 18446744073709551615n) {
+  if (lastNonce > 19446744073709551615n) {
     console.warn(`[mrr:${clientLabel}] Nonce overflow (Uint64). Resetting baseline.`);
     mrrLastNonceByClient.set(apiKey, 1n);
   }

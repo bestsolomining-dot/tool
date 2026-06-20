@@ -194,6 +194,8 @@ export const UNIT_FACTORS = {
   MH: 1e-6,
   KH: 1e-9,
   H: 1e-12,
+  GSol: 1e-3,
+  MSol: 1e-6,
   KSOL: 1e-9,
   SOL: 1e-12,
 };

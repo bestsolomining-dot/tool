@@ -7,6 +7,7 @@ import { asyncHandler, maskSensitive, extractAlgorithmItems, extractRentalInfo, 
 import { mrrApiCall, mrrRequest, fetchAggregatedRentals, mrrConfigs, defaultMrrClient } from './mrr.js';
 import { resolveNhClient, getNiceHashApp, nhConfigs, isAggregate, normalizeAlgoForNiceHash, mapNiceHashToMRR, getCachedNhPools } from './nh.js';
 import { sendTelegramInternal, runRentalMonitor, getTelegramStatus, setTelegramStatus } from './monitor.js';
+import { handleMiningOpportunityScan } from './miningOpportunityNotifier.js';
 import { db } from './db.js';
 import { saveMiningTrainingSnapshot } from './miningTrainingDb.js';
 import { getAlgorithmUnit } from '../src/core/mapping.js';
@@ -1094,6 +1095,8 @@ export function registerRoutes(app) {
    * Fetches current market prices for popular mining-related coins from CoinGecko.
    * Implements caching and fallback rates to ensure reliability even when API is rate-limited.
    */
+  app.get('/api/v2/mining/opportunities/scan', asyncHandler(handleMiningOpportunityScan));
+
   app.get('/api/v2/prices/coingecko', asyncHandler(async (req, res) => {
     const defaultIds = 'bitcoin,ethereum,ethereum-classic,litecoin,ravencoin,monero,kaspa,iron-fish,zephyr-protocol,clore-ai,dynex,conflux,ergo';
     const ids = req.query.ids || defaultIds;

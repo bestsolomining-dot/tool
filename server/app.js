@@ -7,6 +7,7 @@ import { initMrrConfigs, mrrConfigs, initNonces, syncMrrClock, mrrApiCall } from
 import { registerRoutes } from './routes.js';
 import { corsMiddleware, logRequestMiddleware } from './utils.js';
 import { runRentalMonitor } from './monitor.js';
+import { startMiningOpportunityScanner } from './miningOpportunityNotifier.js';
 import { authMiddleware, generateToken } from './auth.js';
 import authRoutes from './auth.js';
 
@@ -80,6 +81,9 @@ export async function initializeApp(env) {
 
   // Delay first heartbeat until sync/app load is complete (15s)
   setTimeout(() => runRentalMonitor(true), 15000);
+
+  // Start mining opportunity scanner for Telegram alerts
+  setTimeout(() => startMiningOpportunityScanner(), 30000);
 
   try {
     const { client } = resolveNhClient('BT');

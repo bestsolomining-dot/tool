@@ -21,3 +21,7 @@ data/stats.db-shm
 data/stats.db-wal
 data/mining_training.db-shm
 data/mining_training.db-wal
+data/mining_trends.db-wal
+data/mining_trends.db-shm
+results.md
+test_opp_module.mjs

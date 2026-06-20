@@ -142,7 +142,8 @@ export default function MiningDutch({ onCall }) {
       setLoading(true);
       setError("");
       try {
-        let response = await fetchMiningStats(
+        // Use REST mining-stats route which fetches from the public API
+        const response = await fetchMiningStats(
           "miningpooldutch",
           "BT",
           null,
@@ -151,14 +152,12 @@ export default function MiningDutch({ onCall }) {
           force,
         );
 
-        if (!response?.success && typeof onCall === "function") {
-          response = await onCall("/api/v2/mining-dutch/html", {
-            query: force ? { force: 1 } : undefined,
-            silent: true,
-          });
-        }
-
-        if (response?.success) {
+        if (response?.miningpooldutch) {
+          setStats(response);
+          setLastFetchedAt(
+            response.miningpooldutch.fetchedAt || new Date().toISOString(),
+          );
+        } else if (response?.success) {
           setStats(response);
           setLastFetchedAt(response.fetchedAt || new Date().toISOString());
         } else {

@@ -131,7 +131,7 @@ export default function HeroMinersCard({ onCall, pollInterval = 30000 }) {
     key: "usdPerDay",
     direction: "desc",
   });
-  const [filterMiningOnly, setFilterMiningOnly] = useState(false);
+  const [filterMiningOnly, setFilterMiningOnly] = useState(false); // false = show all algorithms
   const pollTimerRef = useRef(null);
   const { rentedRigs } = useRentedRigs();
 

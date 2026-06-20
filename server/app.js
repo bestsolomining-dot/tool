@@ -1,5 +1,7 @@
+import http from 'http';
 import express from 'express';
 import path from 'path';
+import { setupWebSocket } from './ws.js';
 import { SyncManager } from '../SyncManager.js'; // Assuming SyncManager is in the root
 import { db } from './db.js'; // db is now simpler
 import { initNhConfigs, nhConfigs, getNiceHashApp, resolveNhClient } from './nh.js';
@@ -22,6 +24,18 @@ export function createApp({ distPath }) {
   app.use('/api/auth', authRoutes);
 
   registerRoutes(app);
+
+  // Create HTTP server and attach WebSocket
+  const server = http.createServer(app);
+  setupWebSocket(server);
+  app.server = server;
+
+  if (distPath) {
+    const originalListen = app.listen;
+    app.listen = function(...args) {
+      return server.listen(...args);
+    };
+  }
 
   if (distPath) {
     app.use(express.static(distPath));

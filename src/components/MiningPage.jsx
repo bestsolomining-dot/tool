@@ -769,7 +769,7 @@ function StratumConnectionHelper({ onCall }) {
               <h4 style={{ color: "#fbbf24", margin: "0 0 8px", fontSize: "13px" }}>
                 Mining-Dutch – Stratum Endpoints
               </h4>
-              {dutchMultiport && dutchMultiport.ports ? (
+              {dutchMultiport && dutchMultiport.ports && Array.isArray(dutchMultiport.ports) ? (
                 <div
                   style={{
                     display: "grid",

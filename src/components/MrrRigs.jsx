@@ -529,7 +529,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <small style={{ opacity: 0.3 }}>
-            Showing {filteredRigs.length} of {totalFetchedCount} rigs {algo && `for ${algo}`}
+          {filteredRigs.length} of {totalFetchedCount} rigs {algo && `for ${algo}`}
           </small>
           <button className="btn-pro secondary" onClick={fetchRigs} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}

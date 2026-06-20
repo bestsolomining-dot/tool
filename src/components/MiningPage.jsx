@@ -1,6 +1,5 @@
 import HeroMinersCard from "./HeroMinersCard";
 import MiningCoin, { HeaderCell, BodyCell } from "./MiningCoin.jsx";
-import TelegramManager from "./TelegramManager.jsx";
 import { RentedRigProvider } from "./RentedRigContext.jsx";
 import {
   MiningWorkspaceProvider,
@@ -40,6 +39,40 @@ function StatCard({ label, value, accent }) {
           lineHeight: 1.1,
           fontWeight: 900,
           marginTop: "4px",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, tone }) {
+  return (
+    <div
+      style={{
+        padding: "8px",
+        borderRadius: "8px",
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid rgba(148,163,184,0.08)",
+      }}
+    >
+      <div
+        style={{
+          color: "#64748b",
+          fontSize: "10px",
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          color: tone,
+          fontSize: "15px",
+          fontWeight: 900,
+          marginTop: "3px",
         }}
       >
         {value}
@@ -578,39 +611,6 @@ function MiningRouteHero() {
   );
 }
 
-function MiniStat({ label, value, tone }) {
-  return (
-    <div
-      style={{
-        padding: "8px",
-        borderRadius: "8px",
-        background: "rgba(255,255,255,0.02)",
-        border: "1px solid rgba(148,163,184,0.08)",
-      }}
-    >
-      <div
-        style={{
-          color: "#64748b",
-          fontSize: "10px",
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          color: tone,
-          fontSize: "15px",
-          fontWeight: 900,
-          marginTop: "3px",
-        }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
 
 function MiningWorkspaceShell({ onNavigateHome, onCall, nhClient }) {
   return (

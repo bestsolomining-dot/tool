@@ -1,4 +1,4 @@
-// routes.js - Updated with new module imports
+// routes.js - Complete and fixed
 import fs from "fs/promises";
 import path from "path";
 import { Builder, By, until } from "selenium-webdriver";
@@ -45,11 +45,8 @@ import {
   startMiningOpportunityScanner,
 } from "./miningOpportunityNotifier.js";
 
-import {
-  scrapeHeroMinersGlobal,
-  scrapeHeroMinersCoin,
-} from "./miners/heroMiners.js";
-
+// ✅ FIX: Only import what's actually exported
+import { scrapeHeroMinersGlobal } from "./miners/heroMiners.js";
 import { scrapeMiningDutchGlobal } from "./miners/miningDutch.js";
 
 import {
@@ -66,7 +63,7 @@ const DATA_DIR = path.resolve(process.cwd(), "data");
 const coinGeckoCache = new Map();
 const COINGECKO_CACHE_TTL = 60000; // 1 minute
 
-/** Hardcoded fallback BTC rates for common coins when APIs are unavailable (approximate, last updated) */
+/** Hardcoded fallback BTC rates for common coins when APIs are unavailable */
 const FALLBACK_BTC_RATES = {
   bitcoin: 1,
   ethereum: 0.052,
@@ -98,7 +95,6 @@ function buildFallbackPrices(ids) {
 async function saveToDatabase(filename, items) {
   if (!items || !Array.isArray(items) || items.length === 0) return;
   const tableName = filename.replace(".csv", "").replace(/-/g, "_");
-  const filePath = path.join(DATA_DIR, filename);
   const columns = Object.keys(items[0]);
   const quotedColumns = columns.map((c) => `"${c}"`);
   const placeholders = columns.map(() => "?").join(", ");
@@ -130,6 +126,9 @@ async function saveToDatabase(filename, items) {
 }
 
 export function registerRoutes(app) {
+  // =========================
+  // MIDDLEWARE
+  // =========================
   app.use("/api/v2", (req, res, next) => {
     if (
       req.path.startsWith("/mrr/") ||
@@ -149,30 +148,38 @@ export function registerRoutes(app) {
     }
   });
 
+  // =========================
+  // NICEHASH ROUTES
+  // =========================
+
   app.get(
     "/api/v2/time",
     asyncHandler(async (req, res) =>
       res.json(await req.nhApp.public.getTime()),
     ),
   );
+
   app.get(
     "/api/v2/algorithms",
     asyncHandler(async (req, res) =>
       res.json(await req.nhApp.public.getAlgorithms()),
     ),
   );
+
   app.get(
     "/api/v2/public/currency-algos",
     asyncHandler(async (req, res) =>
       res.json(await req.nhApp.easyMining.getCurrencyAlgos()),
     ),
   );
+
   app.get(
     "/api/v2/mining/markets",
     asyncHandler(async (req, res) =>
       res.json(await req.nhApp.public.getMarkets()),
     ),
   );
+
   app.get(
     "/api/v2/public/stats/24h",
     asyncHandler(async (req, res) =>
@@ -326,8 +333,761 @@ export function registerRoutes(app) {
     }),
   );
 
+  app.get(
+    "/api/v2/accounting/balance/:currency",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.accounting.getBalance(req.params.currency)),
+    ),
+  );
+
+  app.post(
+    "/api/v2/accounting/withdrawal",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.accounting.createWithdrawal(req.body)),
+    ),
+  );
+
+  app.get(
+    "/api/v2/mining/address",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.mining.getMiningAddress()),
+    ),
+  );
+
+  app.get(
+    "/api/v2/mining/rigs2",
+    asyncHandler(async (req, res) => {
+      const clientParam = String(req.query.client || "BT").toUpperCase();
+      if (isAggregate(clientParam)) {
+        const nhAccounts = Object.keys(nhConfigs).filter(
+          (k) =>
+            nhConfigs[k].apiKey &&
+            nhConfigs[k].apiSecret &&
+            nhConfigs[k].orgId &&
+            !isAggregate(k),
+        );
+
+        const clientMap = new Map();
+        for (const acct of nhAccounts) {
+          const { client, clientName } = resolveNhClient(acct);
+          if (
+            client &&
+            !clientMap.has(clientName) &&
+            (acct === "BT" || clientName !== "BT")
+          ) {
+            clientMap.set(clientName, client);
+          }
+        }
+
+        const results = await Promise.all(
+          Array.from(clientMap.entries()).map(async ([clientName, client]) => {
+            try {
+              const data = await getNiceHashApp(client).mining.getRigs();
+              return (data?.miningRigs || []).map((r) => ({
+                ...r,
+                nhClient: clientName,
+              }));
+            } catch (e) {
+              return [];
+            }
+          }),
+        );
+
+        return res.json({ miningRigs: results.flat() });
+      }
+      res.json(await req.nhApp.mining.getRigs());
+    }),
+  );
+
+  app.get(
+    "/api/v2/mining/rig/:rigId",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.mining.getRigDetails(req.params.rigId)),
+    ),
+  );
+
+  app.post(
+    "/api/v2/mining/rigs/status",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.mining.setRigStatus(req.body)),
+    ),
+  );
+
+  app.get(
+    "/api/v2/mining/payouts",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.mining.getPayouts()),
+    ),
+  );
+
+  app.get(
+    "/api/v2/mining/history",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.mining.getRigsStatsHistory(req.query)),
+    ),
+  );
+
+  app.get(
+    "/api/v2/mining/algo-stats",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.mining.getAlgoStats()),
+    ),
+  );
+
   // =========================
-  // MINING STATUS ENDPOINTS (using new split modules)
+  // HASH POWER ROUTES
+  // =========================
+
+  app.get(
+    "/api/v2/hashpower/myOrders",
+    asyncHandler(async (req, res) => {
+      const clientParam = String(req.query.client || "BT").toUpperCase();
+      const query = { ...req.query };
+      if (!query.ts) query.ts = Date.now().toString();
+
+      let data;
+      if (isAggregate(clientParam)) {
+        const nhAccounts = Object.keys(nhConfigs).filter(
+          (k) =>
+            nhConfigs[k].apiKey &&
+            nhConfigs[k].apiSecret &&
+            nhConfigs[k].orgId &&
+            !isAggregate(k),
+        );
+
+        const clientMap = new Map();
+        for (const acct of nhAccounts) {
+          const { client, clientName } = resolveNhClient(acct);
+          if (
+            client &&
+            !clientMap.has(clientName) &&
+            (acct === "BT" || clientName !== "BT")
+          ) {
+            clientMap.set(clientName, client);
+          }
+        }
+
+        const results = await Promise.all(
+          Array.from(clientMap.entries()).map(async ([clientName, client]) => {
+            try {
+              const result =
+                await getNiceHashApp(client).hashpower.getMyOrders(query);
+              return (result?.list || []).map((o) => ({
+                ...o,
+                nhClient: clientName,
+              }));
+            } catch (e) {
+              return [];
+            }
+          }),
+        );
+
+        data = { list: results.flat() };
+      } else {
+        data = await req.nhApp.hashpower.getMyOrders(query);
+      }
+
+      const rawList =
+        data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
+
+      const processedList = rawList.map((o) => ({
+        id: o.id || "",
+        acceptedCurrentSpeed: o.acceptedCurrentSpeed || 0,
+        algorithmSpeed: o.acceptedCurrentSpeed || 0,
+        niceAdvertisedHashrate: o.limit || 0,
+        poolName: o.pool?.name || "",
+        poolHost: o.pool?.stratumHostname || "",
+        poolPort: o.pool?.port || "",
+        algorithm:
+          typeof o.algorithm === "object" ? o.algorithm.algorithm : o.algorithm,
+        market: typeof o.market === "object" ? o.market.id : o.market,
+        price: o.price,
+        limit: o.limit,
+        payedAmount: o.payedAmount || 0,
+        availableAmount: o.availableAmount || 0,
+        rigsCount: o.rigsCount || 0,
+        poolUser: o.pool?.username || "",
+        poolPass: o.pool?.password || "",
+        status: typeof o.status === "object" ? o.status.code : o.status,
+        isDead:
+          (o.status?.code || o.status) === "ACTIVE" &&
+          parseFloat(o.acceptedCurrentSpeed || 0) === 0 &&
+          parseInt(o.rigsCount || 0) === 0,
+        pool: o.pool,
+        nhClient: o.nhClient,
+        ts: new Date().toISOString(),
+      }));
+
+      await saveToDatabase(
+        "nh_order.csv",
+        processedList.filter((o) => o.status === "ACTIVE"),
+      );
+
+      res.json(
+        typeof data === "object" && !Array.isArray(data)
+          ? { ...data, list: processedList }
+          : processedList,
+      );
+    }),
+  );
+
+  app.get(
+    "/api/v2/hashpower/order/price",
+    asyncHandler(async (req, res) => {
+      const clientParam = String(req.query.client || "BT").toUpperCase();
+      const query = { ...req.query };
+      if (!query.ts) query.ts = Date.now().toString();
+
+      const algorithm = normalizeAlgoForNiceHash(query.algorithm);
+      const matchActiveOrder = async (clientName, client) => {
+        try {
+          const data = await getNiceHashApp(client).hashpower.getMyOrders({
+            op: "LE",
+            limit: 100,
+          });
+          const rawList =
+            data?.list || data?.myOrders || (Array.isArray(data) ? data : []);
+          const activeOrders = rawList.filter(
+            (o) =>
+              String(o?.status?.code || o?.status || "").toUpperCase() ===
+              "ACTIVE",
+          );
+          const found = activeOrders.find(
+            (o) =>
+              normalizeAlgoForNiceHash(o?.algorithm || o?.algo || o?.type) ===
+              algorithm,
+          );
+          if (!found) return null;
+          const price = Number.parseFloat(
+            found.price ?? found.marketPrice ?? found.fixedPrice ?? 0,
+          );
+          if (!Number.isFinite(price) || price <= 0) return null;
+          return {
+            fixedPrice: price.toFixed(8),
+            speedUnit: getAlgorithmUnit(algorithm),
+            price,
+            marketPrice: price,
+            marketUnit: getAlgorithmUnit(algorithm),
+            source: "active-order",
+            nhClient: clientName,
+            orderId: found.id,
+          };
+        } catch {
+          return null;
+        }
+      };
+
+      if (isAggregate(clientParam)) {
+        const nhAccounts = Object.keys(nhConfigs).filter(
+          (k) =>
+            nhConfigs[k].apiKey &&
+            nhConfigs[k].apiSecret &&
+            nhConfigs[k].orgId &&
+            !isAggregate(k),
+        );
+        for (const acct of nhAccounts) {
+          const { client, clientName } = resolveNhClient(acct);
+          if (!client || (acct !== "BT" && clientName === "BT")) continue;
+          try {
+            const orderPrice = await matchActiveOrder(clientName, client);
+            if (orderPrice) {
+              res.set("X-NH-Client", clientName);
+              return res.json(orderPrice);
+            }
+          } catch (e) {}
+        }
+      }
+
+      if (clientParam !== "ALL" && clientParam !== "VN") {
+        const { client, clientName } = resolveNhClient(clientParam);
+        if (client) {
+          const orderPrice = await matchActiveOrder(clientName, client);
+          if (orderPrice) {
+            res.set("X-NH-Client", clientName);
+            return res.json(orderPrice);
+          }
+        }
+      }
+
+      return res.json({
+        success: false,
+        error: `No active NiceHash order price found for ${algorithm || "unknown"}.`,
+        algorithm: query.algorithm,
+        market: query.market || "USA",
+        source: "active-order",
+      });
+    }),
+  );
+
+  app.get(
+    "/api/v2/hashpower/order/:orderId",
+    asyncHandler(async (req, res) => {
+      const clientParam = String(req.query.client || "BT").toUpperCase();
+      if (isAggregate(clientParam)) {
+        const nhAccounts = Object.keys(nhConfigs).filter(
+          (k) =>
+            nhConfigs[k].apiKey &&
+            nhConfigs[k].apiSecret &&
+            nhConfigs[k].orgId &&
+            !isAggregate(k),
+        );
+        const processedClients = new Set();
+        for (const acct of nhAccounts) {
+          const { client, clientName } = resolveNhClient(acct);
+          if (
+            !client ||
+            (acct !== "BT" && clientName === "BT") ||
+            processedClients.has(clientName)
+          )
+            continue;
+          processedClients.add(clientName);
+          try {
+            const data = await getNiceHashApp(client).hashpower.getOrderDetail(
+              req.params.orderId,
+            );
+            if (data && !data.error) {
+              res.set("X-NH-Client", clientName);
+              return res.json(data);
+            }
+          } catch (e) {}
+        }
+      }
+      res.json(await req.nhApp.hashpower.getOrderDetail(req.params.orderId));
+    }),
+  );
+
+  app.post(
+    "/api/v2/hashpower/order",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.hashpower.createOrder(req.body)),
+    ),
+  );
+
+  app.get(
+    "/api/v2/hashpower/order-book",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.hashpower.getOrderBook(req.query)),
+    ),
+  );
+
+  app.delete(
+    "/api/v2/hashpower/order/:orderId",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.hashpower.cancelOrder(req.params.orderId)),
+    ),
+  );
+
+  app.post(
+    "/api/v2/hashpower/order/:orderId/refill",
+    asyncHandler(async (req, res) =>
+      res.json(
+        await req.nhApp.hashpower.refillOrder(req.params.orderId, req.body),
+      ),
+    ),
+  );
+
+  app.post(
+    "/api/v2/hashpower/order/:orderId/update",
+    asyncHandler(async (req, res) =>
+      res.json(
+        await req.nhApp.hashpower.updatePriceLimit(
+          req.params.orderId,
+          req.body,
+        ),
+      ),
+    ),
+  );
+
+  // =========================
+  // POOL ROUTES
+  // =========================
+
+  app.get(
+    "/api/v2/pools",
+    asyncHandler(async (req, res) => {
+      const clientParam = String(req.query.client || "BT").toUpperCase();
+      if (isAggregate(clientParam)) {
+        const nhAccounts = Object.keys(nhConfigs).filter(
+          (k) =>
+            nhConfigs[k].apiKey &&
+            nhConfigs[k].apiSecret &&
+            nhConfigs[k].orgId &&
+            !isAggregate(k),
+        );
+
+        const clientMap = new Map();
+        for (const acct of nhAccounts) {
+          const { client, clientName } = resolveNhClient(acct);
+          if (
+            client &&
+            !clientMap.has(clientName) &&
+            (acct === "BT" || clientName !== "BT")
+          ) {
+            clientMap.set(clientName, client);
+          }
+        }
+
+        const results = await Promise.all(
+          Array.from(clientMap.entries()).map(async ([clientName, client]) => {
+            try {
+              const data = await getNiceHashApp(client).pools.getPools();
+              const pools = (data?.list || []).map((p) => ({
+                ...p,
+                nhClient: clientName,
+              }));
+              if (pools.length > 0) {
+                db.serialize(() => {
+                  db.run(
+                    `CREATE TABLE IF NOT EXISTS nh_pools (id TEXT, name TEXT, algorithm TEXT, stratumHostname TEXT, port TEXT, username TEXT, password TEXT, nhClient TEXT, last_updated DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id, nhClient))`,
+                  );
+                  const stmt = db.prepare(
+                    `INSERT OR REPLACE INTO nh_pools (id, name, algorithm, stratumHostname, port, username, password, nhClient, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+                  );
+                  pools.forEach((p) =>
+                    stmt.run(
+                      p.id,
+                      p.name,
+                      p.algorithm,
+                      p.stratumHostname,
+                      p.port,
+                      p.username,
+                      p.password,
+                      clientName,
+                    ),
+                  );
+                  stmt.finalize();
+                });
+              }
+              return pools;
+            } catch (e) {
+              return [];
+            }
+          }),
+        );
+
+        return res.json({
+          list: results.flat(),
+          totalCount: results.flat().length,
+        });
+      }
+      const data = await req.nhApp.pools.getPools();
+      const pools = data?.list || [];
+      const clientName = res.get("X-NH-Client") || "BT";
+      if (pools.length > 0) {
+        db.serialize(() => {
+          db.run(
+            `CREATE TABLE IF NOT EXISTS nh_pools (id TEXT, name TEXT, algorithm TEXT, stratumHostname TEXT, port TEXT, username TEXT, password TEXT, nhClient TEXT, last_updated DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id, nhClient))`,
+          );
+          const stmt = db.prepare(
+            `INSERT OR REPLACE INTO nh_pools (id, name, algorithm, stratumHostname, port, username, password, nhClient, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+          );
+          pools.forEach((p) =>
+            stmt.run(
+              p.id,
+              p.name,
+              p.algorithm,
+              p.stratumHostname,
+              p.port,
+              p.username,
+              p.password,
+              clientName,
+            ),
+          );
+          stmt.finalize();
+        });
+      }
+      res.json(data);
+    }),
+  );
+
+  app.get(
+    "/api/v2/pool/:poolId",
+    asyncHandler(async (req, res) => {
+      const clientParam = String(req.query.client || "BT").toUpperCase();
+      if (isAggregate(clientParam)) {
+        const nhAccounts = Object.keys(nhConfigs).filter(
+          (k) =>
+            nhConfigs[k].apiKey &&
+            nhConfigs[k].apiSecret &&
+            nhConfigs[k].orgId &&
+            !isAggregate(k),
+        );
+        const processedClients = new Set();
+        for (const acct of nhAccounts) {
+          const { client, clientName } = resolveNhClient(acct);
+          if (
+            !client ||
+            (acct !== "BT" && clientName === "BT") ||
+            processedClients.has(clientName)
+          )
+            continue;
+          processedClients.add(clientName);
+          try {
+            const data = await getNiceHashApp(client).pools.getPoolDetails(
+              req.params.poolId,
+            );
+            if (data && !data.error) {
+              res.set("X-NH-Client", clientName);
+              return res.json(data);
+            }
+          } catch (e) {}
+        }
+      }
+      res.json(await req.nhApp.pools.getPoolDetails(req.params.poolId));
+    }),
+  );
+
+  app.post(
+    "/api/v2/pool",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.pools.createPool(req.body)),
+    ),
+  );
+
+  app.post(
+    "/api/v2/pools/verify",
+    asyncHandler(async (req, res) =>
+      res.json(await req.nhApp.pools.verifyPool(req.body)),
+    ),
+  );
+
+  // =========================
+  // MRR ROUTES
+  // =========================
+
+  app.get(
+    "/api/v2/mrr/rentals",
+    asyncHandler(async (req, res) => {
+      const { client: clientQuery, ...forwardQuery } = req.query || {};
+      const result = await fetchAggregatedRentals(
+        forwardQuery,
+        String(clientQuery || defaultMrrClient).toUpperCase(),
+      );
+
+      await saveToDatabase("mrr_rentals.csv", result.data?.data?.rentals || []);
+
+      res.set("X-MRR-Client", result.clientName);
+      res.status(result.statusCode).json(result.data);
+    }),
+  );
+
+  app.get(
+    "/api/v2/mrr/rigs",
+    asyncHandler(async (req, res) => {
+      const clientParam = String(
+        req.query.client || defaultMrrClient,
+      ).toUpperCase();
+      const targetEndpoint = req.query.endpoint || "/rig/mine";
+
+      if (isAggregate(clientParam)) {
+        const allClientNames = Object.keys(mrrConfigs).filter(
+          (c) =>
+            mrrConfigs[c].apiKey && mrrConfigs[c].apiSecret && !isAggregate(c),
+        );
+        const allRigs = [];
+
+        const results = await Promise.all(
+          allClientNames.map(async (clientName) => {
+            try {
+              const { data, statusCode } = await mrrApiCall({
+                endpoint: targetEndpoint,
+                clientNameRaw: clientName,
+              });
+              const rigs = Array.isArray(data?.data)
+                ? data.data
+                : Array.isArray(data?.data?.rigs)
+                  ? data.data.rigs
+                  : [];
+
+              if (
+                targetEndpoint === "/rig/mine" &&
+                statusCode === 200 &&
+                data.success &&
+                rigs.length > 0
+              ) {
+                const rigIds = rigs.map((r) => r.id).join(";");
+                const { data: poolsData } = await mrrApiCall({
+                  endpoint: `/rig/${rigIds}/pool`,
+                  clientNameRaw: clientName,
+                });
+                if (poolsData && poolsData.success) {
+                  const nhPools = await getCachedNhPools(clientName);
+
+                  const poolItems = Array.isArray(poolsData.data)
+                    ? poolsData.data
+                    : poolsData.data?.result || [];
+                  const poolMap = new Map(
+                    poolItems
+                      .map((item) => {
+                        const id = String(
+                          item.rigId ||
+                            item.rigid ||
+                            item.id ||
+                            item.rentalid ||
+                            "",
+                        );
+
+                        if (
+                          Array.isArray(item.pools) &&
+                          item.pools.length > 0
+                        ) {
+                          db.serialize(() => {
+                            db.run(
+                              `CREATE TABLE IF NOT EXISTS mrr_pools (id TEXT, name TEXT, algo TEXT, host TEXT, port TEXT, user TEXT, mrrClient TEXT, last_updated DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id, mrrClient))`,
+                            );
+                            const stmt = db.prepare(
+                              `INSERT OR REPLACE INTO mrr_pools (id, name, algo, host, port, user, mrrClient, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+                            );
+                            item.pools.forEach((p) => {
+                              const algo =
+                                p.algo ||
+                                p.algorithm ||
+                                p.type ||
+                                item.algo ||
+                                item.algorithm ||
+                                "";
+                              stmt.run(
+                                id,
+                                p.name || `RigPool-${id}`,
+                                algo,
+                                p.host || p.stratumHost,
+                                p.port || p.stratumPort,
+                                p.user || p.username,
+                                clientName,
+                              );
+                            });
+                            stmt.finalize();
+                          });
+                        }
+
+                        if (Array.isArray(item.pools)) {
+                          item.pools.forEach((p) => {
+                            const mrrUser = String(p.user || p.username || "")
+                              .trim()
+                              .toLowerCase();
+                            const nhMatch = nhPools.find(
+                              (nhp) =>
+                                String(nhp.username || "")
+                                  .trim()
+                                  .toLowerCase() === mrrUser,
+                            );
+                            if (nhMatch) p.nhPoolName = nhMatch.name;
+                          });
+                        }
+                        return [id, item.pools];
+                      })
+                      .filter((i) => i[0]),
+                  );
+
+                  rigs.forEach((rig) => {
+                    const pools = poolMap.get(String(rig.id));
+                    if (pools && pools.length > 0) {
+                      const p0 =
+                        pools.find(
+                          (p) => p.priority === 0 || p.priority === "0",
+                        ) || pools[0];
+                      rig.host = p0.host || p0.stratumHost;
+                      rig.port = p0.port || p0.stratumPort;
+                      rig.user = p0.user || p0.username;
+                    }
+                  });
+                }
+              }
+
+              if (statusCode === 200 && data?.success && rigs.length > 0) {
+                return {
+                  rigs: rigs.map((rig) => ({
+                    ...rig,
+                    mrrClient: clientName,
+                    nicehashAlgo: normalizeAlgoForNiceHash(
+                      rig.algo || rig.type || rig.miningAlgorithm,
+                    ),
+                  })),
+                };
+              }
+              return {
+                error: {
+                  client: clientName,
+                  message:
+                    data?.message ||
+                    `Failed to fetch rigs (status: ${statusCode})`,
+                },
+              };
+            } catch (err) {
+              return { error: { client: clientName, message: err.message } };
+            }
+          }),
+        );
+
+        const errors = [];
+        results.forEach((res) => {
+          if (res.rigs) allRigs.push(...res.rigs);
+          if (res.error) errors.push(res.error);
+        });
+
+        await saveToDatabase("mrr_rigs.csv", allRigs);
+
+        res.json({
+          success: true,
+          rigs: allRigs,
+          errors: errors.length > 0 ? errors : undefined,
+        });
+      } else {
+        if (targetEndpoint === "/rig/mine") {
+          const { data, statusCode, clientName } = await mrrApiCall({
+            endpoint: "/rig/mine",
+            clientNameRaw: clientParam,
+          });
+          if (statusCode === 200 && data.success) {
+            const rigs = Array.isArray(data.data)
+              ? data.data
+              : data.data?.rigs || [];
+            rigs.forEach((rig) => {
+              rig.nicehashAlgo = normalizeAlgoForNiceHash(
+                rig.algo || rig.type || rig.miningAlgorithm,
+              );
+            });
+            if (rigs.length > 0) {
+              const rigIds = rigs.map((r) => r.id).join(";");
+              const { data: poolsData } = await mrrApiCall({
+                endpoint: `/rig/${rigIds}/pool`,
+                clientNameRaw: clientParam,
+              });
+              if (poolsData && poolsData.success) {
+                const poolItems = Array.isArray(poolsData.data)
+                  ? poolsData.data
+                  : poolsData.data?.result || [];
+                const poolMap = new Map(
+                  poolItems.map((item) => [
+                    String(item.rigId || item.rigid || item.id),
+                    item.pools,
+                  ]),
+                );
+                rigs.forEach((rig) => {
+                  const pools = poolMap.get(String(rig.id));
+                  if (pools && pools.length > 0) {
+                    const p0 =
+                      pools.find(
+                        (p) => p.priority === 0 || p.priority === "0",
+                      ) || pools[0];
+                    rig.host = p0.host || p0.stratumHost;
+                    rig.port = p0.port || p0.stratumPort;
+                    rig.user = p0.user || p0.username;
+                  }
+                });
+              }
+            }
+          }
+          res.set("X-MRR-Client", clientName);
+          return res.status(statusCode).json(data);
+        }
+        await mrrRequest(targetEndpoint, req, res);
+      }
+    }),
+  );
+
+  // =========================
+  // MINING STATUS ENDPOINTS
   // =========================
 
   app.get(
@@ -356,7 +1116,7 @@ export function registerRoutes(app) {
   );
 
   // =========================
-  // COINGECKO PRICE ENDPOINTS (using new modules)
+  // COINGECKO PRICE ENDPOINTS
   // =========================
 
   app.get(
@@ -427,10 +1187,6 @@ export function registerRoutes(app) {
     }),
   );
 
-  /**
-   * GET /api/v2/prices/coingecko/fetch
-   * Fetch and save CoinGecko prices to database
-   */
   app.get(
     "/api/v2/prices/coingecko/fetch",
     asyncHandler(async (req, res) => {
@@ -440,10 +1196,6 @@ export function registerRoutes(app) {
     }),
   );
 
-  /**
-   * GET /api/v2/prices/coingecko/latest
-   * Get latest coin prices from database
-   */
   app.get(
     "/api/v2/prices/coingecko/latest",
     asyncHandler(async (req, res) => {
@@ -454,10 +1206,6 @@ export function registerRoutes(app) {
     }),
   );
 
-  /**
-   * GET /api/v2/prices/coingecko/metadata
-   * Get coin metadata from database
-   */
   app.get(
     "/api/v2/prices/coingecko/metadata",
     asyncHandler(async (req, res) => {
@@ -470,15 +1218,10 @@ export function registerRoutes(app) {
   // MINING STATS REST API
   // =========================
 
-  /**
-   * GET /api/v2/mining-stats/herominers_global
-   * Fetches all HeroMiners pool algorithms globally.
-   */
   app.get(
     "/api/v2/mining-stats/herominers_global",
     asyncHandler(async (req, res) => {
       const force = req.query.force === "true";
-      // Get BTC price first
       let btcPrice = 60000;
       try {
         const priceRes = await fetch(
@@ -501,10 +1244,6 @@ export function registerRoutes(app) {
     }),
   );
 
-  /**
-   * GET /api/v2/mining-stats/miningpooldutch
-   * Fetches Mining-Dutch avgprofitability from their public API.
-   */
   app.get(
     "/api/v2/mining-stats/miningpooldutch",
     asyncHandler(async (req, res) => {
@@ -525,10 +1264,6 @@ export function registerRoutes(app) {
     }),
   );
 
-  /**
-   * GET /api/v2/mining-stats/all
-   * Fetches both HeroMiners and Mining-Dutch in one call.
-   */
   app.get(
     "/api/v2/mining-stats/all",
     asyncHandler(async (req, res) => {
@@ -560,111 +1295,90 @@ export function registerRoutes(app) {
   );
 
   // =========================
-  // REMAINING ROUTES (unchanged from original)
+  // ADDITIONAL ROUTES
   // =========================
 
-  app.get(
-    "/api/v2/accounting/balance/:currency",
-    asyncHandler(async (req, res) =>
-      res.json(await req.nhApp.accounting.getBalance(req.params.currency)),
-    ),
-  );
   app.post(
-    "/api/v2/accounting/withdrawal",
-    asyncHandler(async (req, res) =>
-      res.json(await req.nhApp.accounting.createWithdrawal(req.body)),
-    ),
-  );
-  app.get(
-    "/api/v2/mining/address",
-    asyncHandler(async (req, res) =>
-      res.json(await req.nhApp.mining.getMiningAddress()),
-    ),
-  );
-
-  app.get(
-    "/api/v2/mining/rigs2",
+    "/api/v2/notify/telegram",
     asyncHandler(async (req, res) => {
-      const clientParam = String(req.query.client || "BT").toUpperCase();
-      if (isAggregate(clientParam)) {
-        const nhAccounts = Object.keys(nhConfigs).filter(
-          (k) =>
-            nhConfigs[k].apiKey &&
-            nhConfigs[k].apiSecret &&
-            nhConfigs[k].orgId &&
-            !isAggregate(k),
-        );
-
-        const clientMap = new Map();
-        for (const acct of nhAccounts) {
-          const { client, clientName } = resolveNhClient(acct);
-          if (
-            client &&
-            !clientMap.has(clientName) &&
-            (acct === "BT" || clientName !== "BT")
-          ) {
-            clientMap.set(clientName, client);
-          }
-        }
-
-        const results = await Promise.all(
-          Array.from(clientMap.entries()).map(async ([clientName, client]) => {
-            try {
-              const data = await getNiceHashApp(client).mining.getRigs();
-              return (data?.miningRigs || []).map((r) => ({
-                ...r,
-                nhClient: clientName,
-              }));
-            } catch (e) {
-              return [];
-            }
-          }),
-        );
-
-        return res.json({ miningRigs: results.flat() });
+      const { message } = req.body;
+      try {
+        const data = await sendTelegramInternal(message);
+        res.json(data);
+      } catch (err) {
+        console.warn(`[telegram] ${err.message}`);
+        res.status(400).json({ success: false, error: err.message });
       }
-      res.json(await req.nhApp.mining.getRigs());
     }),
   );
 
   app.get(
-    "/api/v2/mining/rig/:rigId",
-    asyncHandler(async (req, res) =>
-      res.json(await req.nhApp.mining.getRigDetails(req.params.rigId)),
-    ),
+    "/api/v2/notify/telegram/status",
+    asyncHandler(async (req, res) => {
+      res.json(await getTelegramStatus());
+    }),
   );
+
   app.post(
-    "/api/v2/mining/rigs/status",
-    asyncHandler(async (req, res) =>
-      res.json(await req.nhApp.mining.setRigStatus(req.body)),
-    ),
-  );
-  app.get(
-    "/api/v2/mining/payouts",
-    asyncHandler(async (req, res) =>
-      res.json(await req.nhApp.mining.getPayouts()),
-    ),
-  );
-  app.get(
-    "/api/v2/mining/history",
-    asyncHandler(async (req, res) =>
-      res.json(await req.nhApp.mining.getRigsStatsHistory(req.query)),
-    ),
-  );
-  app.get(
-    "/api/v2/mining/algo-stats",
-    asyncHandler(async (req, res) =>
-      res.json(await req.nhApp.mining.getAlgoStats()),
-    ),
+    "/api/v2/notify/telegram/status",
+    asyncHandler(async (req, res) => {
+      const { enabled } = req.body;
+      res.json(await setTelegramStatus(enabled));
+    }),
   );
 
-  // ... (all other routes remain the same - hashpower, mrr, pools, etc.)
+  app.get(
+    "/api/v2/notify/telegram/health",
+    asyncHandler(async (req, res) => {
+      const hasToken = !!process.env.TELEGRAM_BOT_TOKEN;
+      const hasChatId = !!process.env.TELEGRAM_CHAT_ID;
+      res.json({
+        success: hasToken && hasChatId,
+        configured: hasToken && hasChatId,
+        tokenPresent: hasToken,
+        chatIdPresent: hasChatId,
+      });
+    }),
+  );
 
-  // =========================
-  // START MINING SCANNER ON INIT
-  // =========================
-  // Uncomment this to start the scanner automatically
-  // startMiningOpportunityScanner();
+  app.post(
+    "/api/v2/mining/training-snapshot",
+    asyncHandler(async (req, res) => {
+      try {
+        const result = await saveMiningTrainingSnapshot(req.body || {});
+        res.json({ success: true, data: result });
+      } catch (err) {
+        console.error(
+          "[mining-training] Failed to save snapshot:",
+          err.message,
+        );
+        res.status(500).json({ success: false, error: err.message });
+      }
+    }),
+  );
+
+  app.get(
+    "/api/v2/extracted-pools",
+    asyncHandler(async (req, res) => {
+      const filePath = path.resolve(process.cwd(), "extracted_pools.json");
+      try {
+        await fs.access(filePath);
+        const content = await fs.readFile(filePath, "utf-8");
+        const data = JSON.parse(content || "[]");
+        res.json(Array.isArray(data) ? data : []);
+      } catch (err) {
+        if (err.code === "ENOENT") {
+          return res.json([]);
+        }
+        res.status(500).json({
+          success: false,
+          error: `Error reading extracted pools: ${err.message}`,
+        });
+      }
+    }),
+  );
+
+  console.log("[Routes] All routes registered successfully");
 }
 
 // Export the start function for external use

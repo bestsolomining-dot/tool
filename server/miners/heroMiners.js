@@ -14,7 +14,7 @@ const COIN_TO_ALGO_MAP = {
   iron: "fishhash", dynex: "dynexsolve", alephium: "blake3",
 };
 
-async function discoverSubdomains() {
+async function discoverHeroMinersSubdomains() {
   const cacheKey = "hero_subdomains";
   const cached = HERO_CACHE.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < HERO_CACHE_TTL) return cached.data;
@@ -47,7 +47,7 @@ async function discoverSubdomains() {
   return result;
 }
 
-async function scrapeCoin(coin, btcPrice) {
+async function scrapeHeroMinersCoin(coin, btcPrice) {
   const cacheKey = `hero_${coin}`;
   const cached = HERO_CACHE.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < HERO_CACHE_TTL) return cached.data;
@@ -63,7 +63,7 @@ async function scrapeCoin(coin, btcPrice) {
       return [];
     }
     const data = await response.json();
-    const rows = parseApiData(data, coin, btcPrice);
+    const rows = parseHeroMinersApiData(data, coin, btcPrice);
     HERO_CACHE.set(cacheKey, { data: rows, timestamp: Date.now() });
     return rows;
   } catch {
@@ -72,7 +72,7 @@ async function scrapeCoin(coin, btcPrice) {
   }
 }
 
-function parseApiData(data, coin, btcPrice) {
+function parseHeroMinersApiData(data, coin, btcPrice) {
   const rows = [];
   const pool = data?.pool || data;
   const config = data?.config || {};
@@ -97,14 +97,14 @@ function parseApiData(data, coin, btcPrice) {
 
 export async function scrapeHeroMinersGlobal(btcPrice) {
   try {
-    const coins = await discoverSubdomains();
+    const coins = await discoverHeroMinersSubdomains();
     const results = [];
     const chunks = [];
     for (let i = 0; i < coins.length; i += CONFIG.MAX_CONCURRENT_FETCHES) {
       chunks.push(coins.slice(i, i + CONFIG.MAX_CONCURRENT_FETCHES));
     }
     for (const chunk of chunks) {
-      const chunkResults = await Promise.all(chunk.map((coin) => scrapeCoin(coin, btcPrice)));
+      const chunkResults = await Promise.all(chunk.map((coin) => scrapeHeroMinersCoin(coin, btcPrice)));
       results.push(...chunkResults.flat());
     }
     const allCoinStats = results.flat();
@@ -115,3 +115,10 @@ export async function scrapeHeroMinersGlobal(btcPrice) {
     return { success: false, error: err.message, coinStats: [] };
   }
 }
+
+// Export all functions that might be needed elsewhere
+export {
+  scrapeHeroMinersCoin,
+  discoverHeroMinersSubdomains,
+  parseHeroMinersApiData,
+};

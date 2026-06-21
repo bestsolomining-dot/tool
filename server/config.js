@@ -1,4 +1,6 @@
 // server/config.js
+import path from 'path';
+
 export const CONFIG = {
   SCAN_INTERVAL_MS: 15 * 60 * 1000,
   MIN_NOTIFY_INTERVAL_MS: 15 * 60 * 1000,

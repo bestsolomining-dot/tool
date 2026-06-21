@@ -1,19 +1,18 @@
-// server/miningOpportunityNotifier.js - Main orchestrator
+// miningOpportunityNotifier.js - Complete Fixed Version
 import { CONFIG } from "./config.js";
-import { getTrendDb, run, all } from "./db.js";
+import { getTrendDb, run, all } from "./database/db.js";
 import { getCoinGeckoId, COIN_TO_COINGECKO_MAP } from "./coinGecko/coinMapping.js";
 import { fetchAndSaveCoinPrices, getCoinPricesFromDb } from "./coinGecko/coinGeckoClient.js";
 import { scrapeHeroMinersGlobal } from "./miners/heroMiners.js";
 import { scrapeMiningDutchGlobal } from "./miners/miningDutch.js";
 import { sendMineTelegram } from "./telegram/telegramClient.js";
 import { getAlgorithmDisplayName } from "../src/core/mapping.js";
-// import { getBtcPrice } from "./utils/priceUtils.js";
 
 let lastNotifiedOpportunities = new Map();
 let btcPriceCache = { price: 60000, timestamp: 0 };
 const BTC_PRICE_TTL = 60000;
 
-async function getBtcPrice() {
+export async function getBtcPrice() {
   const now = Date.now();
   if (btcPriceCache.timestamp > now - BTC_PRICE_TTL) return btcPriceCache.price;
   try {
@@ -94,7 +93,7 @@ function extractCoinNames(heroRows, dutchRows) {
 
 async function sendOpportunityAlert(opp) {
   const emoji = opp.profitStatus === "profitable" ? "🟢" : opp.profitStatus === "loss" ? "🔴" : "🟡";
-  const coinsDisplay = opp.heroCoins.slice(0, 5).join(", ");
+  const coinsDisplay = opp.heroCoins?.slice(0, 5).join(", ") || "N/A";
   let priceLine = '';
   if (opp.coinPrices) {
     const usdPrice = opp.coinPrices.usd ? `$${opp.coinPrices.usd.toFixed(2)}` : 'N/A';
@@ -111,7 +110,7 @@ async function sendOpportunityAlert(opp) {
     (opp.profitUsd ? `<b>Profit:</b> $${opp.profitUsd.toFixed(2)}\n` : '') +
     priceLine +
     `<b>Miners:</b> ${opp.poolMiners}\n` +
-    `<b>Coins:</b> ${coinsDisplay || "N/A"}\n` +
+    `<b>Coins:</b> ${coinsDisplay}\n` +
     `<b>${opp.recommendation || ""}</b>\n` +
     `━━━━━━━━━━━━━━━━━━\n<i>Updated every 15 min</i>`;
   await sendMineTelegram(msg);
@@ -133,7 +132,11 @@ async function sendMiningSummary(topOpps) {
 export async function scanMiningOpportunities(force = false) {
   console.log(`[mine:scan] Scanning...`);
   
-  await fetchAndSaveCoinPrices(force);
+  try {
+    await fetchAndSaveCoinPrices(force);
+  } catch (err) {
+    console.warn('[mine:scan] CoinGecko fetch failed:', err.message);
+  }
   
   const btcPrice = await getBtcPrice();
   const [heroRes, dutchRes] = await Promise.all([
@@ -148,7 +151,13 @@ export async function scanMiningOpportunities(force = false) {
     const id = getCoinGeckoId(name);
     if (id) { coinIdMap.set(name, id); coinIdSet.add(id); }
   }
-  const coinPrices = await getCoinPricesFromDb(Array.from(coinIdSet));
+  
+  let coinPrices = {};
+  try {
+    coinPrices = await getCoinPricesFromDb(Array.from(coinIdSet));
+  } catch (err) {
+    console.warn('[mine:scan] Failed to get coin prices:', err.message);
+  }
 
   const algoSet = new Set();
   const addAlgos = (rows) => {
@@ -188,6 +197,7 @@ export async function scanMiningOpportunities(force = false) {
     cur.miners += row.miners || 0;
   }
 
+  // ✅ Define opportunities BEFORE using it
   const opportunities = [];
   const now = new Date();
 
@@ -204,15 +214,25 @@ export async function scanMiningOpportunities(force = false) {
     const profit = calculateProfitability(poolBtc, nhPrice, mrrPrice, coinPriceData);
 
     opportunities.push({
-      algo, label: getAlgorithmDisplayName(algo), coinName, coinId,
-      poolBtcPerDay: poolBtc, nhPriceBtc: nhPrice, mrrPriceBtc: mrrPrice,
-      spreadPct: spread, spreadVsMrr: profit.vsMrr,
+      algo,
+      label: getAlgorithmDisplayName(algo),
+      coinName,
+      coinId,
+      poolBtcPerDay: poolBtc,
+      nhPriceBtc: nhPrice,
+      mrrPriceBtc: mrrPrice,
+      spreadPct: spread,
+      spreadVsMrr: profit.vsMrr,
       poolMiners: Math.max(hero?.miners || 0, dutch?.miners || 0),
       source: poolBtc > 0 ? (dutch?.btcPerDay > hero?.btcPerDay ? "Mining-Dutch" : "HeroMiners") : "N/A",
-      heroCoins: hero?.coins || [], heroSubdomains: hero?.subdomains || [],
-      profitStatus: profit.status, recommendation: profit.recommendation,
-      profitBtc: profit.profitBtc, profitUsd: profit.profitUsd,
-      coinPrices: coinPriceData, time: now.toLocaleTimeString()
+      heroCoins: hero?.coins || [],
+      heroSubdomains: hero?.subdomains || [],
+      profitStatus: profit.status,
+      recommendation: profit.recommendation,
+      profitBtc: profit.profitBtc,
+      profitUsd: profit.profitUsd,
+      coinPrices: coinPriceData,
+      time: now.toLocaleTimeString()
     });
   }
 
@@ -222,14 +242,19 @@ export async function scanMiningOpportunities(force = false) {
   const capturedAt = now.toISOString();
   const notifyMessages = [];
 
+  // ✅ Now opportunities is defined, use it here
   for (const opp of opportunities) {
-    await run(db,
-      `INSERT INTO mining_opportunities (algo, captured_at, pool_btc_per_day, nh_price_btc, mrr_price_btc, spread_pct, spread_vs_mrr, pool_miners, profit_status, coin_name, coin_id, coin_prices_json, summary_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [opp.algo, capturedAt, opp.poolBtcPerDay, opp.nhPriceBtc, opp.mrrPriceBtc,
-       opp.spreadPct ?? 0, opp.spreadVsMrr ?? 0, opp.poolMiners, opp.profitStatus,
-       opp.coinName || null, opp.coinId || null, JSON.stringify(opp.coinPrices || {}), JSON.stringify(opp)]
-    );
+    try {
+      await run(db,
+        `INSERT INTO mining_opportunities (algo, captured_at, pool_btc_per_day, nh_price_btc, mrr_price_btc, spread_pct, pool_miners)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [opp.algo, capturedAt, opp.poolBtcPerDay || 0, opp.nhPriceBtc || 0, 
+         opp.mrrPriceBtc || 0, opp.spreadPct ?? 0, opp.poolMiners || 0]
+      );
+    } catch (err) {
+      console.warn('[DB] Insert failed for', opp.algo, err.message);
+    }
+
     if (opp.spreadPct !== null && opp.spreadPct >= CONFIG.SPREAD_THRESHOLD_PCT && opp.poolBtcPerDay > 0) {
       const lastNotified = lastNotifiedOpportunities.get(opp.algo) || 0;
       if (Date.now() - lastNotified > CONFIG.MIN_NOTIFY_INTERVAL_MS || force) {
@@ -240,16 +265,24 @@ export async function scanMiningOpportunities(force = false) {
   }
 
   if (notifyMessages.length > 0) {
-    for (const opp of notifyMessages) await sendOpportunityAlert(opp);
+    for (const opp of notifyMessages) {
+      await sendOpportunityAlert(opp);
+    }
   }
 
   const profitable = opportunities.filter((o) => o.profitStatus === "profitable");
-  if (profitable.length > 0) await sendMiningSummary(profitable.slice(0, 10));
+  if (profitable.length > 0) {
+    await sendMiningSummary(profitable.slice(0, 10));
+  }
 
   return {
-    success: true, scannedAt: capturedAt, totalAlgos: algos.length,
-    opportunities: opportunities.slice(0, 20), notificationsSent: notifyMessages.length,
-    profitableCount: profitable.length, heroCoins: heroRes?.coinStats?.length || 0,
+    success: true,
+    scannedAt: capturedAt,
+    totalAlgos: algos.length,
+    opportunities: opportunities.slice(0, 20),
+    notificationsSent: notifyMessages.length,
+    profitableCount: profitable.length,
+    heroCoins: heroRes?.coinStats?.length || 0,
     dutchCoins: dutchRes?.coinStats?.length || 0
   };
 }
@@ -306,12 +339,33 @@ let scanInterval = null;
 let coinPriceInterval = null;
 
 export function startMiningOpportunityScanner() {
-  if (scanInterval) return;
+  if (scanInterval) {
+    console.log("[mine:scan] Scanner already running");
+    return;
+  }
   console.log("[mine:scan] Starting scanner (every 15 min)");
-  scanMiningOpportunities(true).catch(() => {});
-  scanInterval = setInterval(() => scanMiningOpportunities(false).catch(() => {}), CONFIG.SCAN_INTERVAL_MS);
+  
+  // Initial scan
+  scanMiningOpportunities(true).catch((err) => {
+    console.error("[mine:scan] Initial scan failed:", err.message);
+  });
+  
+  scanInterval = setInterval(() => {
+    scanMiningOpportunities(false).catch((err) => {
+      console.error("[mine:scan] Scheduled scan failed:", err.message);
+    });
+  }, CONFIG.SCAN_INTERVAL_MS);
 }
 
 export function stopMiningOpportunityScanner() {
-  if (scanInterval) { clearInterval(scanInterval); scanInterval = null; }
+  if (scanInterval) {
+    clearInterval(scanInterval);
+    scanInterval = null;
+    console.log("[mine:scan] Scanner stopped");
+  }
+  if (coinPriceInterval) {
+    clearInterval(coinPriceInterval);
+    coinPriceInterval = null;
+    console.log("[CoinGecko] Price fetcher stopped");
+  }
 }

@@ -1,65 +1,69 @@
 {
-	"name": "nh-tool",
-	"private": true,
-	"version": "0.0.0",
-	"type": "module",
-	"scripts": {
-		"dev": "vite",
-		"backend": "node index.js",
-		"build:exe": "npm run build && npx pkg . --output release/nh-tool.exe",
-		"electron:build": "npm run build:exe",
-		"all": "concurrently \"npm run backend\" \"npm run dev\"",
-		"all:start": "concurrently \"npm run backend\" \"vite --open /?start=true\"",
-		"build": "vite build",
-		"generate-wrangler": "node script/generate-wrangler.js",
-		"build:wrangler": "npm run generate-wrangler",
-		"build:cloudflare": "npm run build && npm run generate-wrangler",
-		"lint": "eslint .",
-		"preview": "npm run build && vite preview",
-		"deploy": "npm run build && npm run generate-wrangler && wrangler deploy --config wrangler.generated.toml",
-		"test:notify": "node test-notifier.js"
-	},
-	"main": "index.js",
-	"bin": "index.js",
-	"pkg": {
-		"assets": [
-			"dist/client/**/*",
-			"src/components/TelegramManager.jsx"
-		],
-		"targets": [
-			"node18-win-x64"
-		]
-	},
-	"dependencies": {
-		"axios": "^1.16.1",
-		"bcrypt": "^6.0.0",
-		"cheerio": "^1.2.0",
-		"dotenv": "^17.4.2",
-		"express": "^5.2.1",
-		"express-rate-limit": "^8.5.2",
-		"jsonwebtoken": "^9.0.3",
-		"react": "^19.2.6",
-		"react-dom": "^19.2.6",
-		"selenium-webdriver": "^4.44.0",
-		"sqlite3": "^6.0.1",
-		"uuid": "^14.0.0",
-		"xlsx": "^0.18.5",
-		"cors": "^2.8.6"
-	},
-	"devDependencies": {
-		"@cloudflare/vite-plugin": "^1.38.0",
-		"@eslint/js": "^10.0.1",
-		"@types/react": "^19.2.14",
-		"@types/react-dom": "^19.2.3",
-		"@types/uuid": "^10.0.0",
-		"@vitejs/plugin-react": "^6.0.1",
-		"concurrently": "^9.2.1",
-		"eslint": "^10.3.0",
-		"eslint-plugin-react-hooks": "^7.1.1",
-		"eslint-plugin-react-refresh": "^0.5.2",
-		"globals": "^17.6.0",
-		"pkg": "^5.8.1",
-		"vite": "^8.0.12",
-		"wrangler": "^4.95.0"
-	}
+  "name": "nh-tool",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "backend": "node index.js",
+    "backend:dev": "node --watch index.js",
+    "build:exe": "npm run build && npx pkg . --output release/nh-tool.exe",
+    "electron:build": "npm run build:exe",
+    "all": "concurrently --kill-others --names \"BACKEND,FRONTEND\" \"npm run backend\" \"npm run dev\"",
+    "all:start": "concurrently --kill-others --names \"BACKEND,FRONTEND\" \"npm run backend\" \"vite --open /?start=true\"",
+    "start": "npm run backend & npm run dev",
+    "start:wait": "wait-on tcp:3000 && npm run dev",
+    "build": "vite build",
+    "generate-wrangler": "node script/generate-wrangler.js",
+    "build:wrangler": "npm run generate-wrangler",
+    "build:cloudflare": "npm run build && npm run generate-wrangler",
+    "lint": "eslint .",
+    "preview": "npm run build && vite preview",
+    "deploy": "npm run build && npm run generate-wrangler && wrangler deploy --config wrangler.generated.toml",
+    "test:notify": "node test-notifier.js"
+  },
+  "main": "index.js",
+  "bin": "index.js",
+  "pkg": {
+    "assets": [
+      "dist/client/**/*",
+      "src/components/TelegramManager.jsx"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ]
+  },
+  "dependencies": {
+    "axios": "^1.16.1",
+    "bcrypt": "^6.0.0",
+    "cheerio": "^1.2.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "jsonwebtoken": "^9.0.3",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "selenium-webdriver": "^4.44.0",
+    "sqlite3": "^6.0.1",
+    "uuid": "^14.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.38.0",
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "pkg": "^5.8.1",
+    "vite": "^8.0.12",
+    "wait-on": "^8.0.0",
+    "wrangler": "^4.95.0"
+  }
 }

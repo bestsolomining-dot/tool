@@ -1,14 +1,3 @@
-<<<<<<< HEAD
-// miningOpportunityNotifier.js - Complete Fixed Version
-import { CONFIG } from "./config.js";
-import { getTrendDb, run, all } from "./db.js";
-import { getCoinGeckoId, COIN_TO_COINGECKO_MAP } from "./coinGecko/coinMapping.js";
-import { fetchAndSaveCoinPrices, getCoinPricesFromDb } from "./coinGecko/coinGeckoClient.js";
-import { scrapeHeroMinersGlobal } from "./miners/heroMiners.js";
-import { scrapeMiningDutchGlobal } from "./miners/miningDutch.js";
-import { sendMineTelegram } from "./telegram/telegramClient.js";
-import { getAlgorithmDisplayName } from "../src/core/mapping.js";
-=======
 import path from "path";
 import fs from "node:fs/promises";
 import sqlite3 from "sqlite3";
@@ -28,31 +17,11 @@ const COMMON_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
 };
->>>>>>> parent of c7ca626 (update)
 
 let lastNotifiedOpportunities = new Map();
 let btcPriceCache = { price: 60000, timestamp: 0 };
 const BTC_PRICE_TTL = 60000;
 
-<<<<<<< HEAD
-export async function getBtcPrice() {
-  const now = Date.now();
-  if (btcPriceCache.timestamp > now - BTC_PRICE_TTL) return btcPriceCache.price;
-  try {
-    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", {
-      signal: AbortSignal.timeout(3000)
-    });
-    const data = await res.json();
-    btcPriceCache = { price: data?.bitcoin?.usd || 60000, timestamp: now };
-  } catch {
-    btcPriceCache = { price: 60000, timestamp: now };
-  }
-  return btcPriceCache.price;
-}
-
-async function fetchPrices(algos, type = "nh") {
-  if (!algos || algos.length === 0) return {};
-=======
 const TREND_WINDOW_HOURS = 24;
 const MIN_NOTIFY_INTERVAL_MS = 30 * 60 * 1000;
 const SPREAD_THRESHOLD_PCT = 5;
@@ -231,9 +200,7 @@ export async function scrapeMiningDutchGlobal(force = false) {
 //  Fetch NH Prices
 // =========================
 async function fetchNhPrices(algos, nhClient = "BT") {
-  const results = {};
   if (!Array.isArray(algos) || algos.length === 0) return results;
->>>>>>> parent of c7ca626 (update)
   const baseUrl = `http://localhost:${process.env.PORT || 3000}`;
   const endpoint = type === "nh" ? "/api/v2/hashpower/order/price" : "/api/v2/mrr/rentals";
   const queryParam = type === "nh" ? "algorithm" : "algo";
@@ -321,18 +288,18 @@ async function sendOpportunityAlert(opp) {
   await sendMineTelegram(msg);
 }
 
-async function sendMiningSummary(topOpps) {
-  const lines = topOpps.map((o, i) => {
-    const pct = o.spreadPct !== null ? (o.spreadPct >= 0 ? "+" + o.spreadPct.toFixed(2) : o.spreadPct.toFixed(2)) : "N/A";
-    return `🟢 <b>${i + 1}. ${o.label}</b> — ${o.poolBtcPerDay.toFixed(8)} BTC/day (${pct}%) | ${o.poolMiners} miners`;
-  });
-  const msg = `📊 <b>Mining Summary</b>\n━━━━━━━━━━━━━━━━━━\n` +
-    `<b>Time:</b> ${new Date().toLocaleTimeString()}\n` +
-    `<b>Profitable:</b> ${topOpps.length}\n━━━━━━━━━━━━━━━━━━\n` +
-    lines.join("\n") +
-    `\n━━━━━━━━━━━━━━━━━━\n<i>Updated every 15 min</i>`;
-  await sendMineTelegram(msg);
-}
+// async function sendMiningSummary(topOpps) {
+//   const lines = topOpps.map((o, i) => {
+//     const pct = o.spreadPct !== null ? (o.spreadPct >= 0 ? "+" + o.spreadPct.toFixed(2) : o.spreadPct.toFixed(2)) : "N/A";
+//     return `🟢 <b>${i + 1}. ${o.label}</b> — ${o.poolBtcPerDay.toFixed(8)} BTC/day (${pct}%) | ${o.poolMiners} miners`;
+//   });
+//   const msg = `📊 <b>Mining Summary</b>\n━━━━━━━━━━━━━━━━━━\n` +
+//     `<b>Time:</b> ${new Date().toLocaleTimeString()}\n` +
+//     `<b>Profitable:</b> ${topOpps.length}\n━━━━━━━━━━━━━━━━━━\n` +
+//     lines.join("\n") +
+//     `\n━━━━━━━━━━━━━━━━━━\n<i>Updated every 15 min</i>`;
+//   await sendMineTelegram(msg);
+// }
 
 export async function scanMiningOpportunities(force = false) {
   console.log(`[mine:scan] Scanning...`);
@@ -365,23 +332,12 @@ export async function scanMiningOpportunities(force = false) {
   }
 
   const algoSet = new Set();
-<<<<<<< HEAD
-  const addAlgos = (rows) => {
-    for (const row of rows || []) {
-      if (row.nicehashAlgo) algoSet.add(row.nicehashAlgo);
-      if (row.normalizedAlgo && row.normalizedAlgo !== "UNKNOWN") algoSet.add(row.normalizedAlgo);
-    }
-  };
-  addAlgos(heroRes?.coinStats);
-  addAlgos(dutchRes?.coinStats);
-=======
   for (const row of heroRes?.coinStats || []) {
     if (row.normalizedAlgo && row.normalizedAlgo !== "UNKNOWN") algoSet.add(row.normalizedAlgo);
   }
   for (const row of dutchRes?.coinStats || []) {
     if (row.normalizedAlgo && row.normalizedAlgo !== "UNKNOWN") algoSet.add(row.normalizedAlgo);
   }
->>>>>>> parent of c7ca626 (update)
 
   const algos = Array.from(algoSet).filter(Boolean);
   if (algos.length === 0) return { success: false, error: "No algos found" };
@@ -393,21 +349,11 @@ export async function scanMiningOpportunities(force = false) {
 
   const heroByAlgo = new Map();
   for (const row of heroRes?.coinStats || []) {
-<<<<<<< HEAD
-    const k = row.nicehashAlgo || row.normalizedAlgo;
-    if (!heroByAlgo.has(k)) heroByAlgo.set(k, { btcPerDay: 0, miners: 0, coins: [], subdomains: [] });
-    const cur = heroByAlgo.get(k);
-    cur.btcPerDay = Math.max(cur.btcPerDay, row.btcPerDay);
-    cur.miners += row.miners || 0;
-    if (row.coin) cur.coins.push(row.coin);
-    if (row.subdomain) cur.subdomains.push(row.subdomain);
-=======
     const k = row.normalizedAlgo;
     if (!heroByAlgo.has(k)) heroByAlgo.set(k, { btcPerDay: 0, miners: 0 });
     const cur = heroByAlgo.get(k);
     cur.btcPerDay = Math.max(cur.btcPerDay, row.btcPerDay);
     cur.miners += row.miners || 0;
->>>>>>> parent of c7ca626 (update)
   }
 
   const dutchByAlgo = new Map();
@@ -437,13 +383,7 @@ export async function scanMiningOpportunities(force = false) {
 
     opportunities.push({
       algo,
-<<<<<<< HEAD
-      label: getAlgorithmDisplayName(algo),
-      coinName,
-      coinId,
-=======
       label: getDisplayName(algo),
->>>>>>> parent of c7ca626 (update)
       poolBtcPerDay: poolBtc,
       nhPriceBtc: nhPrice,
       mrrPriceBtc: mrrPrice,
@@ -451,17 +391,6 @@ export async function scanMiningOpportunities(force = false) {
       spreadVsMrr: profit.vsMrr,
       poolMiners: Math.max(hero?.miners || 0, dutch?.miners || 0),
       source: poolBtc > 0 ? (dutch?.btcPerDay > hero?.btcPerDay ? "Mining-Dutch" : "HeroMiners") : "N/A",
-<<<<<<< HEAD
-      heroCoins: hero?.coins || [],
-      heroSubdomains: hero?.subdomains || [],
-      profitStatus: profit.status,
-      recommendation: profit.recommendation,
-      profitBtc: profit.profitBtc,
-      profitUsd: profit.profitUsd,
-      coinPrices: coinPriceData,
-      time: now.toLocaleTimeString()
-=======
->>>>>>> parent of c7ca626 (update)
     });
   }
 
@@ -504,20 +433,6 @@ export async function scanMiningOpportunities(force = false) {
     await sendMiningSummary(profitable.slice(0, 10));
   }
 
-<<<<<<< HEAD
-  return {
-    success: true,
-    scannedAt: capturedAt,
-    totalAlgos: algos.length,
-    opportunities: opportunities.slice(0, 20),
-    notificationsSent: notifyMessages.length,
-    profitableCount: profitable.length,
-    heroCoins: heroRes?.coinStats?.length || 0,
-    dutchCoins: dutchRes?.coinStats?.length || 0
-  };
-}
-
-=======
   return { success: true, scannedAt: capturedAt, totalAlgos: algos.length, opportunities: opportunities.slice(0, 20), notificationsSent: notifyMessages.length, positiveCount };
 }
 
@@ -563,7 +478,6 @@ async function sendMiningSummary(topOpps) {
 // =========================
 //  API route handler
 // =========================
->>>>>>> parent of c7ca626 (update)
 export async function handleMiningOpportunityScan(req, res) {
   try {
     const force = req.query?.force === "true";
@@ -631,7 +545,7 @@ export function startMiningOpportunityScanner() {
     scanMiningOpportunities(false).catch((err) => {
       console.error("[mine:scan] Scheduled scan failed:", err.message);
     });
-  }, CONFIG.SCAN_INTERVAL_MS);
+  }, 5000);
 }
 
 export function stopMiningOpportunityScanner() {

@@ -20,6 +20,7 @@ const COMMON_HEADERS = {
   "Accept": "text/html,application/json,application/xml",
   "Accept-Language": "en-US,en;q=0.9",
   "Accept-Encoding": "gzip, deflate, br",
+  "Cache-Control": "no-cache"
 };
 
 let lastNotifiedOpportunities = new Map();
@@ -122,138 +123,147 @@ async function sendMineTelegram(message) {
 }
 
 // =========================
-//  HERO MINERS - Comprehensive Scraper with Discovery
+//  HERO MINERS - Comprehensive Scraper with Coin Discovery
 // =========================
 
-// Known working algorithms (verified)
-const KNOWN_WORKING_ALGOS = [
-  'randomx',
-  'cryptonight',
-  'kawpow',
-  'etchash',
-  'autolykos',
-  'equihash',
-  'zhash',
-  'beamv3'
-];
-
-// Algorithms that might exist
-const EXPERIMENTAL_ALGOS = [
-  'octopus',
-  'verushash',
-  'nexapow',
-  'fishhash',
-  'dynexsolve',
-  'blake3',
-  'kheavyhash',
-  'eaglesong',
-  'xelishashv3',
-  'janushash',
-  'progpowz',
-  'pearlhash',
-  'x11',
-  'lyra2rev2',
-  'neoscrypt',
-  'yespower',
-  'argon2',
-  'mtp',
-  'yescrypt',
-  'cryptonightv7',
-  'cryptonightr'
-];
-
-// Algorithm name mappings (HeroMiners -> NiceHash)
-const ALGO_MAPPINGS = {
-  'randomx': 'RANDOMXMONERO',
-  'cryptonight': 'CRYPTONIGHT',
-  'cryptonightv7': 'CRYPTONIGHT',
-  'cryptonightr': 'CRYPTONIGHT',
-  'kawpow': 'KAWPOW',
-  'etchash': 'ETCHASH',
-  'autolykos': 'AUTOLYKOS',
-  'equihash': 'EQUIHASH',
-  'zhash': 'ZHASH',
-  'beamv3': 'BEAMV3',
-  'octopus': 'OCTOPUS',
-  'verushash': 'VERUSHASH',
-  'nexapow': 'NEXAPOW',
-  'fishhash': 'FISHHASH',
-  'dynexsolve': 'DYNEXSOLVE',
-  'blake3': 'BLAKE3_ALPH',
-  'kheavyhash': 'KHEAVYHASH',
-  'eaglesong': 'EAGLESONG',
-  'xelishashv3': 'XELISHASHV3',
-  'janushash': 'JANUSHASH',
-  'progpowz': 'PROGPOWZ',
-  'pearlhash': 'PEARLHASH',
-  'x11': 'X11',
-  'lyra2rev2': 'LYRA2REV2',
-  'neoscrypt': 'NEOSCRYPT',
-  'yespower': 'YESPOWER',
-  'argon2': 'ARGON2',
-  'mtp': 'MTP'
+// Coin to algorithm mappings
+const COIN_TO_ALGO_MAP = {
+  'ergo': 'autolykos',
+  'salvium': 'randomx',
+  'etc': 'etchash',
+  'aipg': 'aipg',
+  'karlsen': 'kheavyhash',
+  'clore': 'kawpow',
+  'neoxa': 'kawpow',
+  'nexa': 'nexapow',
+  'rvn': 'kawpow',
+  'kaspa': 'kheavyhash',
+  'beam': 'beamv3',
+  'zeph': 'randomx',
+  'iron': 'fishhash',
+  'dynex': 'dynexsolve',
+  'alephium': 'blake3',
+  'octopus': 'octopus',
+  'verus': 'verushash',
+  'xelis': 'xelishashv3',
+  'zano': 'progpowz',
+  'pearl': 'pearlhash',
+  'x11': 'x11',
+  'lyra': 'lyra2rev2',
+  'neoscrypt': 'neoscrypt',
+  'yespower': 'yespower',
+  'argon2': 'argon2',
+  'mtp': 'mtp'
 };
 
+// Algorithm to coin mapping (reverse lookup)
+const ALGO_TO_COIN_MAP = Object.entries(COIN_TO_ALGO_MAP).reduce((acc, [coin, algo]) => {
+  if (!acc[algo]) acc[algo] = [];
+  acc[algo].push(coin);
+  return acc;
+}, {});
+
+// Known working coins (fallback if discovery fails)
+const KNOWN_COINS = [
+  'ergo', 'salvium', 'etc', 'aipg', 'karlsen',
+  'clore', 'neoxa', 'nexa', 'rvn', 'kaspa',
+  'beam', 'zeph', 'iron', 'dynex', 'alephium'
+];
+
 /**
- * Discover available HeroMiners algorithms from sitemap and homepage
+ * Discover HeroMiners subdomains from sitemap
  */
-async function discoverHeroMinersAlgorithms() {
+async function discoverHeroMinersSubdomains() {
   const discovered = new Set();
   
   try {
     // Method 1: Sitemap
-    const sitemapRes = await fetch('https://herominers.com/sitemap.xml', {
+    const res = await fetch('https://herominers.com/sitemap.xml', {
       headers: COMMON_HEADERS,
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(15000)
     });
     
-    if (sitemapRes.ok) {
-      const xml = await sitemapRes.text();
-      const hosts = [...xml.matchAll(/https:\/\/([a-z0-9-]+)\.herominers\.com\//gi)]
-        .map(m => m[1])
-        .filter(h => h && h !== 'herominers' && !h.includes('www'));
+    if (res.ok) {
+      const xml = await res.text();
+      // Extract all subdomains from sitemap URLs
+      const matches = [...xml.matchAll(/https:\/\/([a-z0-9-]+)\.herominers\.com\//gi)];
       
-      hosts.forEach(h => discovered.add(h));
-      console.log(`[HeroMiners] Found ${hosts.length} algos from sitemap`);
-    }
-  } catch (err) {
-    console.log('[HeroMiners] Sitemap discovery failed');
-  }
-  
-  // Method 2: Check known working algorithms
-  for (const algo of KNOWN_WORKING_ALGOS) {
-    discovered.add(algo);
-  }
-  
-  // Method 3: Try to discover from homepage
-  try {
-    const homeRes = await fetch('https://herominers.com/', {
-      headers: COMMON_HEADERS,
-      signal: AbortSignal.timeout(10000)
-    });
-    
-    if (homeRes.ok) {
-      const html = await homeRes.text();
-      const $ = cheerio.load(html);
-      
-      // Look for algorithm links
-      $('a[href*="/pool/"]').each((i, el) => {
-        const href = $(el).attr('href');
-        if (href) {
-          const match = href.match(/\/pool\/([a-z0-9-]+)/);
-          if (match && match[1] && !match[1].includes('www')) {
-            discovered.add(match[1]);
-          }
+      for (const match of matches) {
+        const subdomain = match[1];
+        // Filter out main domain and common non-coin subdomains
+        if (subdomain && 
+            subdomain !== 'herominers' && 
+            !subdomain.includes('www') &&
+            !subdomain.includes('api') &&
+            !subdomain.includes('pool') &&
+            !subdomain.includes('support') &&
+            !subdomain.includes('blog')) {
+          discovered.add(subdomain);
         }
-      });
+      }
+      console.log(`[HeroMiners] Found ${discovered.size} coins from sitemap`);
     }
   } catch (err) {
-    console.log('[HeroMiners] Homepage discovery failed');
+    console.log('[HeroMiners] Sitemap discovery failed:', err.message);
   }
   
-  // Add experimental algos as fallback
-  for (const algo of EXPERIMENTAL_ALGOS) {
-    discovered.add(algo);
+  // Method 2: Try to get from homepage
+  if (discovered.size < 5) {
+    try {
+      const res = await fetch('https://herominers.com/', {
+        headers: COMMON_HEADERS,
+        signal: AbortSignal.timeout(10000)
+      });
+      
+      if (res.ok) {
+        const html = await res.text();
+        const $ = cheerio.load(html);
+        
+        // Look for pool links
+        $('a[href*="herominers.com"]').each((i, el) => {
+          const href = $(el).attr('href');
+          if (href) {
+            const match = href.match(/https?:\/\/([a-z0-9-]+)\.herominers\.com/);
+            if (match && match[1] && 
+                match[1] !== 'herominers' && 
+                !match[1].includes('www')) {
+              discovered.add(match[1]);
+            }
+          }
+        });
+        console.log(`[HeroMiners] Found ${discovered.size} coins from homepage`);
+      }
+    } catch (err) {
+      console.log('[HeroMiners] Homepage discovery failed:', err.message);
+    }
+  }
+  
+  // Method 3: Try to get from pool list API
+  if (discovered.size < 5) {
+    try {
+      const res = await fetch('https://herominers.com/api/pools', {
+        headers: COMMON_HEADERS,
+        signal: AbortSignal.timeout(10000)
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data)) {
+          data.forEach(pool => {
+            if (pool.coin) discovered.add(pool.coin.toLowerCase());
+            if (pool.subdomain) discovered.add(pool.subdomain.toLowerCase());
+          });
+        }
+      }
+    } catch (err) {
+      console.log('[HeroMiners] Pools API failed:', err.message);
+    }
+  }
+  
+  // Add known coins as fallback
+  if (discovered.size === 0) {
+    KNOWN_COINS.forEach(c => discovered.add(c));
+    console.log(`[HeroMiners] Using ${KNOWN_COINS.length} fallback coins`);
   }
   
   return Array.from(discovered);
@@ -275,178 +285,100 @@ async function getBtcPrice() {
 }
 
 /**
- * Check if an algorithm exists on HeroMiners
+ * Map coin to algorithm
  */
-async function algorithmExists(algorithm) {
+function mapCoinToAlgorithm(coin) {
+  return COIN_TO_ALGO_MAP[coin] || coin;
+}
+
+/**
+ * Scrape a single coin subdomain
+ */
+async function scrapeHeroMinersCoin(coin, btcPrice) {
   try {
-    // Try HEAD request first
-    const res = await fetch(`https://herominers.com/pool/${algorithm}`, {
-      method: 'HEAD',
-      headers: COMMON_HEADERS,
-      signal: AbortSignal.timeout(5000)
+    // Try API endpoint first
+    const url = `https://${coin}.herominers.com/api/stats`;
+    const response = await fetch(url, {
+      headers: {
+        ...COMMON_HEADERS,
+        'Accept': 'application/json'
+      },
+      signal: AbortSignal.timeout(10000)
     });
     
-    if (res.ok) return true;
+    if (response.ok) {
+      const data = await response.json();
+      return parseHeroMinersApiData(data, coin, btcPrice);
+    }
     
-    // Try API endpoint
-    const apiRes = await fetch(`https://${algorithm}.herominers.com/api/stats`, {
-      method: 'HEAD',
+    // Fallback: Try HTML page
+    const htmlUrl = `https://${coin}.herominers.com/`;
+    const htmlRes = await fetch(htmlUrl, {
       headers: COMMON_HEADERS,
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(10000)
     });
     
-    return apiRes.ok;
-  } catch {
-    return false;
+    if (htmlRes.ok) {
+      const html = await htmlRes.text();
+      return parseHeroMinersHtml(html, coin, btcPrice);
+    }
+    
+    return [];
+  } catch (err) {
+    return [];
   }
 }
 
 /**
- * Scrape a single HeroMiners algorithm page with fallback
+ * Parse HeroMiners API data
  */
-async function scrapeHeroMinersAlgorithm(algorithm, btcPrice) {
-  const allRows = [];
-  
-  // Try multiple URL patterns
-  const urlPatterns = [
-    `https://herominers.com/pool/${algorithm}`,
-    `https://herominers.com/stats/${algorithm}`,
-    `https://${algorithm}.herominers.com/api/stats`,
-    `https://${algorithm}.herominers.com/`
-  ];
-  
-  for (const url of urlPatterns) {
-    try {
-      const response = await fetch(url, {
-        headers: {
-          ...COMMON_HEADERS,
-          'Accept': 'text/html,application/json,application/xml'
-        },
-        signal: AbortSignal.timeout(10000)
-      });
-      
-      if (!response.ok) continue;
-      
-      const contentType = response.headers.get('content-type') || '';
-      let rows = [];
-      
-      // JSON response
-      if (contentType.includes('json')) {
-        try {
-          const data = await response.json();
-          rows = parseHeroMinersJson(data, algorithm, btcPrice);
-          if (rows.length > 0) {
-            allRows.push(...rows);
-            continue;
-          }
-        } catch (e) {
-          // JSON parsing failed
-        }
-      }
-      
-      // XML response (some endpoints return XML)
-      if (contentType.includes('xml')) {
-        try {
-          const xml = await response.text();
-          rows = parseHeroMinersXml(xml, algorithm, btcPrice);
-          if (rows.length > 0) {
-            allRows.push(...rows);
-            continue;
-          }
-        } catch (e) {
-          // XML parsing failed
-        }
-      }
-      
-      // HTML response
-      const html = await response.text();
-      rows = parseHeroMinersHtml(html, algorithm, btcPrice);
-      if (rows.length > 0) {
-        allRows.push(...rows);
-        continue;
-      }
-      
-    } catch (err) {
-      // Try next URL
-      continue;
-    }
-  }
-  
-  return allRows;
-}
-
-/**
- * Parse HeroMiners XML response
- */
-function parseHeroMinersXml(xml, algorithm, btcPrice) {
+function parseHeroMinersApiData(data, coin, btcPrice) {
   const rows = [];
-  const $ = cheerio.load(xml, { xmlMode: true });
+  const pool = data?.pool || data;
+  const config = data?.config || {};
   
-  $('pool, coin, stats').each((i, el) => {
-    const coin = $(el).find('coin, symbol, name').text().trim() || algorithm.toUpperCase();
-    const miners = parseInt($(el).find('miners, workers').text()) || 0;
-    const hashrate = $(el).find('hashrate, poolHashrate').text().trim() || 'N/A';
-    const btcPerDay = parseFloat($(el).find('price, btcPerDay, expected').text()) || 0;
-    
-    if (miners > 0 || btcPerDay > 0) {
-      rows.push({
-        algorithm,
-        coin: coin.toUpperCase(),
-        miners,
-        hashrate,
-        btcPerDay,
-        usdPerDay: btcPerDay * btcPrice
-      });
-    }
-  });
-  
-  return rows;
-}
-
-/**
- * Parse HeroMiners JSON response
- */
-function parseHeroMinersJson(data, algorithm, btcPrice) {
-  const rows = [];
-  
-  // Try different data structures
-  const pool = data?.pool || data?.data?.pool || data;
-  const config = data?.config || data?.data?.config || {};
-  
-  if (pool && typeof pool === 'object') {
-    const coin = String(config.symbol || algorithm).toUpperCase();
+  if (pool) {
+    const coinName = String(config.symbol || coin).toUpperCase();
     const miners = parseInt(pool.miners || pool.workers || 0);
     const hashrate = pool.hashrate || pool.poolHashrate || 'N/A';
-    const btcPerDay = parseFloat(pool.price?.btc || pool.price?.BTC || pool.expected || 0);
+    const btcPerDay = parseFloat(pool.price?.btc || pool.price?.BTC || 0);
+    const algorithm = mapCoinToAlgorithm(coin);
     
     if (miners > 0 || btcPerDay > 0) {
       rows.push({
         algorithm,
-        coin,
+        coin: coinName,
+        subdomain: coin,
         miners,
         hashrate: String(hashrate),
         btcPerDay,
-        usdPerDay: btcPerDay * btcPrice
+        usdPerDay: btcPerDay * btcPrice,
+        normalizedAlgo: normalizeAlgo(algorithm),
+        nicehashAlgo: algorithm.toUpperCase()
       });
     }
   }
   
-  // Multiple coins
-  const coins = data?.coins || data?.data?.coins || data?.result || data?.stats;
+  // Handle multiple coins in response
+  const coins = data?.coins || data?.data?.coins;
   if (coins && typeof coins === 'object') {
-    for (const [coin, info] of Object.entries(coins)) {
+    for (const [coinName, info] of Object.entries(coins)) {
       if (typeof info === 'object' && info !== null) {
         const miners = parseInt(info.miners || info.workers || 0);
         const btcPerDay = parseFloat(info.btcPerDay || info.expected || 0);
+        const algorithm = mapCoinToAlgorithm(coin);
         
         if (miners > 0 || btcPerDay > 0) {
           rows.push({
             algorithm,
-            coin: coin.toUpperCase(),
+            coin: coinName.toUpperCase(),
+            subdomain: coin,
             miners,
             hashrate: String(info.hashrate || info.poolHashrate || 'N/A'),
             btcPerDay,
-            usdPerDay: btcPerDay * btcPrice
+            usdPerDay: btcPerDay * btcPrice,
+            normalizedAlgo: normalizeAlgo(algorithm),
+            nicehashAlgo: algorithm.toUpperCase()
           });
         }
       }
@@ -457,75 +389,53 @@ function parseHeroMinersJson(data, algorithm, btcPrice) {
 }
 
 /**
- * Parse HeroMiners HTML to extract coin data
+ * Parse HeroMiners HTML
  */
-function parseHeroMinersHtml(html, algorithm, btcPrice) {
+function parseHeroMinersHtml(html, coin, btcPrice) {
   const rows = [];
   const $ = cheerio.load(html);
+  const algorithm = mapCoinToAlgorithm(coin);
   
   // Look for tables with mining data
   $('table').each((i, table) => {
-    $(table).find('tbody > tr, tr').each((j, row) => {
+    $(table).find('tbody > tr').each((j, row) => {
       const tds = $(row).find('td');
       if (tds.length >= 3) {
-        const coin = $(tds[0]).text().trim() || 'Unknown';
+        const coinName = $(tds[0]).text().trim() || coin.toUpperCase();
         const miners = parseInt($(tds[1]).text().replace(/,/g, '')) || 0;
         const hashrate = $(tds[2]).text().trim() || 'N/A';
         const btcPerDay = parseFloat($(tds[3])?.text()?.replace(/[^0-9.]/g, '') || 0);
         
-        if (coin !== 'Unknown' || miners > 0 || btcPerDay > 0) {
+        if (coinName !== 'Unknown' || miners > 0 || btcPerDay > 0) {
           rows.push({
             algorithm,
-            coin,
+            coin: coinName,
+            subdomain: coin,
             miners,
             hashrate,
             btcPerDay,
-            usdPerDay: btcPerDay * btcPrice
+            usdPerDay: btcPerDay * btcPrice,
+            normalizedAlgo: normalizeAlgo(algorithm),
+            nicehashAlgo: algorithm.toUpperCase()
           });
         }
       }
     });
   });
   
-  // If no table, try div-based layout
-  if (rows.length === 0) {
-    $('div[class*="coin"], div[class*="stat"], div[class*="miner"]').each((i, el) => {
-      const coin = $(el).find('[class*="name"], [class*="symbol"]').text().trim() || algorithm.toUpperCase();
-      const miners = parseInt($(el).find('[class*="miner"], [class*="worker"]').text().replace(/,/g, '')) || 0;
-      const hashrate = $(el).find('[class*="hashrate"]').text().trim() || 'N/A';
-      const btcPerDay = parseFloat($(el).find('[class*="btc"], [class*="price"]').text().replace(/[^0-9.]/g, '')) || 0;
-      
-      if (coin && (miners > 0 || btcPerDay > 0)) {
-        rows.push({
-          algorithm,
-          coin,
-          miners,
-          hashrate,
-          btcPerDay,
-          usdPerDay: btcPerDay * btcPrice
-        });
-      }
-    });
-  }
-  
-  // If still no data, try script tags with JSON
+  // If no table, try script tags with JSON
   if (rows.length === 0) {
     $('script').each((i, script) => {
       const content = $(script).html();
       if (content) {
-        const matches = content.match(/(?:var|let|const)\s+(?:data|stats|pool)\s*=\s*({[\s\S]*?});/g);
-        if (matches) {
-          for (const match of matches) {
-            try {
-              const jsonMatch = match.match(/({[\s\S]*?})/);
-              if (jsonMatch) {
-                const data = JSON.parse(jsonMatch[1]);
-                const jsonRows = parseHeroMinersJson(data, algorithm, btcPrice);
-                rows.push(...jsonRows);
-              }
-            } catch (e) {
-              // JSON parsing failed
-            }
+        const match = content.match(/(?:var|let|const)\s+(?:data|stats|pool)\s*=\s*({[\s\S]*?});/);
+        if (match) {
+          try {
+            const data = JSON.parse(match[1]);
+            const jsonRows = parseHeroMinersApiData(data, coin, btcPrice);
+            rows.push(...jsonRows);
+          } catch (e) {
+            // JSON parsing failed
           }
         }
       }
@@ -536,7 +446,7 @@ function parseHeroMinersHtml(html, algorithm, btcPrice) {
 }
 
 /**
- * Scrape all HeroMiners algorithms
+ * Scrape all HeroMiners coins
  */
 export async function scrapeHeroMinersGlobal(force = true) {
   try {
@@ -544,50 +454,37 @@ export async function scrapeHeroMinersGlobal(force = true) {
     const btcPrice = await getBtcPrice();
     console.log(`[HeroMiners] BTC Price: $${btcPrice}`);
     
-    // Discover available algorithms
-    let algorithms = await discoverHeroMinersAlgorithms();
-    console.log(`[HeroMiners] Discovered ${algorithms.length} algorithms to try`);
-    
-    // If we have too many, prioritize known working ones first
-    const prioritized = [
-      ...KNOWN_WORKING_ALGOS.filter(a => algorithms.includes(a)),
-      ...algorithms.filter(a => !KNOWN_WORKING_ALGOS.includes(a))
-    ];
+    // Discover all coin subdomains
+    const coins = await discoverHeroMinersSubdomains();
+    console.log(`[HeroMiners] Discovered ${coins.length} coins: ${coins.slice(0, 20).join(', ')}${coins.length > 20 ? `... +${coins.length - 20} more` : ''}`);
     
     const allCoinStats = [];
     let totalMiners = 0;
-    let successfulAlgos = 0;
+    let successfulCoins = 0;
     
-    for (const algo of prioritized) {
+    for (const coin of coins) {
       try {
-        const rows = await scrapeHeroMinersAlgorithm(algo, btcPrice);
+        const rows = await scrapeHeroMinersCoin(coin, btcPrice);
         
         if (rows && rows.length > 0) {
-          // Map algorithm name to NiceHash format
-          const mappedAlgo = ALGO_MAPPINGS[algo] || algo.toUpperCase();
-          const enhancedRows = rows.map(row => ({
-            ...row,
-            normalizedAlgo: normalizeAlgo(mappedAlgo),
-            nicehashAlgo: mappedAlgo
-          }));
-          
-          allCoinStats.push(...enhancedRows);
-          const algoMiners = rows.reduce((sum, r) => sum + (r.miners || 0), 0);
-          totalMiners += algoMiners;
-          successfulAlgos++;
-          console.log(`[HeroMiners] ✓ ${algo}: ${rows.length} coins, ${algoMiners} miners`);
+          allCoinStats.push(...rows);
+          const coinMiners = rows.reduce((sum, r) => sum + (r.miners || 0), 0);
+          totalMiners += coinMiners;
+          successfulCoins++;
+          const algo = rows[0]?.algorithm || coin;
+          console.log(`[HeroMiners] ✓ ${coin} (${algo}): ${rows.length} entries, ${coinMiners} miners`);
         } else {
-          console.log(`[HeroMiners] ✗ ${algo}: No data found`);
+          console.log(`[HeroMiners] ✗ ${coin}: No data found`);
         }
         
-        // Rate limiting
-        await new Promise(r => setTimeout(r, 500));
+        // Rate limiting - be respectful
+        await new Promise(r => setTimeout(r, 1000));
       } catch (err) {
-        console.log(`[HeroMiners] ✗ ${algo}: Error - ${err.message}`);
+        console.log(`[HeroMiners] ✗ ${coin}: Error - ${err.message}`);
       }
     }
     
-    console.log(`[HeroMiners] Complete: ${successfulAlgos}/${prioritized.length} algos, ${allCoinStats.length} coins, ${totalMiners} miners`);
+    console.log(`[HeroMiners] Complete: ${successfulCoins}/${coins.length} coins, ${allCoinStats.length} entries, ${totalMiners} total miners`);
     
     // Save to database for trends
     const db = await getTrendDb();
@@ -606,9 +503,9 @@ export async function scrapeHeroMinersGlobal(force = true) {
       coinStats: allCoinStats,
       miners: totalMiners,
       fetchedAt: capturedAt,
-      algorithmsScraped: successfulAlgos,
-      totalAlgorithms: prioritized.length,
-      totalCoins: allCoinStats.length
+      coinsScraped: successfulCoins,
+      totalCoins: coins.length,
+      totalEntries: allCoinStats.length
     };
     
   } catch (err) {
@@ -637,10 +534,11 @@ export async function scrapeMiningDutchGlobal(force = false) {
         if (json?.success && json?.result) {
           const coinStats = Object.entries(json.result).map(([algorithm, data]) => {
             const btcPerDay = parseFloat(data.expected || data.average || 0);
+            const algoLower = algorithm.toLowerCase();
             return {
               algorithm: algorithm,
               normalizedAlgo: normalizeAlgo(algorithm),
-              nicehashAlgo: ALGO_MAPPINGS[algorithm.toLowerCase()] || algorithm.toUpperCase(),
+              nicehashAlgo: algorithm.toUpperCase(),
               coin: algorithm.toUpperCase(),
               miners: 0,
               btcPerDay: Number.isFinite(btcPerDay) ? btcPerDay : 0,
@@ -684,7 +582,7 @@ export async function scrapeMiningDutchGlobal(force = false) {
               coinStats.push({
                 algorithm,
                 normalizedAlgo: normalizeAlgo(algorithm),
-                nicehashAlgo: ALGO_MAPPINGS[algoLower] || algorithm.toUpperCase(),
+                nicehashAlgo: algorithm.toUpperCase(),
                 coin: algorithm.toUpperCase(),
                 miners,
                 btcPerDay,
@@ -789,11 +687,12 @@ export async function scanMiningOpportunities(force = false) {
   const heroByAlgo = new Map();
   for (const row of heroRes?.coinStats || []) {
     const k = row.nicehashAlgo || row.normalizedAlgo;
-    if (!heroByAlgo.has(k)) heroByAlgo.set(k, { btcPerDay: 0, miners: 0, coins: [] });
+    if (!heroByAlgo.has(k)) heroByAlgo.set(k, { btcPerDay: 0, miners: 0, coins: [], subdomains: [] });
     const cur = heroByAlgo.get(k);
     cur.btcPerDay = Math.max(cur.btcPerDay, row.btcPerDay);
     cur.miners += row.miners || 0;
     if (row.coin) cur.coins.push(row.coin);
+    if (row.subdomain) cur.subdomains.push(row.subdomain);
   }
 
   const dutchByAlgo = new Map();
@@ -820,7 +719,8 @@ export async function scanMiningOpportunities(force = false) {
       spreadPct: spread,
       poolMiners: Math.max(hero?.miners || 0, dutch?.miners || 0),
       source: poolBtc > 0 ? (dutch?.btcPerDay > hero?.btcPerDay ? "Mining-Dutch" : "HeroMiners") : "N/A",
-      heroCoins: hero?.coins || []
+      heroCoins: hero?.coins || [],
+      heroSubdomains: hero?.subdomains || []
     });
   }
 
@@ -869,7 +769,9 @@ export async function scanMiningOpportunities(force = false) {
     notificationsSent: notifyMessages.length, 
     positiveCount,
     heroCoins: heroRes?.coinStats?.length || 0,
-    dutchCoins: dutchRes?.coinStats?.length || 0
+    dutchCoins: dutchRes?.coinStats?.length || 0,
+    heroMiners: heroRes?.miners || 0,
+    dutchMiners: dutchRes?.miners || 0
   };
 }
 
@@ -880,6 +782,9 @@ async function sendOpportunityAlerts(opportunities) {
   for (const opp of opportunities) {
     const emoji = opp.spreadPct >= 20 ? "🔥" : opp.spreadPct >= 10 ? "💰" : "✅";
     const trendEmoji = opp.trend?.direction === "improving" ? "📈" : opp.trend?.direction === "declining" ? "📉" : "➡️";
+    const coinsDisplay = opp.heroCoins.length > 0 ? opp.heroCoins.slice(0, 5).join(', ') : 'N/A';
+    const subdomainDisplay = opp.heroSubdomains.length > 0 ? opp.heroSubdomains.slice(0, 3).join(', ') : '';
+    
     const msg = `${emoji} <b>Mining Opportunity</b>\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `<b>Algo:</b> <code>${opp.label}</code>\n` +
@@ -888,7 +793,8 @@ async function sendOpportunityAlerts(opportunities) {
       `<b>Spread:</b> <code>${opp.spreadPct >= 0 ? "+" : ""}${opp.spreadPct.toFixed(2)}%</code>\n` +
       `<b>Source:</b> ${opp.source}\n` +
       `<b>Miners:</b> ${opp.poolMiners}\n` +
-      (opp.heroCoins.length > 0 ? `<b>Coins:</b> ${opp.heroCoins.slice(0, 5).join(', ')}${opp.heroCoins.length > 5 ? ` +${opp.heroCoins.length - 5}` : ''}\n` : '') +
+      (opp.heroCoins.length > 0 ? `<b>Coins:</b> ${coinsDisplay}${opp.heroCoins.length > 5 ? ` +${opp.heroCoins.length - 5}` : ''}\n` : '') +
+      (subdomainDisplay ? `<b>Pools:</b> ${subdomainDisplay}\n` : '') +
       `${trendEmoji} <b>Trend:</b> ${opp.trend?.direction || "N/A"} (${opp.trend?.samples || 0} samples)\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
       `<i>Mine on pool, arbitrage vs NiceHash</i>`;

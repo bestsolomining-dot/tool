@@ -1,9 +1,8 @@
-// ws.js - WebSocket server for mining stats
-// Handles WebSocket connections from miningStatsFetcher.js
-// Legacy support - all new requests should use REST API
-
-import { WebSocketServer } from "ws";
-import { scrapeHeroMinersGlobal } from "./miningOpportunityNotifier.js";
+// server/ws.js
+import { WebSocketServer as WSS } from "ws";
+import { scrapeHeroMinersGlobal } from "./miners/heroMiners.js";
+import { scrapeMiningDutchGlobal } from "./miners/miningDutch.js";
+import { getBtcPrice } from "./utils/priceUtils.js";
 
 const ACTION_HANDLERS = {
   herominers: handleHeroMiners,
@@ -14,7 +13,7 @@ const ACTION_HANDLERS = {
 };
 
 export function setupWebSocket(server) {
-  const wss = new WebSocketServer({ server, path: "/api/v2/mrr/fetch/ws" });
+  const wss = new WSS({ server, path: "/api/v2/mrr/fetch/ws" });
 
   wss.on("connection", (ws, req) => {
     console.log("[WS] Client connected");
@@ -49,7 +48,14 @@ export function setupWebSocket(server) {
               error: err.message,
             })
           );
-        } catch {}
+        } catch {
+          ws.send(
+            JSON.stringify({
+              success: false,
+              error: "Invalid request format",
+            })
+          );
+        }
       }
     });
 
@@ -66,64 +72,75 @@ export function setupWebSocket(server) {
   return wss;
 }
 
+/**
+ * Handle HeroMiners WebSocket requests
+ */
 async function handleHeroMiners(options) {
-  const result = await scrapeHeroMinersGlobal(options?.force || false);
-  return result;
-}
-
-async function handleMiningDutch(options) {
   try {
-    const res = await fetch(
-      "https://www.mining-dutch.nl/api/v1/public/multiport/?method=avgprofitability",
-      {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-        signal: AbortSignal.timeout(15000),
-      }
-    );
-
-    if (!res.ok) throw new Error(`Mining-Dutch API: ${res.status}`);
-
-    const json = await res.json();
-    if (!json?.success || !json?.result) {
-      throw new Error("Mining-Dutch API returned invalid data");
-    }
-
-    // Map avgprofitability results to coinStats format
-    const coinStats = Object.entries(json.result).map(([algorithm, data]) => {
-      const expected = parseFloat(data.expected || data.average || 0);
-      return {
-        algorithm,
-        coin: algorithm.toUpperCase(),
-        btcPerDay: Number.isFinite(expected) ? expected : 0,
-        usdPerDay: 0,
-        miners: 0,
-        hashrate: "N/A",
-      };
-    });
-
+    const force = options?.force || false;
+    const btcPrice = await getBtcPrice();
+    const result = await scrapeHeroMinersGlobal(btcPrice);
+    
     return {
-      miningpooldutch: {
-        coinStats,
+      herominers_global: {
+        success: result.success,
+        coinStats: result.coinStats || [],
+        miners: result.miners || 0,
         fetchedAt: new Date().toISOString(),
+        error: result.error || null,
       },
     };
   } catch (err) {
-    console.error("[WS:dutch] Fetch error:", err.message);
+    console.error("[WS:hero] Error:", err.message);
     throw err;
   }
 }
 
-async function handleAll(options) {
-  const [hero, dutch] = await Promise.allSettled([
-    handleHeroMiners(options),
-    handleMiningDutch(options),
-  ]);
-
-  return {
-    herominers: hero.status === "fulfilled" ? hero.value : null,
-    miningDutch: dutch.status === "fulfilled" ? dutch.value : null,
-  };
+/**
+ * Handle Mining-Dutch WebSocket requests
+ */
+async function handleMiningDutch(options) {
+  try {
+    const force = options?.force || false;
+    const btcPrice = await getBtcPrice();
+    const result = await scrapeMiningDutchGlobal(btcPrice, force);
+    
+    return {
+      miningpooldutch: {
+        success: result.success,
+        coinStats: result.coinStats || [],
+        fetchedAt: new Date().toISOString(),
+        error: result.error || null,
+      },
+    };
+  } catch (err) {
+    console.error("[WS:dutch] Error:", err.message);
+    throw err;
+  }
 }
+
+/**
+ * Handle "all" request
+ */
+async function handleAll(options) {
+  try {
+    const [hero, dutch] = await Promise.allSettled([
+      handleHeroMiners(options),
+      handleMiningDutch(options),
+    ]);
+
+    return {
+      herominers: hero.status === "fulfilled" ? hero.value : null,
+      miningDutch: dutch.status === "fulfilled" ? dutch.value : null,
+    };
+  } catch (err) {
+    console.error("[WS:all] Error:", err.message);
+    throw err;
+  }
+}
+
+export const handlers = {
+  handleHeroMiners,
+  handleMiningDutch,
+  handleAll,
+};

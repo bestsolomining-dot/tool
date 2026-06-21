@@ -1,7 +1,9 @@
 import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { WebSocketServer } from 'ws'; // Corrected import
+import { setupWebSocket } from './server/ws.js';
+
+// import { WebSocketServer } from 'ws'; // Corrected import
 import fs from 'node:fs/promises';
 import * as cheerio from 'cheerio';
 import { createApp, initializeApp } from './server/app.js';

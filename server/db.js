@@ -10,6 +10,29 @@ import { DATA_DIR, TRENDS_DB_PATH } from "./config.js";
 let opportunityDb = null;
 let dbInitPromise = null;
 
+async function updateMiningOpportunitiesTable() {
+  const db = await getTrendDb();
+  
+  // Check if profit_status column exists
+  const columns = await all(db, "PRAGMA table_info(mining_opportunities)");
+  const hasProfitStatus = columns.some(c => c.name === 'profit_status');
+  
+  if (!hasProfitStatus) {
+    console.log('[DB] Adding missing columns to mining_opportunities...');
+    
+    // Add all missing columns
+    await run(db, "ALTER TABLE mining_opportunities ADD COLUMN profit_status TEXT DEFAULT 'neutral'");
+    await run(db, "ALTER TABLE mining_opportunities ADD COLUMN trend_direction TEXT DEFAULT 'stable'");
+    await run(db, "ALTER TABLE mining_opportunities ADD COLUMN coin_name TEXT");
+    await run(db, "ALTER TABLE mining_opportunities ADD COLUMN coin_id TEXT");
+    await run(db, "ALTER TABLE mining_opportunities ADD COLUMN coin_prices_json TEXT");
+    await run(db, "ALTER TABLE mining_opportunities ADD COLUMN summary_json TEXT");
+    await run(db, "ALTER TABLE mining_opportunities ADD COLUMN spread_vs_mrr REAL DEFAULT 0");
+    
+    console.log('[DB] Columns added successfully');
+  }
+}
+
 export async function getTrendDb() {
   if (opportunityDb) return opportunityDb;
   if (dbInitPromise) return dbInitPromise;

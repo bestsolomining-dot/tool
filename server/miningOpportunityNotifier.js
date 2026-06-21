@@ -1,6 +1,6 @@
 // miningOpportunityNotifier.js - Complete Fixed Version
 import { CONFIG } from "./config.js";
-import { getTrendDb, run, all } from "./database/db.js";
+import { getTrendDb, run, all } from "./db.js";
 import { getCoinGeckoId, COIN_TO_COINGECKO_MAP } from "./coinGecko/coinMapping.js";
 import { fetchAndSaveCoinPrices, getCoinPricesFromDb } from "./coinGecko/coinGeckoClient.js";
 import { scrapeHeroMinersGlobal } from "./miners/heroMiners.js";

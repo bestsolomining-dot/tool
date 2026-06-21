@@ -558,8 +558,13 @@ export default function MrrRigs({
             })),
             isRental: true,
             nicehashPrice: nhPriceData,
-            price: rental.price, // Add rental price from the API response
-            currency: rental.currency || "", // Add rental currency from the API response
+            price: normalized?.price || rental.price || {}, // Prefer normalized rental price shape
+            currency:
+              normalized?.price?.currency ||
+              rental.currency ||
+              normalized?.currency ||
+              "", // Preserve a usable currency label
+            price_converted: normalized?.price_converted || rental.price_converted || null,
             duration: rental.hours || rental.length || rental.duration || 0,
           };
         } else {
@@ -640,7 +645,11 @@ export default function MrrRigs({
   };
 
   const handlePriceChange = async (rig) => {
-    const currentPrice = rig.price || rig.min_price || "0";
+    const currentPriceData = getPriceDataLocal(rig.price || rig.min_price);
+    const currentPrice =
+      currentPriceData?.value > 0
+        ? String(currentPriceData.value)
+        : "0";
     const newPrice = window.prompt(
       `Enter new price for rig "${rig.name}" (BTC/Unit/Day):`,
       currentPrice,

@@ -3,6 +3,7 @@ import { CountdownTimer } from "./MiningRigRental";
 import {
   getClientBadgeStyle,
   getRawHashrate,
+  getPriceDataLocal,
   parsePriceValueLocal,
   formatRentalStartTime,
   getStatusClass,
@@ -63,53 +64,34 @@ const FALLBACK_BTC_RATES = {
 };
 
 const resolvePaidPrice = (priceSource, convertedSource) => {
-  const source =
-    priceSource && typeof priceSource === "object" ? priceSource : {};
-
-  if (source.paid !== undefined || source.amount !== undefined) {
+  const primary = getPriceDataLocal(priceSource);
+  if (primary.value > 0) {
     return {
-      amount: parsePriceValueLocal(source.paid ?? source.amount),
-      currency: String(
-        source.currency || source.price_unit || source.unit || "BTC",
-      ).toUpperCase(),
+      amount: primary.value,
+      currency: String(primary.currency || "BTC").toUpperCase(),
     };
   }
 
-  for (const currency of PRICE_CURRENCIES) {
-    const nested = source[currency];
-    if (!nested || typeof nested !== "object") continue;
-    const amount = parsePriceValueLocal(
-      nested.paid ??
-        nested.price ??
-        nested.amount ??
-        nested.hour ??
-        nested.minhrs ??
-        nested.maxhrs,
-    );
-    if (amount > 0) {
-      return {
-        amount,
-        currency,
-      };
+  if (priceSource && typeof priceSource === "object") {
+    for (const currency of PRICE_CURRENCIES) {
+      const nested = priceSource[currency];
+      if (!nested || typeof nested !== "object") continue;
+      const nestedPrice = getPriceDataLocal(nested);
+      if (nestedPrice.value > 0) {
+        return {
+          amount: nestedPrice.value,
+          currency,
+        };
+      }
     }
   }
 
-  if (convertedSource && typeof convertedSource === "object") {
-    const convertedAmount = parsePriceValueLocal(
-      convertedSource.paid ??
-        convertedSource.price ??
-        convertedSource.amount ??
-        convertedSource.BTC ??
-        convertedSource.value,
-    );
-    if (convertedAmount > 0) {
-      return {
-        amount: convertedAmount,
-        currency: String(
-          convertedSource.currency || convertedSource.price_unit || "BTC",
-        ).toUpperCase(),
-      };
-    }
+  const converted = getPriceDataLocal(convertedSource);
+  if (converted.value > 0) {
+    return {
+      amount: converted.value,
+      currency: String(converted.currency || "BTC").toUpperCase(),
+    };
   }
 
   return { amount: 0, currency: "BTC" };
@@ -246,7 +228,7 @@ const MrrRigCard = ({
     info?.algo || rig.algo || rig.algorithm || rig.type || algoName;
   const normalizedAlgo = normalizeAlgoForNiceHash(rawAlgo || algoName);
   const paidPrice = resolvePaidPrice(
-    info?.price || rig.price,
+    info?.normalized?.price || info?.price || rig.price,
     info?.price_converted || rig.price_converted,
   );
   const paidAmount = paidPrice.amount;
@@ -302,7 +284,6 @@ const MrrRigCard = ({
     paidBtcAmount > 0
       ? "Calculated from MRR sold rental"
       : "Waiting for paid BTC conversion";
-  const roiFormulaLabel = "MRR Sold Rate vs NiceHash Buy Order";
 
   const normalizedCardAlgo = normalizeAlgoForNiceHash(algoName || rawAlgo);
   const nhOrder = [...(nhOrders || [])]

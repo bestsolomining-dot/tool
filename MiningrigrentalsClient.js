@@ -91,6 +91,7 @@ export class MiningRigRentalsClient {
 
     // --- Robust Nonce & Auth Recovery ---
     const errorMessage = String(data.message || data.data?.message || '');
+<<<<<<< Updated upstream
     const isBadNonce = errorMessage.includes('Bad Nonce') || response.statusCode === 401 && errorMessage.includes('Nonce');
     
     if (isBadNonce && retryCount < 3) {
@@ -98,6 +99,16 @@ export class MiningRigRentalsClient {
       // to get ahead of any server-side clock issues or previous high nonces.
       const jumpValue = (BigInt(Date.now()) + 3600000n) * 1000000n;
       console.log(`[mrr:${this.clientName}] ☢️ NUCLEAR JUMP: Recovering from Bad Nonce. New baseline: ${jumpValue}`);
+=======
+    const isBadNonce = errorMessage.includes('Bad Nonce') || 
+                       (response.statusCode === 401 && (errorMessage.includes('Nonce') || /signature|invalid|key/i.test(errorMessage)));
+    
+    if (isBadNonce && retryCount < 3) {
+      // NUCLEAR JUMP: If we get a Bad Nonce, jump forward by 90 days worth of nanoseconds 
+      // to get ahead of any server-side clock issues or previous high nonces.
+      const jumpValue = (BigInt(Date.now()) + 7776000000n) * 1000000n;
+      console.log(`[mrr:${this.clientName}] ☢️ NUCLEAR JUMP: Recovering from Bad Nonce. New baseline: ${jumpValue} (+90d)`);
+>>>>>>> Stashed changes
       mrrLastNonces.set(this.apiKey, jumpValue);
       
       return this.call({ method, endpoint, query, body, retryCount: retryCount + 1 });

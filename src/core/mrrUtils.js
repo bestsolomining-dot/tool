@@ -1,8 +1,16 @@
+<<<<<<< Updated upstream
 import { parsePriceValue as parsePriceValueUtils } from './priceUtils';
+=======
+import { parsePriceValue as parsePriceValueUtils } from './priceUtils.js';
+>>>>>>> Stashed changes
 
 /** Power factor mapping for normalization (EH/s base) */
 export const UNIT_TO_POWER = {
   'EH': 0, 'PH': -3, 'TH': -6, 'GH': -9, 'MH': -12,
+<<<<<<< Updated upstream
+=======
+  'GSOL': -9, 'MSOL': -12,
+>>>>>>> Stashed changes
   'E': 0, 'P': -3, 'T': -6, 'G': -9, 'M': -12,
   'EHS': 0, 'PHS': -3, 'THS': -6, 'GHS': -9, 'MHS': -12
 };
@@ -10,11 +18,16 @@ export const UNIT_TO_POWER = {
 /** Robustly extract base unit (e.g., 'GH/s' or 'BTC/TH/Day' -> 'GH' or 'TH') */
 export const clean = (u) => {
   const str = String(u || '').toUpperCase().trim();
+<<<<<<< Updated upstream
   if (str.includes('SHA256')) return 'EH';
   if (str.includes('SCRYPT')) return 'TH';
   if (str.includes('RANDOMX')) return 'MH';
 
   const m = str.match(/(EHS|PHS|THS|GHS|MHS|EH|PH|TH|GH|MH|KH)/) || str.match(/\b(E|P|T|G|M|K|H)\b/);
+=======
+
+  const m = str.match(/(GSOL|MSOL|KSOL|SOL|EHS|PHS|THS|GHS|MHS|EH|PH|TH|GH|MH|KH)/) || str.match(/\b(E|P|T|G|M|K|H)\b/);
+>>>>>>> Stashed changes
   if (!m) return 'TH';
   let unit = m[0];
   const singleMap = { 'E': 'EH', 'P': 'PH', 'T': 'TH', 'G': 'GH', 'M': 'MH', 'K': 'KH' };

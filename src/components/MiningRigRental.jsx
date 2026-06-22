@@ -31,6 +31,18 @@ function extractArray(payload, keys = ['rentals', 'rigs', 'list', 'result', 'ite
   return [];
 }
 
+<<<<<<< Updated upstream
+=======
+function isCurrentRental(rental) {
+  const statusRaw = rental?.status;
+  const status = String(typeof statusRaw === 'object' ? statusRaw.status : statusRaw || '').toLowerCase();
+  const rentedFlag = Boolean(statusRaw?.rented || rental?.rented);
+  const endTs = toUtcTimestamp(rental?.end || rental?.end_time || rental?.endTime || statusRaw?.end);
+  const hasFutureEnd = Number.isFinite(endTs) && endTs > Date.now();
+  return hasFutureEnd || rentedFlag || status.includes('rented') || status.includes('active') || status.includes('running');
+}
+
+>>>>>>> Stashed changes
 export function CountdownTimer({ endTime }) {
   const [remaining, setRemaining] = useState(() => calculateRemainingTime(endTime));
   const timerRef = useRef(null);
@@ -139,7 +151,12 @@ function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
             const actualHashesDone = avg * (elapsedMs / 1000);
             // Allow deficit to be negative (surplus)
             const remainingHashesNeeded = totalExpectedHashes - actualHashesDone;
+<<<<<<< Updated upstream
             const target = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
+=======
+            const targetCalc = remainingMs > 0 ? (remainingHashesNeeded / (remainingMs / 1000)) : 0;
+            const target = Number.isFinite(targetCalc) ? targetCalc : 0;
+>>>>>>> Stashed changes
             const displayTarget = target < 0 ? 0 : target;
 
             return (
@@ -178,10 +195,17 @@ function MrrRentalsTable({ data, onOpenPools, onNotice, mrrClient }) {
                 </td>
                 <td style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+<<<<<<< Updated upstream
                     <button className="text-button" onClick={() => onOpenPools?.(r)} style={{ fontSize: '11px' }}>
                       Pools
                     </button>
                     <button className="text-button" onClick={() => onNotice?.(r, target)} style={{ fontSize: '11px', color: '#24A1DE' }}>
+=======
+                    <button className="btn-pro secondary" onClick={() => onOpenPools?.(r)} style={{ fontSize: '11px' }}>
+                      Pools
+                    </button>
+                    <button className="btn-pro secondary" onClick={() => onNotice?.(r, target)} style={{ fontSize: '11px', color: '#24A1DE' }}>
+>>>>>>> Stashed changes
                       Notice
                     </button>
                   </div>
@@ -294,6 +318,15 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
         const newList = extractArray(result);
         const now = Date.now();
 
+<<<<<<< Updated upstream
+=======
+        // Filter for genuinely active rentals before processing
+        const newList = rawList.filter(r => {
+          const endTs = toUtcTimestamp(r.end || r.end_time);
+          return endTs > now;
+        });
+
+>>>>>>> Stashed changes
         // Detect new rentals
         const fresh = newList.find(r => {
           const isKnown = knownRentalIds.current.has(String(r.id));
@@ -319,8 +352,15 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           const elapsedMs = now - startTime;
           const remainingMs = endTime - now;
 
+<<<<<<< Updated upstream
           const currentHash = parseFloat(r.hashrate?.average?.hash || r.hashrate?.current || r.hash || 0);
           const efficiency = parseFloat(r.hashrate?.average?.percent || r.percent || 100);
+=======
+          const rawHash = r.hashrate?.average?.hash || r.hashrate?.current || r.hash || 0;
+          const currentHash = Number.isFinite(parseFloat(rawHash)) ? parseFloat(rawHash) : 0;
+          const rawEff = r.hashrate?.average?.percent || r.percent || 100;
+          const efficiency = Number.isFinite(parseFloat(rawEff)) ? parseFloat(rawEff) : 100;
+>>>>>>> Stashed changes
 
           let timers = conditionTimers.current.get(rentalId) || { zeroStart: 0, lowStart: 0 };
 
@@ -357,8 +397,13 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
           }
 
           // RULE: Notice if newly rented (< 1h completed) and efficiency < 70%
+<<<<<<< Updated upstream
           const startupKey = `${rentalId}_startup_70`;
           if (elapsedMs > 0 && elapsedMs < 3600000 && efficiency < 70 && efficiency > 0) {
+=======
+          const startupKey = `${rentalId}_startup_50`;
+          if (elapsedMs > 0 && elapsedMs < 3600000 && efficiency < 50 && efficiency > 0) {
+>>>>>>> Stashed changes
             if (!notifiedAlerts.current.has(startupKey)) {
               tg.notifyStartupEfficiencyAlert(r, efficiency).then(() => {
                 notifiedAlerts.current.add(startupKey);
@@ -410,10 +455,21 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
 
   // Periodic Summary Heartbeat (15 mins)
   useEffect(() => {
+<<<<<<< Updated upstream
     const interval = setInterval(async () => {
       // Trigger the server-side monitor which fetches fresh data and posts a summary automatically
       await onCall('/api/v2/mrr/monitor/run', { method: 'POST', query: { client: mrrClient }, silent: true });
       lastSummarySentTime.current = Date.now();
+=======
+    const interval = setInterval(() => {
+      // Guard: Ensure we have data and aren't in a transient loading/empty state
+      if (mrrSummaryData && rentals && (mrrSummaryData.totalAll > 0 || rentals.length === 0)) {
+        const currentRentals = rentals.filter(isCurrentRental);
+        const rented24h = currentRentals.filter(r => (Date.now() - toUtcTimestamp(r.start)) <= 86400000).length;
+        tg.notifyHeartbeatSummary({ ...mrrSummaryData, rentedAll: currentRentals.length, rented24h });
+        lastSummarySentTime.current = Date.now();
+      }
+>>>>>>> Stashed changes
     }, 900000); // 15 minutes
     return () => clearInterval(interval);
   }, [mrrClient, onCall]);
@@ -466,7 +522,11 @@ export default function MiningRigRental({ onCall, mrrClient, setMrrClient, algor
   };
 
   return (
+<<<<<<< Updated upstream
     <div className="rig-section nh-theme" style={{ marginLeft: '5px', marginRight: '5px', marginTop: '5px', paddingTop: '5px', paddingBottom: '5px' }}>
+=======
+    <div className="rig-section" style={{ marginLeft: '5px', marginRight: '5px', marginTop: '5px', paddingTop: '5px', paddingBottom: '5px', maxHeight: 'auto' }}>
+>>>>>>> Stashed changes
       <h2 className="section-title" style={{ paddingBottom: '10px' }}>Mining Rig Rentals</h2>
       {/* Client Selector */}
       <div className="market-inputs">

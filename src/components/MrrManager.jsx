@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
+<<<<<<< Updated upstream
 import PoolEditorPopup from './PoolEditorPopup';
+=======
+import CryptoRatePage from './CryptoRatePage';
+
+import { fetchMiningStats } from './miningStatsFetcher';
+>>>>>>> Stashed changes
 
 /**
  * MrrPoolManager Component
@@ -179,6 +185,7 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
     const wsUrl = `${protocol}//${window.location.host}/api/v2/mrr/fetch/ws`;
     const socket = new WebSocket(wsUrl);
 
+<<<<<<< Updated upstream
     socket.onopen = () => {
       socket.send(JSON.stringify({
         action: type,
@@ -205,6 +212,17 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
       } finally {
         socket.close();
         setLoading(false);
+=======
+    // Resolve the specific sub-account client (BT/SL/PH) from rig metadata if the global context is 'VN' (aggregate).
+    // This ensures we use valid API credentials for the account owning the rig when fetching pool configurations.
+    const targetClient = (mrrClient === 'VN' && rig.mrrClient) ? rig.mrrClient : mrrClient;
+
+    try {
+      const data = await fetchMiningStats(type, targetClient, rig.rigid || rig.id);
+      if (data.pools) {
+        // "Paste" the fetched pools directly into the rig's live configuration
+        await updatePools(rig, data.pools);
+>>>>>>> Stashed changes
       }
     };
 
@@ -242,7 +260,11 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
     const updatedPools = [...rig.pools];
     updatedPools[poolIndex] = {
       ...updatedPools[poolIndex],
+<<<<<<< Updated upstream
       priority: parseInt(newPriority) || 0
+=======
+      priority: parseInt(newPriority, 10) || 0
+>>>>>>> Stashed changes
     };
     await updatePools(rig, updatedPools);
   };
@@ -287,6 +309,14 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
               <h3 style={{ margin: 0, fontSize: '1rem', color: '#60a5fa' }}>{rig.name || (rig.isProfile ? 'Pool Profile' : 'Rig')} (ID: {rig.rigid || rig.id})</h3>
               {!rig.isProfile && (
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+<<<<<<< Updated upstream
+=======
+                  <button className="btn-pro secondary" style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 'bold' }} onClick={() => runWebSocketFetch('all', rig)}>Fetch All</button>
+                  <button className="btn-pro secondary" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => runWebSocketFetch('herominers', rig)}>HM Stats</button>
+                  <button className="btn-pro secondary" style={{ fontSize: '10px', color: '#34d399' }} onClick={() => runWebSocketFetch('herominers', rig)}>HM Global</button>
+                  <button className="btn-pro secondary" style={{ fontSize: '10px', color: '#fbbf24' }} onClick={() => runWebSocketFetch('miningpooldutch', rig)}>Fetch MiningPoolDutch</button>
+                  <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.1)', margin: '0 5px' }}></div>
+>>>>>>> Stashed changes
                   <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <label style={{ fontSize: '10px', opacity: 0.6 }}>Price:</label>
                     <input 
@@ -298,7 +328,11 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
                     />
                   </div>
                   <button 
+<<<<<<< Updated upstream
                     className="text-button" 
+=======
+                    className="btn-pro secondary" 
+>>>>>>> Stashed changes
                     style={{ color: rig.status === 'disabled' ? '#10b981' : '#f87171', fontSize: '11px' }}
                     onClick={() => updateRigConfig(rig.rigid || rig.id, { status: rig.status === 'disabled' ? 'available' : 'disabled' })}
                   >
@@ -356,6 +390,7 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
                     <span style={{ opacity: 0.4 }}>user:</span> {pool.user}
                   </div>
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
                   <div style={{ textAlign: 'right' }}>
                     <button className="text-button" style={{ color: '#60a5fa', fontWeight: '600' }} onClick={() => handleEditPool(pool, rig)}>Edit</button>
                   </div>
@@ -372,12 +407,15 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
                     </button>
                   )}
 >>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
                 </div>
               ))}
             </div>
           </div>
         ))}
 
+<<<<<<< Updated upstream
         {editorState && (
           <PoolEditorPopup
             editor={editorState}
@@ -422,18 +460,86 @@ export default function MrrPoolManager({ onCall, mrrClient, externalPoolData, ex
             </div>
             {miningPoolDutchStats.error && (
               <div style={{ color: '#f87171', fontSize: '11px', marginTop: '10px' }}>{miningPoolDutchStats.error}</div>
+=======
+        {/* HeroMiners Statistics Display */}
+        {heroMinersStats && (
+          <div style={{ marginTop: '2rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px' }}>
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: '#60a5fa' }}>HeroMiners Statistics</h3>
+            
+            {heroMinersStats.globalHashrates && (
+              <div style={{ marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
+                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: '#fbbf24' }}>Global Hashrates</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', fontSize: '11px' }}>
+                  {Object.entries(heroMinersStats.globalHashrates).map(([algo, rate]) => (
+                    <div key={algo} style={{ background: 'rgba(255,255,255,0.05)', padding: '5px 8px', borderRadius: '4px' }}>
+                      <span style={{ opacity: 0.7 }}>{algo}:</span> <strong style={{ color: '#f8fafc' }}>{rate}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {heroMinersStats.coinStats && heroMinersStats.coinStats.length > 0 && (
+              <div style={{ maxHeight: '400px', overflowY: 'auto', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.15) transparent' }}>
+                <table className="pro-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ fontSize: '10px', opacity: 0.7, textTransform: 'uppercase' }}>
+                      <th style={{ padding: '8px', textAlign: 'left' }}>Coin</th>
+                      <th style={{ padding: '8px', textAlign: 'left' }}>Algo</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Net Hash</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Pool Hash</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Height</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Blocks</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Miners</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Workers</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>USD/day</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {heroMinersStats.coinStats.map((coin, idx) => (
+                      <tr key={idx} style={{ fontSize: '11px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                        <td style={{ padding: '8px', fontWeight: 'bold', color: '#f8fafc' }}>{coin.coin}</td>
+                        <td style={{ padding: '8px', color: '#60a5fa' }}>{coin.algorithm}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontFamily: 'monospace' }}>{coin.networkHashrate}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontFamily: 'monospace' }}>{coin.poolHashrate}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>{coin.blockHeight}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>{coin.blocksFound}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>{coin.miners}</td>
+                        <td style={{ padding: '8px', textAlign: 'right' }}>{coin.workers}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', color: '#10b981', fontWeight: 'bold' }}>{coin.usdPerDay}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {!heroMinersStats.globalHashrates && !heroMinersStats.coinStats && (
+              <div style={{ opacity: 0.5, fontSize: '12px', textAlign: 'center', padding: '10px' }}>
+                No HeroMiners statistics available.
+              </div>
+>>>>>>> Stashed changes
             )}
           </div>
         )}
 
+<<<<<<< Updated upstream
 >>>>>>> Stashed changes
       </div>
+=======
+      </div>
+              <CryptoRatePage onCall={onCall} />
+
+>>>>>>> Stashed changes
     </div>
   );
 
   if (rentalIds && !externalPoolData) {
     return (
+<<<<<<< Updated upstream
       <Modal isOpen={true} onClose={onClose} title="Pool Manager" maxWidth="1000px">
+=======
+      <Modal isOpen={true} onClose={onClose} title="Pool Configuration" maxWidth="1000px">
+>>>>>>> Stashed changes
         {content}
       </Modal>
     );

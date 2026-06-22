@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+<<<<<<< Updated upstream
 import { getPriceData, getBtcPriceData, parsePriceValue } from '../core/priceUtils';
 
 function resolveUnit(value) {
@@ -8,6 +9,17 @@ function resolveUnit(value) {
   const normalized = String(value).toUpperCase().replace(/\s+/g, '').replace(/\/S$/, '');
   const match = normalized.match(/(EH|PH|TH|GH|MH|KH|H)(?:\/S)?$/) || normalized.match(/(EH|PH|TH|GH|MH|KH|H)/);
   return match && map[match[1]] ? map[match[1]] : 1e12;
+=======
+import { getPriceData, getBtcPriceData, parsePriceValue } from '../core/priceUtils.js';
+import { HASHRATE_SUFFIXES, getAlgorithmUnit } from '../core/mapping.js';
+
+function resolveUnit(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value; // Already a numeric factor
+  if (!value) return HASHRATE_SUFFIXES['TH']; // Default to TH
+  const normalized = String(value).toUpperCase().replace(/\s+/g, '').replace(/\/S$/, '');
+  const matchedSuffix = Object.keys(HASHRATE_SUFFIXES).find(suffix => normalized.includes(suffix));
+  return matchedSuffix ? HASHRATE_SUFFIXES[matchedSuffix] : HASHRATE_SUFFIXES['TH'];
+>>>>>>> Stashed changes
 }
 
 function normalizeToDateTimeLocal(value) {
@@ -52,11 +64,21 @@ export default function HashCompletionCalculator({
   const [nhPriceData, setNhPriceData] = useState(initialNhPriceData);
 
   const units = [
+<<<<<<< Updated upstream
     { label: 'EH/s', value: 1e18 },
     { label: 'PH/s', value: 1e15 },
     { label: 'TH/s', value: 1e12 },
     { label: 'GH/s', value: 1e9 },
     { label: 'MH/s', value: 1e6 },
+=======
+    { label: 'EH/s', value: HASHRATE_SUFFIXES['EH'] },
+    { label: 'PH/s', value: HASHRATE_SUFFIXES['PH'] },
+    { label: 'TH/s', value: HASHRATE_SUFFIXES['TH'] },
+    { label: 'GH/s', value: HASHRATE_SUFFIXES['GH'] },
+    { label: 'MH/s', value: HASHRATE_SUFFIXES['MH'] },
+    { label: 'KH/s', value: HASHRATE_SUFFIXES['KH'] },
+    { label: 'H/s', value: HASHRATE_SUFFIXES['H'] },
+>>>>>>> Stashed changes
   ];
 
   useEffect(() => {
@@ -153,7 +175,11 @@ export default function HashCompletionCalculator({
     const nhMarketRate = nhMarketInfo.rate;
     const nhEstimatedCost = nhMarketRate * adsValueTh * durationDays;
     const savingsBtc = nhEstimatedCost > 0 ? nhEstimatedCost - totalBtcCost : 0;
+<<<<<<< Updated upstream
     const savingsPercent = nhEstimatedCost > 0 ? (savingsBtc / nhEstimatedCost * 100) : 0;
+=======
+    const savingsPercent = (nhEstimatedCost > 0 && totalBtcCost > 0) ? (savingsBtc / nhEstimatedCost * 100) : 0;
+>>>>>>> Stashed changes
 
     const remainingSeconds = remainingMs / 1000;
     const requiredHashrateRaw = remainingSeconds > 0 ? remainingHashesNeeded / remainingSeconds : 0;
@@ -247,7 +273,11 @@ export default function HashCompletionCalculator({
                 {results.savingsBtc >= 0 ? 'Potential Savings' : 'Cost Overage'}
               </div>
               <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+<<<<<<< Updated upstream
                 {results.savingsPercent.toFixed(1)}%
+=======
+                {Math.abs(results.savingsPercent).toFixed(2)}%
+>>>>>>> Stashed changes
               </div>
               <div style={{ fontSize: '9px', opacity: 0.7 }}>
                 {results.savingsBtc >= 0 ? 'Cheaper than NiceHash' : 'More expensive than NH'}

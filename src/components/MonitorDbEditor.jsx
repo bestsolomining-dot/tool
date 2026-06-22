@@ -117,6 +117,7 @@ export default function MonitorDbEditor({ onCall, isOpen, onClose }) {
                     <div style={{ display: 'flex', gap: '8px' }}>
                       {editingId === row.id ? (
                         <>
+<<<<<<< Updated upstream
                           <button className="text-button" style={{ color: '#34d399' }} onClick={handleUpdate}>Save</button>
                           <button className="text-button" onClick={() => setEditingId(null)}>Cancel</button>
                         </>
@@ -125,6 +126,16 @@ export default function MonitorDbEditor({ onCall, isOpen, onClose }) {
                           <button className="text-button" onClick={() => startEdit(row)}>Edit</button>
                           <button className="text-button" style={{ color: '#fbbf24' }} onClick={() => handleResetAlerts(row.id)} title="Reset alert timers">Reset</button>
                           <button className="text-button" style={{ color: '#f87171' }} onClick={() => handleDelete(row.id)}>Remove</button>
+=======
+                          <button className="btn-pro secondary" style={{ color: '#34d399' }} onClick={handleUpdate}>Save</button>
+                          <button className="btn-pro secondary" onClick={() => setEditingId(null)}>Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="btn-pro secondary" onClick={() => startEdit(row)}>Edit</button>
+                          <button className="btn-pro secondary" style={{ color: '#fbbf24' }} onClick={() => handleResetAlerts(row.id)} title="Reset alert timers">Reset</button>
+                          <button className="btn-pro secondary" style={{ color: '#f87171' }} onClick={() => handleDelete(row.id)}>Remove</button>
+>>>>>>> Stashed changes
                         </>
                       )}
                     </div>

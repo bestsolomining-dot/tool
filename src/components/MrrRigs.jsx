@@ -1,8 +1,16 @@
+<<<<<<< Updated upstream
 import React, { useState, useEffect, useMemo } from 'react';
 import { poolApi } from '../core/poolUtils';
 import { normalizeAlgoForNiceHash, getAlgoDisplayName } from '../core/mapping';
 import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils';
 import { useRentedRigs } from './RentedRigContext';
+=======
+import { useState, useEffect, useMemo, useContext } from 'react';
+import { poolApi } from '../core/poolUtils';
+import { normalizeAlgoForNiceHash, getAlgoDisplayName } from '../core/mapping';
+import { getBtcPriceData as getBtcPriceDataUtils } from '../core/priceUtils';
+import { NiceHashOrderContext } from './NiceHashContext';
+>>>>>>> Stashed changes
 import MrrRigCard from './MrrRigCard';
 import { TelegramTemplates } from '../core/telegram.js';
 import { calculateRemainingTime } from '../core/time';
@@ -20,7 +28,12 @@ import {
 } from '../core/mrrUtils';
 
 export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletionCalculator, onInfo, endpoint = '/rig/mine', algo, initialStatus = 'available', onSummaryUpdate }) {
+<<<<<<< Updated upstream
   const { rentedRigs: nhOrders } = useRentedRigs();
+=======
+  const nhContext = useContext(NiceHashOrderContext);
+  const nhOrders = nhContext?.nicehashOrders || [];
+>>>>>>> Stashed changes
   const [rigs, setRigs] = useState([]);
   const [userRigIds, setUserRigIds] = useState(new Set());
   const [loading, setLoading] = useState(false);
@@ -90,19 +103,46 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
 
     const activeRentalLines = rigs
       .filter(rig => {
+<<<<<<< Updated upstream
         const s = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
         return s.includes('rented') || s.includes('active');
+=======
+        const info = enrichedInfo[rig.id] || {};
+        const rawAds = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0;
+        if (!info || rawAds <= 0) return false; // Ensure we have details and valid hashrate before including
+        const endT = rig.end ? new Date(rig.end + (String(rig.end).endsWith('UTC') ? '' : ' UTC')).getTime() : 0;
+        const hasFutureEnd = endT > Date.now();
+        const s = String(typeof rig.status === 'object' ? rig.status.status : rig.status || '').toLowerCase();
+        const isActiveStatus = s.includes('rented') || s.includes('active');
+        return isActiveStatus && hasFutureEnd;
+>>>>>>> Stashed changes
       })
       .map(rig => {
         const info = enrichedInfo[rig.id];
         // Provide fallbacks if enriched info is still loading
         const algo = info?.algo || rig.algo || rig.algorithm || rig.type || 'N/A';
+<<<<<<< Updated upstream
         const effNum = parseFloat(info?.percent || rig.hashrate?.average?.percent || rig.percent || 0);
         const efficiency = effNum; // Pass as number to avoid .toFixed errors in template
         const roi = 100 - effNum;   // Calculate as work deficit/surplus to match summary example
         const avg = parseFloat(info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash) || 0);
         const ads = parseFloat(info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0);
         const cur = parseFloat(info?.rawCur || rig.hashrate?.current || 0);
+=======
+        const rawEffNum = info?.percent || rig.hashrate?.average?.percent || rig.percent || 0;
+        const effNum = Number.isFinite(parseFloat(rawEffNum)) ? parseFloat(rawEffNum) : 0;
+
+        const efficiency = effNum; // Pass as number to avoid .toFixed errors in template
+        const rawRoi = 100 - effNum;
+        const roi = Number.isFinite(rawRoi) ? rawRoi : 0;
+
+        const rawAvg = info?.rawAvg || getRawHashrate(rig.hashrate?.average || rig.average || rig.hash) || 0;
+        const avg = Number.isFinite(parseFloat(rawAvg)) ? parseFloat(rawAvg) : 0;
+        const rawAds = info?.rawAds || getRawHashrate(rig.hashrate?.advertised || rig.advertised) || 0;
+        const ads = Number.isFinite(parseFloat(rawAds)) ? parseFloat(rawAds) : 0;
+        const rawCur = info?.rawCur || rig.hashrate?.current || 0;
+        const cur = Number.isFinite(parseFloat(rawCur)) ? parseFloat(rawCur) : 0;
+>>>>>>> Stashed changes
 
         // Improved target hashrate calculation with manual fallback for summary accuracy
         const startT = rig.start ? new Date(rig.start + (String(rig.start).endsWith('UTC') ? '' : ' UTC')).getTime() : 0;
@@ -110,19 +150,31 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         const totalMs = endT - startT;
         const remainingMs = Math.max(0, endT - Date.now());
         const elapsedMs = Math.max(0, Math.min(Date.now() - startT, totalMs));
+<<<<<<< Updated upstream
         const calcTarget = (remainingMs > 0 && totalMs > 0) ? ((ads * (totalMs / 1000) - avg * (elapsedMs / 1000)) / (remainingMs / 1000)) : 0;
         const target = parseFloat(info?.targetHashrate || calcTarget || 0);
+=======
+        const rawCalcTarget = (remainingMs > 0 && totalMs > 0) ? ((ads * (totalMs / 1000) - avg * (elapsedMs / 1000)) / (remainingMs / 1000)) : 0;
+        const rawTarget = info?.targetHashrate || rawCalcTarget || 0;
+        const target = Number.isFinite(parseFloat(rawTarget)) ? parseFloat(rawTarget) : 0; // Ensure target is always a number
+>>>>>>> Stashed changes
 
         const remaining = info?.remainingTimeStr || (info?.endTime ? calculateRemainingTime(info.endTime) : (rig.end ? calculateRemainingTime(rig.end) : ''));
         const account = rig.mrrClient || rig.client || mrrClient || 'ALL';
 
+<<<<<<< Updated upstream
         let perfEmoji = '🟡';
+=======
+        // Ensure rig.price exists before calling the template function
+        let perfEmoji = '⚪';
+>>>>>>> Stashed changes
         if (effNum >= 100) perfEmoji = '💯';
         else if (effNum >= 95) perfEmoji = '🟢';
         else if (effNum >= 70) perfEmoji = '🔵';
         else if (effNum < 50) perfEmoji = '🔴';
 
         return TelegramTemplates.activeRentalLine(
+<<<<<<< Updated upstream
           perfEmoji, 
           algo, 
           rig.name || rig.id, 
@@ -134,6 +186,21 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           cur, 
           target, 
           account
+=======
+          perfEmoji,
+          algo,
+          rig.name || rig.id,
+          remaining,
+          efficiency,
+          roi,
+          avg,
+          ads,
+          cur,
+          target,
+          '', // extra
+          account, // client
+          { price: { paid: (rig.price?.paid || 0).toFixed(8), currency: rig.price?.currency || 'BTC' } } // info
+>>>>>>> Stashed changes
         );
       })
       .filter(Boolean);
@@ -171,7 +238,17 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   useEffect(() => {
     const fetchCoinPrices = async () => {
       try {
+<<<<<<< Updated upstream
         const res = await onCall('/api/v2/prices/coingecko', { silent: true });
+=======
+        const res = await onCall('/api/v2/prices/coingecko', {
+          query: {
+            ids: 'bitcoin,ethereum,ethereum-classic,litecoin,dogecoin,ravencoin,monero,kaspa,iron-fish,zephyr-protocol,clore-ai,dynex,conflux,ergo',
+            vs_currencies: 'usd,btc',
+          },
+          silent: true,
+        });
+>>>>>>> Stashed changes
         if (res?.success) setCoinPrices(res.data);
       } catch (err) {
         console.warn('[CoinGecko] Price fetch failed:', err.message);
@@ -338,6 +415,11 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
     const rigId = rig.rigid || rig.rig_id || rig.rig?.id || (isRented ? '' : rig.id);
     const rentalId = rig.rentalid || rig.current_rental_id || rig.rental_id || (isRented ? rig.id : '');
 
+<<<<<<< Updated upstream
+=======
+    const effectiveClient = rig.mrrClient || rig.client || mrrClient;
+
+>>>>>>> Stashed changes
     if (typeof onCall !== 'function') {
       console.error("fetchRigDetailInfo: onCall is not a function. Check prop passing in parent component.");
       return;
@@ -350,8 +432,14 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         : `/api/v2/mrr/rig/${encodeURIComponent(rigId || rig.id)}/info`;
 
       const data = await onCall(path, {
+<<<<<<< Updated upstream
         query: { client: mrrClient },
         silent: true
+=======
+        query: { client: rig.mrrClient || mrrClient },
+        silent: true,
+        background: true // Use background mode to avoid interrupting the user
+>>>>>>> Stashed changes
       });
 
       if (data && !data.error) {
@@ -434,6 +522,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
       });
 
       if (isSubscribed && rentedWithoutInfo.length > 0) {
+<<<<<<< Updated upstream
         for (const rig of rentedWithoutInfo) {
           if (!isSubscribed) break;
           // Sequential await prevents nonce overlap for the same account
@@ -441,6 +530,11 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
           // Add a small safety gap
           await new Promise(resolve => setTimeout(resolve, 300));
         }
+=======
+        // Process only one at a time per effect cycle. 
+        // This staggers requests and prevents nonce collision in the backend.
+        await fetchRigDetailInfo(rentedWithoutInfo[0]);
+>>>>>>> Stashed changes
       }
     };
 
@@ -505,6 +599,7 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
   return (
     <div className="mrr-rigs-dashboard">
       <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '15px' }}>
+<<<<<<< Updated upstream
         <div>
           <h2 style={{ margin: 3 }}>{endpoint === '/rig' ? 'MRR Marketplace' : 'RIGS'} ({mrrClient})
             <select
@@ -531,12 +626,38 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
+=======
+          <h2 style={{ margin: 5 }}>{endpoint === '/rig' ? 'MRR Marketplace' : 'RIGS  '} ({mrrClient})
+            <small style={{ opacity: 0.3 }}>
+            : {filteredRigs.length} / {totalFetchedCount} rigs {algo && `for ${algo}`}
+          </small>
+            <select
+              className="select-pro"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{ fontSize: '11px', padding: '5px 5px 3px 6px', height: '30px', minWidth: '100px', marginTop: '5px' }}
+            >
+              <option value="all">All Statuses</option>
+              <option value="available">Available</option>
+              <option value="offline">Offline</option>
+              <option value="rented">Rented</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </h2>
+          <button className="btn-pro secondary" onClick={fetchRigs} disabled={loading} style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '6px 12px', fontSize: '11px', height: '30px', color: loading ? '#9ca3af' : '#f87171', borderColor: loading ? '#9ca3af' : '#f87171', background: 'transparent', transition: 'all 0.2s ease', borderRadius: '6px', opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+>>>>>>> Stashed changes
       </div>
 
       {error && <div className="error-message" style={{ margin: '15px 0', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '6px', color: '#f87171' }}><strong>Error:</strong> {error}</div>}
 
       {/* Status Dashboard */}
+<<<<<<< Updated upstream
       <div className="rigs-summary-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+=======
+      <div className="rigs-summary-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20px, 1fr))', gap: '10px', marginBottom: '3px' }}>
+>>>>>>> Stashed changes
         <div className="stat-card-mini" style={{ maxWidth: '120px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
           <div style={{ fontSize: '10px', opacity: 0.5, textTransform: 'uppercase' }}>Total</div>
           <div style={{ fontSize: '18px', fontWeight: 'bold' }}>{stats.total}</div>
@@ -559,17 +680,29 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
         </div>
       </div>
 
+<<<<<<< Updated upstream
       <div className="rig-list" style={{ marginTop: '15px', position: 'relative', flexGrow: 1, display: 'flex', flexDirection: 'column', maxHeight: '800px', overflowY: 'auto', paddingRight: '2px', scrollbarWidth: 'thin', scrollbarColor: 'rgba(143, 64, 64, 0.59) transparent', overscrollBehavior: 'contain' }}>
+=======
+      <div className="rig-list" style={{ marginTop: '5px', position: 'relative', flexGrow: 1, display: 'flex', flexDirection: 'column', maxHeight: 'auto', paddingRight: '2px' }}>
+>>>>>>> Stashed changes
         {filteredRigs.length === 0 && !loading && !error && (
           <div style={{ opacity: 0.5, textAlign: 'center', padding: '20px' }}>No rigs found for this account.</div>
         )}
 
         <div className="rig-grid-container" style={{
+<<<<<<< Updated upstream
           minHeight: '800px',
           maxHeight: 'auto',
           overflowY: 'auto',
           paddingRight: '8px',
           overscrollBehavior: 'contain'
+=======
+          // minHeight: '1200px',
+          // maxHeight: 'auto',
+          overflowY: 'auto',
+          paddingRight: '6px',
+          // overscrollBehavior: 'contain',
+>>>>>>> Stashed changes
         }}>
           {groupedRigs.map(([algoName, rigsInGroup]) => {
             const isExpanded = expandedAlgos[algoName];
@@ -595,7 +728,11 @@ export default function MrrRigs({ onCall, mrrClient, onOpenPool, onOpenCompletio
                     <span style={{ fontSize: '10px', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: '10px', opacity: 0.7 }}>{rigsInGroup.length} Rigs</span>
                     {rigsInGroup.some(r => userRigIds.has(String(r.id))) && (
                       <div style={{ display: 'flex', gap: '8px', marginLeft: '10px' }} onClick={e => e.stopPropagation()}>
+<<<<<<< Updated upstream
                         <button className="text-button" style={{ fontSize: '10px', color: '#10b981', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'available')}>
+=======
+                        <button className="btn-pro secondary" style={{ fontSize: '10px', color: '#10b981', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'available')}>
+>>>>>>> Stashed changes
                           Enable All
                         </button>
                         {/* <button className="text-button" style={{ fontSize: '10px', color: '#f87171', fontWeight: 'bold' }} onClick={() => handleBulkRigStatus(rigsInGroup, 'disabled')}>

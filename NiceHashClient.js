@@ -16,6 +16,10 @@ export class NiceHashClient {
       this.initializedPaths.add(key); // Mark immediately to prevent concurrent duplicate logs
       console.log(`[NiceHash] First-time function delay (1s): ${key}`);
       await new Promise(resolve => setTimeout(resolve, 1000));
+<<<<<<< Updated upstream
+=======
+      this.initializedPaths.add(key);
+>>>>>>> Stashed changes
     }
   }
 
@@ -24,7 +28,13 @@ export class NiceHashClient {
    */
   async getServerTime() {
     await this._delayFirstTime('getServerTime');
+<<<<<<< Updated upstream
     const response = await fetch(`${this.baseUrl}/api/v2/time`);
+=======
+    const response = await fetch(`${this.baseUrl}/api/v2/time`, {
+      headers: { 'User-Agent': 'MiningTool/2.0' }
+    });
+>>>>>>> Stashed changes
     if (!response.ok) {
       throw new Error(`NiceHash Time Sync failed: ${response.status}`);
     }
@@ -73,8 +83,14 @@ export class NiceHashClient {
   async call({ method, path, query = {}, body = null }) {
     await this._delayFirstTime(path);
     
+<<<<<<< Updated upstream
     // Ensure path and query string are separated
     let [cleanPath, pathQueryString] = path.split('?');
+=======
+    // Ensure path and query string are separated (in case query was included in the path string)
+    const [cleanPath, pathQueryString] = path.split('?');
+
+>>>>>>> Stashed changes
     const serverTime = await this.getServerTime();
     const time = serverTime.toString();
     const nonce = randomUUID();
@@ -83,10 +99,20 @@ export class NiceHashClient {
     const queryParams = new URLSearchParams(pathQueryString || '');
     const additionalParams = new URLSearchParams(query || {});
     additionalParams.forEach((value, key) => queryParams.set(key, value));
+<<<<<<< Updated upstream
 
     // For Hashpower Private API, ts and nonce MUST be in the query string.
     // We skip this for public endpoints to avoid malformed request errors.
     if (cleanPath.includes('/hashpower/') && !cleanPath.includes('/public/')) {
+=======
+    
+    // Remove 'client' from query before sending to NiceHash upstream, 
+    // as it is only intended for our backend's internal routing.
+    queryParams.delete('client');
+
+    // For Hashpower Private API, ts and nonce MUST be in the query string
+    if (cleanPath.includes('/hashpower/')) {
+>>>>>>> Stashed changes
       queryParams.set('ts', time);
       queryParams.set('nonce', nonce);
     }
@@ -96,11 +122,12 @@ export class NiceHashClient {
     const signature = this.computeSignature(method, cleanPath, queryString, body, time, nonce);
 
     const headers = {
-      'X-Time': time,
-      'X-Nonce': nonce,
-      'X-Organization-Id': this.orgId,
-      'X-Request-Id': requestId,
-      'X-Auth': `${this.apiKey}:${signature}`,
+      'User-Agent': 'MiningTool/2.0',
+      'X-Time': String(time),
+      'X-Nonce': String(nonce),
+      'X-Organization-Id': String(this.orgId || ''),
+      'X-Request-Id': String(requestId),
+      'X-Auth': String(`${this.apiKey}:${signature}`),
       'Content-Type': 'application/json'
     };
 
@@ -117,6 +144,8 @@ export class NiceHashClient {
       try {
         const errorJson = JSON.parse(errorText);
         errorMessage = errorJson.message || errorJson.error || errorText;
+        errorMessage = errorJson.errors?.[0]?.message || errorJson.message || errorJson.error || errorText;
+>>>>>>> Stashed changes
       } catch (e) { /* use raw text */ }
 
       const error = new Error(errorMessage);

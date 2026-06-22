@@ -64,7 +64,11 @@ export function createApiClient({ onState } = {}) {
       }
 
       const isAppError = !res.ok ||
+<<<<<<< Updated upstream
         (data && typeof data === 'object' && (data.success === false || data.error)) ||
+=======
+        (data && typeof data === 'object' && (data.success === false || data.error || data.errors)) ||
+>>>>>>> Stashed changes
         (typeof data === 'string' && data.length > 0 && !data.startsWith('{'));
 
       if (!isAppError && (res.status === 304 || res.ok)) {

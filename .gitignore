@@ -11,3 +11,5 @@ package-lock.json
 *.xlsx
 /dist
 /node_modules
+*.db-wal
+*.db-shm

@@ -1,5 +1,9 @@
+<<<<<<< Updated upstream
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { normalizeAlgoForNiceHash, calculatePriceComparison } from '../core/mapping.js';
+=======
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+>>>>>>> Stashed changes
 
 const RentedRigContext = createContext();
 
@@ -12,6 +16,7 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
   const fetchRentedRigs = useCallback(async () => {
     setLoading(true);
     try {
+<<<<<<< Updated upstream
       // Fetching from the standard NiceHash My Orders endpoint
       const data = await callApi('/api/v2/hashpower/myOrders', {
         query: { op: 'LE', limit: 1000, client: nhClient },
@@ -96,6 +101,16 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
       } else {
         setError(data?.error || 'Failed to fetch NiceHash orders');
       }
+=======
+      const data = await callApi('/api/v2/mrr/rentals');
+      if (data?.error) throw new Error(data.error);
+      const rentals =
+        data?.data?.rentals ||
+        data?.data ||
+        data?.rentals ||
+        [];
+      setRentedRigs(Array.isArray(rentals) ? rentals : []);
+>>>>>>> Stashed changes
     } catch (err) {
       setError(err.message);
     } finally {
@@ -116,11 +131,7 @@ export function RentedRigProvider({ children, nhClient, callApi }) {
     refresh: fetchRentedRigs
   };
 
-  return (
-    <RentedRigContext.Provider value={value}>
-      {children}
-    </RentedRigContext.Provider>
-  );
+  return <RentedRigContext.Provider value={value}>{children}</RentedRigContext.Provider>;
 }
 
 export const useRentedRigs = () => {

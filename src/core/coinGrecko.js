@@ -32,3 +32,15 @@ export async function getSimplePrice(ids, vsCurrencies = 'usd,btc') {
     throw error;
   }
 }
+<<<<<<< Updated upstream
+=======
+
+/**
+ * Fetches current prices for calculator assets: BTC, DOGE, LTC, ETH, BCH.
+ * Useful for server-side aggregation or background tasks.
+ */
+export async function getCalculatorPrices() {
+  const ids = 'bitcoin,dogecoin,litecoin,ethereum,bitcoin-cash';
+  return getSimplePrice(ids, 'usd,btc');
+}
+>>>>>>> Stashed changes

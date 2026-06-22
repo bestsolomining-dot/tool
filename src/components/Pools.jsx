@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+<<<<<<< Updated upstream
 import PoolEditorPopup from './PoolEditorPopup' // Use the new wrapper
+=======
+>>>>>>> Stashed changes
 import Modal from './Modal' // Import the new Modal component
 import { poolHelpers as ph, poolApi, apiFetch } from '../core/poolUtils'
 import { getAlgoDisplayName } from '../core/mapping'
 
+<<<<<<< Updated upstream
 export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient, setNhClient }) {
   const [pools, setPools] = useState([])
+=======
+export default function Pools({ onCall, poolData, niceHashData, mrrClient, setMrrClient, nhClient, setNhClient }) {
+  const [pools, setPools] = useState(() => ph.normalizeList(poolData || []))
+>>>>>>> Stashed changes
   const [selected, setSelected] = useState(null)
   const [selectedId, setSelectedId] = useState('')
   const [response, setResponse] = useState(null)
@@ -34,9 +42,16 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   const [useBrowser, setUseBrowser] = useState(false)
   const [showBrowser, setShowBrowser] = useState(false)
   const [errorModalOpen, setErrorModalOpen] = useState(false) // State for the error detail modal
+<<<<<<< Updated upstream
   const [lastRunSummary, setLastRunSummary] = useState(null)
 
   const [activeEditors, setActiveEditors] = useState([]) // Support multiple popups
+=======
+  const [inventoryModalOpen, setInventoryModalOpen] = useState(false)
+  const [connectionModalOpen, setConnectionModalOpen] = useState(false)
+  const [lastRunSummary, setLastRunSummary] = useState(null)
+
+>>>>>>> Stashed changes
   const [selectorOpen, setSelectorOpen] = useState(false)
   const didAutoStartRef = useRef(false);
   const runTimerRef = useRef(null)
@@ -74,7 +89,14 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     setLoading(true);
     setError('');
     try {
+<<<<<<< Updated upstream
       const result = await apiFetch('/api/v2/extracted-pools');
+=======
+      // Use onCall to ensure authentication token is sent
+      const data = await onCall('/api/v2/extracted-pools', { silent: true });
+      const result = { ok: !!data, data };
+
+>>>>>>> Stashed changes
       if (result.ok && Array.isArray(result.data)) {
         const mapped = result.data.map(p => {
           // Re-map handles to ensure they target correct NiceHash accounts (BT, PH, KIMLOAN, NHATLINH)
@@ -135,9 +157,25 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
   // Function to load NiceHash pools for the selected client
   const loadPools = useCallback(async () => {
     setLoading(true);
+<<<<<<< Updated upstream
     try {
       const result = await poolApi.list(nhClient); // Pass nhClient to the API call
       const normalized = ph.normalizeList(result.data);
+=======
+    setError('');
+    try {
+      // Use onCall instead of direct poolApi which may lack credentials
+      const result = await onCall('/api/v2/pools', { 
+        query: { client: nhClient }, 
+        silent: true,
+        section: 'pools' 
+      });
+      
+      // Robustly extract the pool list from the result envelope or direct array
+      const rawData = result?.data || (Array.isArray(result) ? result : (result?.list || []));
+      const normalized = ph.normalizeList(rawData);
+      
+>>>>>>> Stashed changes
       setPools(normalized);
       return normalized;
     } catch (err) {
@@ -196,6 +234,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     setMrrRigs(null);
     setError('');
     try {
+<<<<<<< Updated upstream
       const result = await poolApi.mrrRigs(clientName);
       if (result.ok) {
         setMrrRigs(result.data);
@@ -205,6 +244,16 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
           throw new Error('Unauthorized: MRR API Key/Secret is invalid or missing for this client.');
         }
         const message = result.data?.error || result.data?.message || `Request failed with status ${result.status}`;
+=======
+      const response = await onCall('/api/v2/mrr/rigs', { query: { client: clientName }, silent: true });
+      if (response && response.success) {
+        setMrrRigs(response.data);
+      } else {
+        if (response?.status === 401) {
+          throw new Error('Unauthorized: MRR API Key/Secret is invalid or missing for this client.');
+        }
+        const message = response?.error || response?.message || 'Request failed';
+>>>>>>> Stashed changes
         throw new Error(message);
       }
     } catch (err) {
@@ -550,7 +599,11 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
       }
 
       setRunCount(prev => prev + 1);
+<<<<<<< Updated upstream
       setNextRunCountdown(null); // Clear previous countdown display
+=======
+      setNextRunCountdown(null); // Clear previous countdown display before a new cycle starts
+>>>>>>> Stashed changes
       if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
 
       await verifyAllOnce({ resetStop: false, keepRunning: true });
@@ -619,6 +672,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
     setCurrentRunStartTime(null)
     setRunCount(0)
     setLastRunTime(null) // Clear the last run time when automation is stopped
+<<<<<<< Updated upstream
   }
 
   const openPoolEditor = (item) => {
@@ -649,6 +703,8 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
       ...prev.filter(item => item.key !== verificationResult.key),
       { ...verificationResult, algorithm: ph.getAlgo(poolDetails) },
     ]);
+=======
+>>>>>>> Stashed changes
   }
 
   const handleExportResults = () => {
@@ -670,7 +726,11 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
         'Port': p.stratumPort || p.port || '',
         'Username': p.username || '',
         'Message': ph.getVerifyMessage(item.result),
+<<<<<<< Updated upstream
         'Verified At': new Date().toLocaleString()
+=======
+        'Verified At': new Date().toLocaleString() + ' (Local)' // Explicitly state local time
+>>>>>>> Stashed changes
       };
     });
     if (poolData.length > 0) {
@@ -817,8 +877,15 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                   </label>
                 </div>
               </div>
+<<<<<<< Updated upstream
               <div style={{ fontSize: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()}>Import XLSX</button>
+=======
+              <div style={{ fontSize: '8px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(60px, 1fr))', gap: '6px' }}>
+                <button className="btn-pro secondary" onClick={() => fileInputRef.current?.click()}>Import XLSX</button>
+                <button className="btn-pro secondary" onClick={() => setInventoryModalOpen(true)}>Inventory</button>
+                <button className="btn-pro secondary" onClick={() => setConnectionModalOpen(true)}>Connect Manager</button>
+>>>>>>> Stashed changes
                 <button className="btn-pro secondary" onClick={handleExportResults} disabled={completedResults.length === 0}>
                   Export Results ({completedResults.length})
                 </button>
@@ -836,7 +903,11 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8, color: '#10b981' }}>
                 <span>Last Cycle End:</span>
+<<<<<<< Updated upstream
                 <span>{lastRunTime || 'N/A'}</span>
+=======
+                <span>{lastRunTime ? `${lastRunTime} (Local)` : 'N/A'}</span> {/* Clarify local time */}
+>>>>>>> Stashed changes
               </div>
               {nextRunCountdown !== null && running && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fbbf24', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px', marginTop: '2px' }}>
@@ -1099,6 +1170,7 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
                   <code style={{ fontSize: '11px', opacity: 0.7 }}>{getAlgoDisplayName(ph.getAlgo(pool))}</code>
                   {(pool.client || pool.nhClient) && <span style={{ fontSize: '9px', color: '#10b981', marginTop: '2px' }}>Account: {pool.client || pool.nhClient}</span>}
                 </div>
+<<<<<<< Updated upstream
                 <button
                   type="button"
                   className="btn-pro secondary"
@@ -1110,6 +1182,121 @@ export default function Pools({ niceHashData, mrrClient, setMrrClient, nhClient,
               </div>
             )
           })}
+=======
+              </div>
+            )
+          })}
+        </div>
+      </Modal>
+      {/* Pool Inventory Modal */}
+      <Modal isOpen={inventoryModalOpen} onClose={() => setInventoryModalOpen(false)} title="Pool Inventory" maxWidth="1200px">
+        <div style={{ maxHeight: '75vh', overflowY: 'auto', padding: '10px' }}>
+          <table className="pro-table">
+            <thead>
+              <tr style={{ fontSize: '11px', opacity: 0.6 }}>
+                <th>NAME</th>
+                <th>ALGORITHM</th>
+                <th>STRATUM HOST</th>
+                <th>PORT</th>
+                <th>USERNAME</th>
+                <th>ACCOUNT</th>
+                <th style={{ textAlign: 'right' }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activePoolSource.map((pool, idx) => {
+                const key = ph.getKey(pool, idx);
+                const label = ph.getLabel(pool, idx);
+                const algo = ph.getAlgo(pool);
+                return (
+                  <tr key={key} style={{ fontSize: '11px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <td style={{ fontWeight: 'bold', color: '#f8fafc' }}>{label}</td>
+                    <td style={{ color: '#60a5fa' }}>{getAlgoDisplayName(algo)}</td>
+                    <td style={{ fontFamily: 'monospace', opacity: 0.8 }}>{pool.stratumHost || pool.stratumHostname || pool.host || 'N/A'}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{pool.stratumPort || pool.port || 'N/A'}</td>
+                    <td style={{ fontFamily: 'monospace', opacity: 0.8 }}>{pool.username || pool.user || 'N/A'}</td>
+                    <td>
+                      <span style={{ fontSize: '9px', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>
+                        {pool.client || pool.nhClient || nhClient}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button 
+                          className="btn-pro secondary" 
+                          style={{ color: '#10b981' }} 
+                          onClick={() => {
+                            setSelected(pool);
+                            setSelectedId(key);
+                            setInventoryModalOpen(false);
+                          }}
+                        >
+                          Select
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {activePoolSource.length === 0 && <div style={{ textAlign: 'center', padding: '40px', opacity: 0.5 }}>No pools found.</div>}
+        </div>
+        <div className="modal-actions" style={{ justifyContent: 'flex-end', marginTop: '15px' }}>
+          <button className="btn-pro secondary" onClick={() => setInventoryModalOpen(false)}>Close</button>
+        </div>
+      </Modal>
+      {/* Pool Connection Manager Modal (Same style as MRR) */}
+      <Modal isOpen={connectionModalOpen} onClose={() => setConnectionModalOpen(false)} title="Pool Connection Manager" maxWidth="1000px">
+        <div style={{ padding: '10px' }}>
+          <div className="pool-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '70vh', overflowY: 'auto', paddingRight: '5px' }}>
+            {activePoolSource.map((pool, idx) => {
+              const key = ph.getKey(pool, idx);
+              const label = ph.getLabel(pool, idx);
+              const algo = ph.getAlgo(pool);
+              const isSelected = selectedId === key;
+
+              return (
+                <div 
+                  key={key} 
+                  className="pool-item" 
+                  style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '45px 1.2fr 1.5fr 1fr 80px', 
+                    gap: '15px', 
+                    alignItems: 'center', 
+                    fontSize: '11px', 
+                    background: isSelected ? 'rgba(59, 130, 246, 0.08)' : 'rgba(255,255,255,0.02)', 
+                    padding: '12px 16px', 
+                    borderRadius: '8px', 
+                    border: isSelected ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255,255,255,0.05)',
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold', textAlign: 'center', opacity: 0.5 }}>#{idx + 1}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                    <div style={{ fontWeight: '600', color: isSelected ? '#60a5fa' : '#f8fafc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
+                    <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#60a5fa', opacity: 0.8 }}>{getAlgoDisplayName(algo)}</div>
+                  </div>
+                  <div style={{ opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '10px' }}>
+                    <span style={{ opacity: 0.4 }}>host:</span> {pool.stratumHost || pool.stratumHostname || pool.host}:{pool.stratumPort || pool.port}
+                  </div>
+                  <div style={{ opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '10px' }}>
+                    <span style={{ opacity: 0.4 }}>user:</span> {pool.username || pool.user}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <button className="btn-pro secondary" style={{ fontSize: '10px', padding: '4px 8px', borderColor: isSelected ? '#34d399' : '' }} onClick={() => onSelect(key)}>
+                      {isSelected ? 'Selected' : 'Select'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {activePoolSource.length === 0 && <div style={{ textAlign: 'center', padding: '40px', opacity: 0.5 }}>No pools found.</div>}
+        </div>
+        <div className="modal-actions" style={{ justifyContent: 'flex-end', marginTop: '15px' }}>
+          <button className="btn-pro secondary" onClick={() => setConnectionModalOpen(false)}>Close</button>
+>>>>>>> Stashed changes
         </div>
       </Modal>
       {/* Error Details Modal */}
